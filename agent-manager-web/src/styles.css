@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+@theme {
+  /* ===== BACKGROUNDS ===== */
+  --color-background: hsl(240 6% 7%);
+  --color-foreground: hsl(0 0% 95%);
+
+  --color-surface-0: hsl(240 6% 7%);
+  --color-surface-1: hsl(240 5% 9%);
+  --color-surface-2: hsl(240 5% 11%);
+  --color-surface-3: hsl(240 5% 13%);
+  --color-surface-4: hsl(240 4% 15%);
+
+  --color-sidebar: hsl(240 5% 8%);
+  --color-sidebar-foreground: hsl(0 0% 90%);
+  --color-sidebar-muted: hsl(240 4% 12%);
+  --color-sidebar-accent: hsl(240 4% 16%);
+
+  --color-card: hsl(240 5% 11%);
+  --color-card-foreground: hsl(0 0% 95%);
+
+  --color-popover: hsl(240 5% 13%);
+  --color-popover-foreground: hsl(0 0% 95%);
+
+  --color-overlay: hsl(240 6% 4% / 0.8);
+
+  /* ===== TEXT HIERARCHY ===== */
+  --color-text-primary: hsl(0 0% 95%);
+  --color-text-secondary: hsl(240 4% 70%);
+  --color-text-tertiary: hsl(240 4% 50%);
+  --color-text-quaternary: hsl(240 4% 35%);
+
+  /* ===== BORDERS ===== */
+  --color-border: hsl(240 4% 18%);
+  --color-border-subtle: hsl(240 4% 14%);
+  --color-border-strong: hsl(240 4% 24%);
+
+  /* ===== INTERACTIVE STATES ===== */
+  --color-primary: hsl(0 0% 98%);
+  --color-primary-foreground: hsl(240 6% 10%);
+
+  --color-secondary: hsl(240 4% 16%);
+  --color-secondary-foreground: hsl(0 0% 90%);
+
+  --color-muted: hsl(240 4% 14%);
+  --color-muted-foreground: hsl(240 5% 55%);
+
+  --color-accent: hsl(240 4% 18%);
+  --color-accent-foreground: hsl(0 0% 95%);
+
+  --color-hover: hsl(240 4% 12%);
+  --color-active: hsl(240 4% 16%);
+
+  /* ===== SEMANTIC COLORS ===== */
+  --color-destructive: hsl(0 72% 51%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-destructive-bg: hsl(0 50% 12%);
+  --color-destructive-border: hsl(0 40% 25%);
+
+  --color-success: hsl(142 72% 45%);
+  --color-success-foreground: hsl(0 0% 100%);
+  --color-success-bg: hsl(142 40% 12%);
+  --color-success-border: hsl(142 30% 25%);
+
+  --color-warning: hsl(38 92% 50%);
+  --color-warning-foreground: hsl(0 0% 10%);
+  --color-warning-bg: hsl(38 50% 12%);
+  --color-warning-border: hsl(38 40% 25%);
+
+  --color-info: hsl(217 91% 60%);
+  --color-info-foreground: hsl(0 0% 100%);
+  --color-info-bg: hsl(217 50% 12%);
+  --color-info-border: hsl(217 40% 25%);
+
+  /* ===== INPUTS ===== */
+  --color-input: hsl(240 4% 14%);
+  --color-input-hover: hsl(240 4% 16%);
+  --color-input-focus: hsl(240 4% 12%);
+
+  --color-ring: hsl(217 91% 60%);
+  --color-ring-offset: hsl(240 6% 7%);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}
+
+:root {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: var(--color-foreground);
+  background-color: var(--color-background);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--color-background);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.shiki {
+  margin: 0;
+  padding: 0.75rem;
+  overflow-x: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+
+.shiki code {
+  white-space: inherit;
+}
+
+#root {
+  height: 100%;
+}
+

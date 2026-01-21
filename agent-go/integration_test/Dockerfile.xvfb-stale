@@ -1,0 +1,10 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# Simulate a snapshot/restore where X11 lock artifacts are present at boot.
+# Using PID 1 intentionally (very likely to exist after restart).
+RUN set -eux; \
+  mkdir -p /tmp/.X11-unix; \
+  chmod 1777 /tmp/.X11-unix; \
+  printf '%s\n' "1" > /tmp/.X99-lock; \
+  : > /tmp/.X11-unix/X99

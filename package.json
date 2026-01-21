@@ -1,0 +1,13 @@
+{
+  "name": "agentsandbox",
+  "private": true,
+  "packageManager": "bun@1.3.5",
+  "scripts": {
+    "dev": "bash agent-manager/dev.local.sh",
+    "dev:docker": "bash agent-manager/docker-compose.dev.sh",
+    "dev:docker:down": "bash agent-manager/docker-compose.down.sh",
+    "dev:k8": "bash k8s/dev.sh",
+    "dev:k8:down": "bash k8s/down.sh",
+    "openapi": "bun run --cwd agent openapi && bun run --cwd agent-manager openapi"
+  }
+}

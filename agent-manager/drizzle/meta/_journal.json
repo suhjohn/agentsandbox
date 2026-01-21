@@ -1,0 +1,167 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1770702330171,
+      "tag": "0000_init",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770707062809,
+      "tag": "0001_awesome_whistler",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770753060159,
+      "tag": "0002_sessions_to_agents",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1770755132786,
+      "tag": "0003_finalize_agents",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770756448054,
+      "tag": "0004_agents_parent_agent_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770756500000,
+      "tag": "0005_remove_agent_apps",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1771379194569,
+      "tag": "0006_productive_squirrel_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1771410417520,
+      "tag": "0007_fantastic_katie_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1771500000000,
+      "tag": "0008_sessions_created_by",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1771455943194,
+      "tag": "0009_naive_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1771456300805,
+      "tag": "0010_cute_scarlet_witch",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1771588551466,
+      "tag": "0011_kind_kitty_pryde",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1771588961283,
+      "tag": "0012_gifted_mephisto",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1771600000000,
+      "tag": "0013_agents_name_required_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1771835683000,
+      "tag": "0014_sessions_search_trgm",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1771840195294,
+      "tag": "0015_images_user_overrides_setup",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1772100000000,
+      "tag": "0016_image_variants",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1772160000000,
+      "tag": "0017_user_image_variant_defaults",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1772179200000,
+      "tag": "0018_image_variant_build_heads",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1772527189289,
+      "tag": "0019_file_and_environment_secrets",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1772600000000,
+      "tag": "0020_users_workspace_keybindings",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1772546133251,
+      "tag": "0021_new_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1772586703663,
+      "tag": "0022_perpetual_strong_guy",
+      "breakpoints": true
+    }
+  ]
+}

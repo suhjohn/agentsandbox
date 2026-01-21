@@ -1,0 +1,39 @@
+# Keep build contexts small and avoid copying local secrets into images.
+
+# Node / web
+**/node_modules
+**/dist
+**/build
+**/.next
+**/.turbo
+**/.cache
+
+# Secrets / env
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS
+.git
+**/.git
+**/.gitignore
+
+# Python
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
+**/.venv
+**/venv
+
+# Local DB artifacts
+**/*.db
+**/*.db-wal
+**/*.db-shm
+
+# Misc
+**/*.log
+.DS_Store

@@ -1,0 +1,1986 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "@agent/core",
+    "version": "0.0.1"
+  },
+  "components": {
+    "securitySchemes": {
+      "agentAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-agent-auth"
+      }
+    },
+    "schemas": {},
+    "parameters": {}
+  },
+  "paths": {
+    "/session": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Create or fetch a session",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$/i"
+                  },
+                  "harness": {
+                    "type": "string",
+                    "enum": [
+                      "codex",
+                      "pi"
+                    ]
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "modelReasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "minimal",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "201 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "createdBy": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Cosmetic session status for human filtering. Suggested values: initial, processing, blocked (agent needs human input to continue with todos), completed (no next todo)."
+                    },
+                    "harness": {
+                      "type": "string"
+                    },
+                    "externalSessionId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "firstUserMessageBody": {},
+                    "lastMessageBody": {},
+                    "model": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "modelReasoningEffort": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        null
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "agentId",
+                    "createdBy",
+                    "status",
+                    "harness",
+                    "externalSessionId",
+                    "title",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "session"
+        ],
+        "summary": "List sessions",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+	          {
+	            "schema": {
+	              "type": "string"
+	            },
+	            "required": false,
+	            "name": "cursor",
+	            "in": "query"
+	          },
+	          {
+	            "schema": {
+	              "type": "string",
+	              "minLength": 1
+	            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "agentId": {
+                            "type": "string"
+                          },
+                          "createdBy": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Cosmetic session status for human filtering. Suggested values: initial, processing, blocked (agent needs human input to continue with todos), completed (no next todo)."
+                          },
+                          "harness": {
+                            "type": "string"
+                          },
+                          "externalSessionId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "title": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "firstUserMessageBody": {},
+                          "lastMessageBody": {},
+                          "model": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "modelReasoningEffort": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "enum": [
+                              "minimal",
+                              "low",
+                              "medium",
+                              "high",
+                              "xhigh",
+                              null
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "agentId",
+                          "createdBy",
+                          "status",
+                          "harness",
+                          "externalSessionId",
+                          "title",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "sessions",
+                    "nextCursor"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/{id}": {
+      "get": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Get a session with messages",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "createdBy": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Cosmetic session status for human filtering. Suggested values: initial, processing, blocked (agent needs human input to continue with todos), completed (no next todo)."
+                    },
+                    "harness": {
+                      "type": "string"
+                    },
+                    "externalSessionId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "firstUserMessageBody": {},
+                    "lastMessageBody": {},
+                    "model": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "modelReasoningEffort": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        null
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "agentId": {
+                            "type": "string"
+                          },
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "turnId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "createdBy": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "body": {},
+                          "embeddings": {
+                            "type": [
+                              "array",
+                              "null"
+                            ],
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "agentId",
+                          "sessionId",
+                          "turnId",
+                          "createdBy",
+                          "embeddings",
+                          "createdAt"
+                        ]
+                      }
+                    },
+                    "isRunning": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "agentId",
+                    "createdBy",
+                    "status",
+                    "harness",
+                    "externalSessionId",
+                    "title",
+                    "createdAt",
+                    "updatedAt",
+                    "messages",
+                    "isRunning"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Delete a session",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "sessionId",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/{id}/message": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Start a run for a session",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "input": {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "text"
+                              ]
+                            },
+                            "text": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "text"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "local_image"
+                              ]
+                            },
+                            "path": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "path"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "image"
+                              ]
+                            },
+                            "data": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "filename": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "data"
+                          ]
+                        }
+                      ]
+                    },
+                    "minItems": 1
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "modelReasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "minimal",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh"
+                    ]
+                  }
+                },
+                "required": [
+                  "input"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "runId": {
+                          "type": "string"
+                        },
+                        "threadId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "sessionId",
+                        "runId"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "runId": {
+                          "type": "string"
+                        },
+                        "sessionFile": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "sessionId",
+                        "runId"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/{id}/stream": {
+      "get": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Stream session events (SSE)",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/{id}/message/{runId}/stream": {
+      "get": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Stream events for a single run (SSE)",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "runId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/{id}/stop": {
+      "post": {
+        "tags": [
+          "session"
+        ],
+        "summary": "Stop an active run",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "sessionId",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "List workspaces",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "required": false,
+            "name": "includeStatus",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workspaces": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "isGitRepo": {
+                            "type": "boolean"
+                          },
+                          "status": {
+                            "type": "object",
+                            "properties": {
+                              "hasChanges": {
+                                "type": "boolean"
+                              },
+                              "staged": {
+                                "type": "integer"
+                              },
+                              "unstaged": {
+                                "type": "integer"
+                              },
+                              "untracked": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "hasChanges",
+                              "staged",
+                              "unstaged",
+                              "untracked"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "path",
+                          "isGitRepo"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "workspaces"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{name}/diff": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Get a workspace diff",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "repo_head",
+                "baseline"
+              ]
+            },
+            "required": false,
+            "name": "basis",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000000
+            },
+            "required": false,
+            "name": "maxChars",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "required": false,
+            "name": "includePatch",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "root": {
+                      "type": "string"
+                    },
+                    "isGitRepo": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "object",
+                      "properties": {
+                        "hasChanges": {
+                          "type": "boolean"
+                        },
+                        "staged": {
+                          "type": "integer"
+                        },
+                        "unstaged": {
+                          "type": "integer"
+                        },
+                        "untracked": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "hasChanges",
+                        "staged",
+                        "unstaged",
+                        "untracked"
+                      ]
+                    },
+                    "patch": {
+                      "type": "string"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    },
+                    "diffBasis": {
+                      "type": "string",
+                      "enum": [
+                        "repo_head",
+                        "baseline"
+                      ]
+                    },
+                    "baselineStatus": {
+                      "type": "string",
+                      "enum": [
+                        "ready",
+                        "building"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "root",
+                    "isGitRepo",
+                    "status",
+                    "patch",
+                    "truncated",
+                    "diffBasis"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{name}/diff/stream": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Stream workspace diff (SSE)",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "repo_head",
+                "baseline"
+              ]
+            },
+            "required": false,
+            "name": "basis",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000000
+            },
+            "required": false,
+            "name": "maxChars",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "required": false,
+            "name": "includePatch",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workspaces/{name}/diff/file-contents": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Get file contents for a diff view",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "name",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "repo_head",
+                "baseline"
+              ]
+            },
+            "required": false,
+            "name": "basis",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "unstaged",
+                "staged",
+                "untracked",
+                "baseline-tracked",
+                "baseline-untracked"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "path",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "oldFile": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "contents": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "contents"
+                      ]
+                    },
+                    "newFile": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "contents": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "contents"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "oldFile",
+                    "newFile"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "timestamp"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}
