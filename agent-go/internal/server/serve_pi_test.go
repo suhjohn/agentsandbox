@@ -74,6 +74,62 @@ func TestExecutePiCLIRunUsesPrintMode(t *testing.T) {
 	expectArg(t, args, "hello from pi")
 }
 
+func TestExecutePiCLIRunPreservesUsageOnMessageEnd(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakePiPath := filepath.Join(tmpDir, "fake-pi")
+
+	script := "#!/bin/sh\n" +
+		"set -eu\n" +
+		"printf '%s\\n' '{\"type\":\"message_end\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}],\"usage\":{\"input\":100,\"output\":50,\"cacheRead\":0,\"cacheWrite\":0,\"cost\":{\"total\":0.00105}}}}'\n"
+	if err := os.WriteFile(fakePiPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake pi: %v", err)
+	}
+
+	app := &server{
+		cfg: serveConfig{
+			RuntimeDir: tmpDir,
+		},
+		pi: &PiCLI{
+			Path: fakePiPath,
+			Dir:  tmpDir,
+		},
+	}
+
+	session := &sessionRecord{ID: "1234567890abcdef1234567890abcdef", Harness: "pi"}
+
+	events := make([]map[string]any, 0, 1)
+	_, err := app.executePiCLIRun(context.Background(), session, []normalizedInput{
+		{Type: "text", Text: "hello from pi"},
+	}, func(evt map[string]any) {
+		events = append(events, evt)
+	})
+	if err != nil {
+		t.Fatalf("executePiCLIRun: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+
+	message, _ := events[0]["message"].(map[string]any)
+	if message == nil {
+		t.Fatalf("expected compacted message payload, got %#v", events[0])
+	}
+	usage, _ := message["usage"].(map[string]any)
+	if usage == nil {
+		t.Fatalf("expected usage to be preserved, got %#v", message)
+	}
+	if got := usage["input"]; got != float64(100) {
+		t.Fatalf("expected usage.input 100, got %#v", got)
+	}
+	cost, _ := usage["cost"].(map[string]any)
+	if cost == nil {
+		t.Fatalf("expected usage.cost to be preserved, got %#v", usage)
+	}
+	if got := cost["total"]; got != float64(0.00105) {
+		t.Fatalf("expected usage.cost.total 0.00105, got %#v", got)
+	}
+}
+
 func expectArg(t *testing.T, args []string, want string) {
 	t.Helper()
 	for _, arg := range args {

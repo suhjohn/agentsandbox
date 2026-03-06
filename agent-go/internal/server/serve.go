@@ -1080,6 +1080,9 @@ func compactPIMessage(message map[string]any) map[string]any {
 			out["customType"] = customType
 		}
 	}
+	if usage, ok := message["usage"].(map[string]any); ok && len(usage) > 0 {
+		out["usage"] = usage
+	}
 
 	if content := compactPIMessageContent(message["content"]); len(content) > 0 {
 		out["content"] = content
