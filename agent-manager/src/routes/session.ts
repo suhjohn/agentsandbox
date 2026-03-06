@@ -2,7 +2,6 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { randomUUID } from 'node:crypto'
 import { and, desc, eq, gte, ilike, inArray, lt, or, sql } from 'drizzle-orm'
 import type { AppEnv } from '../types/context'
 import { registerRoute } from '../openapi/registry'
@@ -15,14 +14,13 @@ const app = new Hono<AppEnv>()
 const BASE = '/session'
 
 const createAgentSchema = z.object({
-  name: z.string().min(1).max(255).optional().default(() => randomUUID()),
   parentAgentId: z.uuid().or(z.string()).optional(),
   imageId: z.uuid().or(z.string()),
   variantId: z.uuid().or(z.string()).optional(),
   region: z
     .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
     .optional()
-})
+}).strict()
 
 const modelReasoningEffortSchema = z.enum([
   'minimal',
@@ -36,11 +34,12 @@ const SESSION_STATUS_GUIDANCE =
 const sessionStatusSchema = z.string().min(1).describe(SESSION_STATUS_GUIDANCE)
 
 const createSessionBootstrapSchema = createAgentSchema.extend({
+  title: z.string().min(1).optional(),
   message: z.string().min(1),
   harness: z.enum(['codex', 'pi']).optional(),
   model: z.string().min(1).optional(),
   modelReasoningEffort: modelReasoningEffortSchema.optional()
-})
+}).strict()
 
 const agentSchema = z.object({
   id: z.string(),

@@ -609,26 +609,15 @@ function createOptimisticUserMessage (args: {
   readonly agentId: string
   readonly sessionId: string
   readonly text: string
-  readonly messageType: 'codex' | 'pi' | 'unknown'
 }): GetSessionId200MessagesItem {
   const nowIso = new Date().toISOString()
   const idSuffix = `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
   const id = `optimistic:${args.sessionId}:${idSuffix}`
 
-  const body =
-    args.messageType === 'pi'
-      ? {
-          type: 'message_end',
-          message: {
-            id,
-            role: 'user',
-            content: [{ type: 'text', text: args.text }]
-          }
-        }
-      : {
-          type: 'user_input',
-          input: [{ type: 'text', text: args.text }]
-        }
+  const body = {
+    type: 'user_input',
+    input: [{ type: 'text', text: args.text }]
+  }
 
   return {
     id,
@@ -1083,8 +1072,7 @@ function SessionComposer (props: {
       const optimisticMessage = createOptimisticUserMessage({
         agentId: props.agentId,
         sessionId: nextSessionId,
-        text,
-        messageType: props.messageType
+        text
       })
       applySessionPatchToWorkspaceCaches(queryClient, nextSessionId, {
         status: SESSION_STATUS_PROCESSING,

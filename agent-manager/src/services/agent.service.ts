@@ -22,23 +22,17 @@ import { agents, images, sessions, users } from "../db/schema";
 import type { AgentStatus } from "../db/enums";
 import type { Region } from "../utils/region";
 import { DEFAULT_REGION, serializeRegion } from "../utils/region";
+import { generateUuid7 } from "../utils/uuid7";
 import { env } from "../env";
 
 function generateSandboxAccessToken(): string {
   // 32 hex chars, URL-safe and fine for use in query params.
   return crypto.randomUUID().replace(/-/g, "");
 }
+const MAX_CREATE_AGENT_ATTEMPTS = 8;
 
-export class AgentNameConflictError extends Error {
-  constructor(name: string) {
-    super(`Agent name already exists: ${name}`);
-    this.name = "AgentNameConflictError";
-  }
-}
-
-function normalizeAgentName(name?: string): string {
-  const trimmed = name?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : crypto.randomUUID();
+function buildDefaultAgentName(agentId: string): string {
+  return `ag-${agentId.slice(0, 16)}`;
 }
 
 function isUniqueAgentNameViolation(err: unknown): boolean {
@@ -47,6 +41,12 @@ function isUniqueAgentNameViolation(err: unknown): boolean {
   return (
     candidate.code === "23505" && candidate.constraint === "agents_name_idx"
   );
+}
+
+function isUniqueAgentIdViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const candidate = err as { code?: unknown; constraint?: unknown };
+  return candidate.code === "23505" && candidate.constraint === "agents_pkey";
 }
 
 const SANDBOX_ACCESS_TOKEN_PREFIX = "enc:v1:";
@@ -90,41 +90,46 @@ function decryptSandboxAccessToken(stored: string): string {
 // ── CRUD ────────────────────────────────────────────────────────────────────
 
 export async function createAgent(input: {
-  name?: string;
   parentAgentId?: string | null;
   imageId: string;
   imageVariantId?: string | null;
   createdBy: string;
   region?: Region;
 }) {
-  const name = normalizeAgentName(input.name);
   const serializedRegion = serializeRegion(input.region);
   const sandboxAccessToken = generateSandboxAccessToken();
-  let agent: typeof agents.$inferSelect | undefined;
-  try {
-    [agent] = await db
-      .insert(agents)
-      .values({
-        name,
-        parentAgentId: input.parentAgentId ?? null,
-        imageId: input.imageId,
-        imageVariantId: input.imageVariantId ?? null,
-        createdBy: input.createdBy,
-        sandboxAccessToken: encryptSandboxAccessToken(sandboxAccessToken),
-        region: serializedRegion ?? DEFAULT_REGION,
-      })
-      .returning();
-  } catch (err) {
-    if (isUniqueAgentNameViolation(err)) {
-      throw new AgentNameConflictError(name);
+  for (let attempt = 0; attempt < MAX_CREATE_AGENT_ATTEMPTS; attempt += 1) {
+    const id = generateUuid7();
+    const name = buildDefaultAgentName(id);
+
+    try {
+      const [agent] = await db
+        .insert(agents)
+        .values({
+          id,
+          name,
+          parentAgentId: input.parentAgentId ?? null,
+          imageId: input.imageId,
+          imageVariantId: input.imageVariantId ?? null,
+          createdBy: input.createdBy,
+          sandboxAccessToken: encryptSandboxAccessToken(sandboxAccessToken),
+          region: serializedRegion ?? DEFAULT_REGION,
+        })
+        .returning();
+
+      if (!agent) {
+        throw new Error("Failed to create agent");
+      }
+      return agent;
+    } catch (err) {
+      if (isUniqueAgentIdViolation(err) || isUniqueAgentNameViolation(err)) {
+        continue;
+      }
+      throw err;
     }
-    throw err;
   }
 
-  if (!agent) {
-    throw new Error("Failed to create agent");
-  }
-  return agent;
+  throw new Error("Failed to create agent after retrying generated identity");
 }
 
 export async function getAgentById(id: string) {

@@ -747,7 +747,7 @@ export async function runBuild(input: {
   if (
     !canUserMutateImageVariant({
       userId: input.userId,
-      imageCreatedBy: image.createdBy,
+      imageCreatedBy: image.createdBy ?? "",
       variant,
     })
   ) {

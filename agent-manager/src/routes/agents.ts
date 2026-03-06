@@ -2,13 +2,11 @@ import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { randomUUID } from 'node:crypto'
 import type { AppEnv } from '../types/context'
 import type { AgentStatus } from '../db/enums'
 import { log } from '../log'
 import { registerRoute } from '../openapi/registry'
 import {
-  AgentNameConflictError,
   createAgent,
   getAgentById,
   listAgentGroups,
@@ -56,19 +54,13 @@ const AGENT_STATUS_VALUES = [
 ] as const
 
 const createAgentSchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .max(255)
-    .optional()
-    .default(() => randomUUID()),
   parentAgentId: z.string().uuid().optional(),
   imageId: z.string().uuid(),
   variantId: z.string().uuid().optional(),
   region: z
     .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
     .optional()
-})
+}).strict()
 
 const booleanQueryParam = z.enum(['true', 'false']).transform(v => v === 'true')
 
@@ -111,11 +103,13 @@ const agentSchema = z.object({
   snapshotImageId: z.string().nullable().optional(),
   region: z.string().nullable().optional(),
   status: z.enum(AGENT_STATUS_VALUES),
-  createdBy: z.string(),
-  createdByUser: z.object({
-    id: z.string(),
-    name: z.string()
-  }),
+  createdBy: z.string().nullable(),
+  createdByUser: z
+    .object({
+      id: z.string(),
+      name: z.string()
+    })
+    .nullable(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date())
 })
@@ -160,11 +154,13 @@ async function toHydratedPublicAgent (
   const createdByUser =
     agent.createdBy === user.id
       ? { id: user.id, name: user.name }
-      : await getUserById(agent.createdBy).then(creator =>
+      : typeof agent.createdBy === 'string' && agent.createdBy.length > 0
+      ? await getUserById(agent.createdBy).then(creator =>
           creator
             ? { id: creator.id, name: creator.name }
             : { id: agent.createdBy, name: 'Unknown' }
         )
+      : null
 
   return {
     ...publicAgent,
@@ -408,22 +404,13 @@ registerRoute(
     }
 
     const region = body.region ?? user.defaultRegion ?? DEFAULT_REGION
-    let agent: DbAgent
-    try {
-      agent = await createAgent({
-        name: body.name,
-        parentAgentId,
-        imageId: body.imageId,
-        imageVariantId: variant.id,
-        createdBy: user.id,
-        region
-      })
-    } catch (err) {
-      if (err instanceof AgentNameConflictError) {
-        return c.json({ error: err.message }, 409)
-      }
-      throw err
-    }
+    const agent: DbAgent = await createAgent({
+      parentAgentId,
+      imageId: body.imageId,
+      imageVariantId: variant.id,
+      createdBy: user.id,
+      region
+    })
     await ensureAgentSandbox({
       agentId: agent.id,
       imageId: variant.headImageId,

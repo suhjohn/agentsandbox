@@ -24,8 +24,11 @@ Behavior:
   - `input.modalSecretName` (or default `openinspect-build-secret`), and
   - `input.environmentSecretNames`.
 - Missing secret names are logged to build stderr and ignored.
+- Always runs an internal setup sequence before snapshotting:
+  - source sync via `agent-go-update-source` when available,
+  - then `input.setupScript` if non-empty,
+  - then builds the `agent-go` binary to `/app/agent-server`.
 - Materializes `fileSecrets` into `.env` files in the sandbox before snapshotting.
-- Runs an agent source sync preamble (`agent-go-update-source` when available) before executing `setupScript`.
 
 ## image.service.ts
 
@@ -45,6 +48,49 @@ Behavior:
 - Passes environment secret names to `runModalImageBuild` via `environmentSecretNames`.
 - Includes both `fileSecrets` and `environmentSecretNames` in the build input payload/hash.
 
+## agent.service.ts
+
+### `createAgent(input)`
+
+```ts
+createAgent(input: {
+  parentAgentId?: string | null
+  imageId: string
+  imageVariantId?: string | null
+  createdBy: string
+  region?: Region
+})
+```
+
+Behavior:
+- Generates the agent `id` in application code as a UUIDv7 before inserting.
+- Derives the default agent `name` from that generated ID as `ag-<first 16 chars of uuid>`.
+- Retries creation when either the generated `id` or derived `name` collides with an existing row.
+
+## session.service.ts
+
+### `createSessionBootstrap(input)`
+
+```ts
+createSessionBootstrap(input: {
+  readonly user: AuthUser
+  readonly body: {
+    readonly parentAgentId?: string
+    readonly imageId: string
+    readonly region?: string | readonly string[]
+    readonly message: string
+    readonly title?: string
+    readonly harness?: "codex" | "pi"
+    readonly model?: string
+    readonly modelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh"
+  }
+})
+```
+
+Behavior:
+- Creates the backing agent through `createAgent`, so bootstrap requests do not accept a caller-provided agent name.
+- Preserves optional runtime session metadata such as `title`, `harness`, `model`, and `modelReasoningEffort` when creating the deterministic runtime session and first run.
+
 ## sandbox.service.ts
 
 ### `ensureAgentSandbox(input)`
@@ -62,5 +108,6 @@ Behavior:
   - named default secret `openinspect-build-secret` (if present),
   - inline API key secret object (OpenAI/Anthropic/Google/manager API keys when configured),
   - image-bound environment secrets from `listEnvironmentSecrets(agent.imageId)`.
+- If an agent no longer has an owner (`created_by` is `NULL`), sandbox creation fails with `409 Agent owner is missing`.
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.
 - Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).

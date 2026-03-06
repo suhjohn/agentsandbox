@@ -69,9 +69,9 @@ export const images = pgTable(
     description: text("description"),
     setupScript: text("setup_script"),
     defaultVariantId: uuid("default_variant_id"),
-    createdBy: uuid("created_by")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -98,7 +98,7 @@ export const imageVariants = pgTable(
       .notNull()
       .references(() => images.id, { onDelete: "cascade" }),
     ownerUserId: uuid("owner_user_id").references(() => users.id, {
-      onDelete: "cascade",
+      onDelete: "set null",
     }),
     baseImageId: text("base_image_id"),
     headBuildId: uuid("head_build_id"),
@@ -133,9 +133,9 @@ export const imageVariantBuilds = pgTable(
     variantId: uuid("variant_id")
       .notNull()
       .references(() => imageVariants.id, { onDelete: "cascade" }),
-    requestedByUserId: uuid("requested_by_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    requestedByUserId: uuid("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     status: text("status").notNull().default("running"),
     inputHash: text("input_hash").notNull(),
     inputPayload: jsonb("input_payload")
@@ -237,9 +237,9 @@ export const agents = pgTable(
     sandboxAccessToken: text("sandbox_access_token"),
     region: text("region").default("us-west-2"),
     status: text("status").$type<AgentStatus>().notNull().default("active"),
-    createdBy: uuid("created_by")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -391,9 +391,9 @@ export const coordinatorSessions = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     title: text("title"),
-    createdBy: uuid("created_by")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

@@ -89,10 +89,10 @@ describe("/agents/:agentId/access (integration)", () => {
     });
 
     const agent = await createAgent({
-      name: "access test agent",
       imageId: image.id,
       createdBy: userId,
     });
+    expect(agent.name).toBe(`ag-${agent.id.slice(0, 16)}`);
     cleanup.push(async () => {
       await deleteAgent(agent.id);
     });
@@ -148,10 +148,10 @@ describe("/agents/:agentId/access (integration)", () => {
     });
 
     const agent = await createAgent({
-      name: "access restart agent",
       imageId: image.id,
       createdBy: userId,
     });
+    expect(agent.name).toBe(`ag-${agent.id.slice(0, 16)}`);
     cleanup.push(async () => {
       await deleteAgent(agent.id);
     });

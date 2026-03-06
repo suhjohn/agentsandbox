@@ -3,25 +3,25 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# OpenVSCode Server (configurable at build/run time)
+# Build arguments for version pinning
 ARG OPENVSCODE_SERVER_RELEASE=openvscode-server-v1.106.3
-ENV OPENVSCODE_SERVER_RELEASE=${OPENVSCODE_SERVER_RELEASE}
-ENV OPENVSCODE_SERVER_PORT=39393
 ARG RUNC_VERSION=1.3.0
-ENV RUNC_VERSION=${RUNC_VERSION}
 ARG GO_VERSION=1.24.0
-ENV GO_VERSION=${GO_VERSION}
 
-# Install uv (fast Python package manager) for Modal prepare_sandbox scripts
-ENV UV_INSTALL_DIR=/usr/local/bin
-ENV UV_NO_MODIFY_PATH=1
+# Persist versions as ENV for runtime access
+ENV OPENVSCODE_SERVER_RELEASE=${OPENVSCODE_SERVER_RELEASE} \
+    OPENVSCODE_SERVER_PORT=39393 \
+    RUNC_VERSION=${RUNC_VERSION} \
+    GO_VERSION=${GO_VERSION} \
+    UV_INSTALL_DIR=/usr/local/bin \
+    UV_NO_MODIFY_PATH=1
 
+# Layer 1: Base system packages (rarely changes)
 RUN set -eux; \
   export DEBIAN_FRONTEND=noninteractive; \
   apt-get update; \
   apt-get install -y --no-install-recommends \
   autocutsel \
-  bash \
   ca-certificates \
   curl \
   dumb-init \
@@ -29,119 +29,123 @@ RUN set -eux; \
   fonts-liberation \
   git \
   gnupg \
-  libheif-examples \
   iproute2 \
   iptables \
   jq \
-  less \
-  nodejs \
-  npm \
   openbox \
-  openssh-client \
   procps \
   python-is-python3 \
   python3 \
-  python3-pip \
-  python3-venv \
   ripgrep \
   runit \
-  sqlite3 \
   tar \
-  unzip \
   websockify \
   novnc \
-  xclip \
   x11vnc \
-  xvfb \
-  zip; \
+  xvfb; \
+  mkdir -p /home/agent/workspaces /tmp/.X11-unix /etc/apt/keyrings; \
+  chmod 0777 /home/agent/workspaces; \
+  chmod 1777 /tmp/.X11-unix; \
+  rm -rf /var/lib/apt/lists/*
+
+# Layer 2: Browser installation (architecture-specific, changes rarely)
+RUN set -eux; \
+  export DEBIAN_FRONTEND=noninteractive; \
   arch="$(dpkg --print-architecture)"; \
-  install -m 0755 -d /etc/apt/keyrings; \
   if [ "${arch}" = "amd64" ]; then \
-  curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg; \
-  chmod a+r /etc/apt/keyrings/google-chrome.gpg; \
-  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
-  apt-get update; \
-  apt-get install -y --no-install-recommends google-chrome-stable; \
-  ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium; \
-  ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium-browser; \
+    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg; \
+    chmod a+r /etc/apt/keyrings/google-chrome.gpg; \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends google-chrome-stable; \
+    ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium; \
+    ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium-browser; \
   else \
-  curl -fsSL https://ftp-master.debian.org/keys/archive-key-12.asc | gpg --dearmor -o /etc/apt/keyrings/debian-archive.gpg; \
-  chmod a+r /etc/apt/keyrings/debian-archive.gpg; \
-  echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/debian-archive.gpg] http://deb.debian.org/debian bookworm main" > /etc/apt/sources.list.d/debian-bookworm-chromium.list; \
-  apt-get update; \
-  apt-get install -y --no-install-recommends chromium; \
-  rm -f /etc/apt/sources.list.d/debian-bookworm-chromium.list; \
+    curl -fsSL https://ftp-master.debian.org/keys/archive-key-12.asc | gpg --dearmor -o /etc/apt/keyrings/debian-archive.gpg; \
+    chmod a+r /etc/apt/keyrings/debian-archive.gpg; \
+    echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/debian-archive.gpg] http://deb.debian.org/debian bookworm main" > /etc/apt/sources.list.d/debian-bookworm-chromium.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends chromium; \
+    rm -f /etc/apt/sources.list.d/debian-bookworm-chromium.list; \
   fi; \
+  rm -rf /var/lib/apt/lists/*
+
+# Layer 3: Docker installation (changes rarely)
+RUN set -eux; \
+  export DEBIAN_FRONTEND=noninteractive; \
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; \
   chmod a+r /etc/apt/keyrings/docker.gpg; \
   . /etc/os-release; \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list; \
   apt-get update; \
   apt-get install -y --no-install-recommends \
-  docker-ce \
-  docker-ce-cli \
-  containerd.io \
-  docker-buildx-plugin \
-  docker-compose-plugin; \
-  mkdir -p /home/agent/workspaces /tmp/.X11-unix; \
-  chmod 0777 /home/agent/workspaces; \
-  chmod 1777 /tmp/.X11-unix; \
+    docker-ce \
+    docker-ce-cli \
+    containerd.io \
+    docker-buildx-plugin \
+    docker-compose-plugin; \
   rm -rf /var/lib/apt/lists/*
 
+# Layer 4: runc override (version-pinned, changes when RUNC_VERSION changes)
 RUN set -eux; \
   arch="$(dpkg --print-architecture)"; \
-  case "${arch}" in \
-  amd64) runc_arch="amd64" ;; \
-  arm64) runc_arch="arm64" ;; \
-  *) echo "Unsupported architecture for runc: ${arch}" >&2; exit 1 ;; \
-  esac; \
-  curl -fsSL -o /usr/local/bin/runc "https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.${runc_arch}"; \
+  curl -fsSL -o /usr/local/bin/runc "https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.${arch}"; \
   chmod +x /usr/local/bin/runc; \
   rm -f /usr/bin/runc /usr/sbin/runc; \
   ln -sfn /usr/local/bin/runc /usr/bin/runc; \
-  ln -sfn /usr/local/bin/runc /usr/sbin/runc; \
-  case "${arch}" in \
-  amd64) ov_arch="x64" ;; \
-  arm64) ov_arch="arm64" ;; \
-  *) echo "Unsupported architecture for openvscode-server: ${arch}" >&2; exit 1 ;; \
-  esac; \
-  tmp_dir="$(mktemp -d)"; \
-  curl -fsSL -o "${tmp_dir}/openvscode-server.tar.gz" "https://github.com/gitpod-io/openvscode-server/releases/download/${OPENVSCODE_SERVER_RELEASE}/${OPENVSCODE_SERVER_RELEASE}-linux-${ov_arch}.tar.gz"; \
-  rm -rf "/opt/${OPENVSCODE_SERVER_RELEASE}-linux-${ov_arch}"; \
-  tar -xzf "${tmp_dir}/openvscode-server.tar.gz" -C /opt; \
-  ln -sfn "/opt/${OPENVSCODE_SERVER_RELEASE}-linux-${ov_arch}/bin/openvscode-server" /usr/local/bin/openvscode-server; \
-  rm -rf "${tmp_dir}"; \
-  case "${arch}" in \
-  amd64) go_arch="amd64" ;; \
-  arm64) go_arch="arm64" ;; \
-  *) echo "Unsupported architecture for Go: ${arch}" >&2; exit 1 ;; \
-  esac; \
+  ln -sfn /usr/local/bin/runc /usr/sbin/runc
+
+# Layer 5: Go installation (version-pinned)
+RUN set -eux; \
+  arch="$(dpkg --print-architecture)"; \
   rm -rf /usr/local/go; \
-  curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${go_arch}.tar.gz" | tar -C /usr/local -xz; \
+  curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${arch}.tar.gz" | tar -C /usr/local -xz; \
+  /usr/local/go/bin/go version
+
+# Layer 6: Node.js + npm packages (changes when updating codex/pi versions)
+RUN set -eux; \
+  export DEBIAN_FRONTEND=noninteractive; \
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
   apt-get install -y --no-install-recommends nodejs; \
   node --version; \
-  /usr/local/go/bin/go version; \
   npm i -g @openai/codex@latest @mariozechner/pi-coding-agent@latest; \
+  npm cache clean --force; \
   command -v codex >/dev/null; \
   command -v pi >/dev/null; \
-  curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --quiet
+  rm -rf /var/lib/apt/lists/*
+
+# Layer 7: OpenVSCode Server (version-pinned, large download)
+RUN set -eux; \
+  arch="$(dpkg --print-architecture)"; \
+  case "${arch}" in \
+    amd64) ov_arch="x64" ;; \
+    arm64) ov_arch="arm64" ;; \
+    *) echo "Unsupported architecture for openvscode-server: ${arch}" >&2; exit 1 ;; \
+  esac; \
+  curl -fsSL "https://github.com/gitpod-io/openvscode-server/releases/download/${OPENVSCODE_SERVER_RELEASE}/${OPENVSCODE_SERVER_RELEASE}-linux-${ov_arch}.tar.gz" | tar -xz -C /opt; \
+  ln -sfn "/opt/${OPENVSCODE_SERVER_RELEASE}-linux-${ov_arch}/bin/openvscode-server" /usr/local/bin/openvscode-server
+
+# Layer 8: uv (Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --quiet
 
 ARG AGENT_REPO_DIR=/opt/agentsandbox
-COPY . ${AGENT_REPO_DIR}
-COPY agent-go/docker /app/docker
-COPY agent-go/tools /app/tools
 
-RUN install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/agent-server.sh" /app/agent-server \
+# Copy entire repo (includes agent-go/docker and agent-go/tools)
+COPY . ${AGENT_REPO_DIR}
+
+# Symlink docker/tools to /app for backwards compatibility
+RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/docker" /app/docker \
+  && ln -sfn "${AGENT_REPO_DIR}/agent-go/tools" /app/tools \
+  && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/agent-server.sh" /app/agent-server \
   && ln -sfn /app/agent-server /usr/local/bin/agent-server \
   && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/update-agent-go-source.sh" /usr/local/bin/agent-go-update-source \
-  && install -m 0755 /app/docker/entrypoint.sh /usr/local/bin/agent-entrypoint \
-  && install -m 0755 /app/docker/docker-wrapper.sh /usr/local/bin/docker \
+  && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/entrypoint.sh" /usr/local/bin/agent-entrypoint \
+  && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/docker-wrapper.sh" /usr/local/bin/docker \
   && mkdir -p /usr/share/novnc \
-  && cp -f /app/docker/novnc/index.html /usr/share/novnc/index.html \
-  && cp -f /app/docker/novnc/index.html /usr/share/novnc/vnc.html \
-  && cp -f /app/docker/novnc/index.html /usr/share/novnc/vnc_lite.html \
-  && chmod +x /app/docker/entrypoint.sh /app/docker/docker-wrapper.sh /app/docker/runit/*.sh
+  && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/index.html \
+  && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/vnc.html \
+  && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/vnc_lite.html \
+  && chmod +x "${AGENT_REPO_DIR}/agent-go/docker/runit/"*.sh
 
 ARG PORT=3131
 ENV PORT=${PORT}

@@ -106,7 +106,6 @@ describe("Sessions sandbox agent API (real)", () => {
       }
 
       const { accessToken } = await registerUser(server.baseUrl);
-      const runId = crypto.randomUUID();
 
       const imageRes = await fetch(`${server.baseUrl}/images`, {
         method: "POST",
@@ -150,11 +149,12 @@ describe("Sessions sandbox agent API (real)", () => {
       const sessionRes = await fetch(`${server.baseUrl}/agents`, {
         method: "POST",
         headers: authedHeaders(accessToken, { "Content-Type": "application/json" }),
-        body: JSON.stringify({ imageId: imageBody.id, name: `Sandbox agent API test ${runId}` }),
+        body: JSON.stringify({ imageId: imageBody.id }),
       });
       expect(sessionRes.status).toBe(201);
-      const session = (await sessionRes.json()) as { id: string };
+      const session = (await sessionRes.json()) as { id: string; name: string };
       expect(typeof session.id).toBe("string");
+      expect(session.name).toBe(`ag-${session.id.slice(0, 16)}`);
 
       try {
         const access = await waitFor(

@@ -114,7 +114,7 @@ const imageSchema = z.object({
   visibility: z.enum(['public', 'private'] as const),
   name: z.string(),
   description: z.string().nullable().optional(),
-  createdBy: z.string(),
+  createdBy: z.string().nullable(),
   defaultVariantId: z.string().uuid().nullable().optional(),
   setupScript: z.string().nullable().optional(),
   createdAt: z.string().or(z.date()),
@@ -175,7 +175,7 @@ const imageVariantBuildSchema = z.object({
   id: z.string().uuid(),
   imageId: z.string().uuid(),
   variantId: z.string().uuid(),
-  requestedByUserId: z.string().uuid(),
+  requestedByUserId: z.string().uuid().nullable(),
   status: z.enum(['running', 'succeeded', 'failed'] as const),
   inputHash: z.string(),
   baseImageId: z.string().nullable(),
@@ -244,10 +244,10 @@ const setupSandboxParamsSchema = z.object({
 
 function ensureCanReadImage (
   _userId: string,
-  _image: { visibility: Visibility; createdBy: string }
+  _image: { visibility: Visibility; createdBy: string | null }
 ) {}
 
-function ensureCanWriteImage (userId: string, image: { createdBy: string }) {
+function ensureCanWriteImage (userId: string, image: { createdBy: string | null }) {
   if (image.createdBy !== userId) {
     throw new Error('Image not found')
   }
@@ -553,7 +553,7 @@ registerRoute(
     if (
       !canUserMutateImageVariant({
         userId: user.id,
-        imageCreatedBy: image.createdBy,
+        imageCreatedBy: image.createdBy ?? '',
         variant
       })
     ) {
@@ -674,7 +674,7 @@ registerRoute(
     if (
       !canUserMutateImageVariant({
         userId: user.id,
-        imageCreatedBy: image.createdBy,
+        imageCreatedBy: image.createdBy ?? '',
         variant
       })
     ) {

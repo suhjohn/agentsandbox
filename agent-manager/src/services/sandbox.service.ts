@@ -935,6 +935,9 @@ export async function ensureAgentSandbox (input: {
       if (input.imageId) {
         candidateImageIds = [input.imageId]
       } else {
+        if (typeof agent.createdBy !== 'string' || agent.createdBy.length === 0) {
+          throw new HTTPException(409, { message: 'Agent owner is missing' })
+        }
         const baseVariant =
           typeof agent.imageId === 'string' && agent.imageId.length > 0
             ? await resolveImageVariantForUser({

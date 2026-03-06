@@ -21,7 +21,7 @@ run_update() {
     return 0
   fi
 
-  if [[ ! -d "${REPO_DIR}/.git" ]]; then
+  if ! git -C "${REPO_DIR}" rev-parse --show-toplevel >/dev/null 2>&1; then
     log "git metadata missing in ${REPO_DIR}; skipping update"
     return 0
   fi

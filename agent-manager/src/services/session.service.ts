@@ -2,7 +2,6 @@ import { HTTPException } from 'hono/http-exception'
 import { agents } from '../db/schema'
 import type { AuthUser } from '../types/context'
 import {
-  AgentNameConflictError,
   createAgent,
   getAgentById
 } from './agent.service'
@@ -29,7 +28,6 @@ type RuntimeAccessPayload = {
 const SANDBOX_AGENT_TOKEN_TTL_SECONDS = 5 * 60
 
 type CreateSessionBootstrapBody = {
-  readonly name?: string
   readonly parentAgentId?: string
   readonly imageId: string
   readonly region?: string | readonly string[]
@@ -230,22 +228,13 @@ export async function createSessionBootstrap (input: {
   }
 
   const region = body.region ?? user.defaultRegion ?? DEFAULT_REGION
-  let agent: DbAgent
-  try {
-    agent = await createAgent({
-      name: body.name,
-      parentAgentId,
-      imageId: body.imageId,
-      imageVariantId: variant.id,
-      createdBy: user.id,
-      region
-    })
-  } catch (err) {
-    if (err instanceof AgentNameConflictError) {
-      throw new HTTPException(409, { message: err.message })
-    }
-    throw err
-  }
+  const agent = await createAgent({
+    parentAgentId,
+    imageId: body.imageId,
+    imageVariantId: variant.id,
+    createdBy: user.id,
+    region
+  })
 
   const sandbox = await ensureAgentSandbox({
     agentId: agent.id,

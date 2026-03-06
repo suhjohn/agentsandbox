@@ -162,6 +162,13 @@
       "when": 1772586703663,
       "tag": "0022_perpetual_strong_guy",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1772762670188,
+      "tag": "0023_next_the_phantom",
+      "breakpoints": true
     }
   ]
 }

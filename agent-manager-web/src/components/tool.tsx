@@ -129,8 +129,14 @@ interface ListSessionsResult {
 
 interface CreateSessionArgs {
   body: {
-    name?: string;
     imageId: string;
+    message: string;
+    parentAgentId?: string;
+    region?: string | string[];
+    title?: string;
+    harness?: "codex" | "pi";
+    model?: string;
+    modelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
   };
 }
 
@@ -493,7 +499,7 @@ export const ToolUIMap: Record<string, ToolUI> = {
       return (
         <div className="text-sm">
           <span className="font-medium">Create session</span>
-          {a.body?.name && `: ${a.body.name}`}
+          {a.body?.title ? `: ${a.body.title}` : ""}
         </div>
       );
     },

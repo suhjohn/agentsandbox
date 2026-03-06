@@ -31,7 +31,15 @@ const AGENT_SOURCE_UPDATE_COMMAND = [
   '    echo "[agent-go] warning: source sync failed; continuing with current checkout" >&2;',
   '  fi;',
   'fi'
-].join(' ')
+].join('\n')
+
+const AGENT_SERVER_BUILD_COMMAND = [
+  'if [[ ! -x /opt/agentsandbox/agent-go/scripts/build-agent-server.sh ]]; then',
+  '  echo "[agent-go] build script missing: /opt/agentsandbox/agent-go/scripts/build-agent-server.sh" >&2;',
+  '  exit 1;',
+  'fi',
+  '/opt/agentsandbox/agent-go/scripts/build-agent-server.sh --output /app/agent-server'
+].join('\n')
 
 export type BuildChunk = {
   readonly source: 'stdout' | 'stderr'
@@ -183,21 +191,47 @@ export async function runModalImageBuild (input: {
     )
     await writeFileIfMissing(sandbox, '/etc/agent-image-version', 'unknown\n')
 
+    const setupSteps: Array<{
+      readonly label: string
+      readonly command: string
+      readonly errorPrefix: string
+    }> = [
+      {
+        label: 'source sync',
+        command: AGENT_SOURCE_UPDATE_COMMAND,
+        errorPrefix: 'setup preamble'
+      }
+    ]
+
     if (input.setupScript.trim().length > 0) {
       const setupScriptPath = '/tmp/image-setup.sh'
       await writeFile(sandbox, setupScriptPath, input.setupScript)
-      const setupCommand = `${AGENT_SOURCE_UPDATE_COMMAND} && chmod 700 ${shellQuote(
-        setupScriptPath
-      )} && ${shellQuote(setupScriptPath)}`
+      setupSteps.push({
+        label: 'user setup script',
+        command: `chmod 700 ${shellQuote(setupScriptPath)} && ${shellQuote(
+          setupScriptPath
+        )}`,
+        errorPrefix: 'setup script'
+      })
+    }
+
+    setupSteps.push({
+      label: 'agent-go binary build',
+      command: AGENT_SERVER_BUILD_COMMAND,
+      errorPrefix: 'agent-go build step'
+    })
+
+    for (const step of setupSteps) {
+      logStep(`Running ${step.label}...`)
       const setupStdout = createLineBuffer(line => {
-        emit({ source: 'stderr', text: `[setup][stdout] ${line}\n` })
+        emit({ source: 'stderr', text: `[setup:${step.label}][stdout] ${line}\n` })
       })
       const setupStderr = createLineBuffer(line => {
-        emit({ source: 'stderr', text: `[setup][stderr] ${line}\n` })
+        emit({ source: 'stderr', text: `[setup:${step.label}][stderr] ${line}\n` })
       })
       const { exitCode, stderr } = await execText(
         sandbox,
-        ['bash', '-lc', setupCommand],
+        ['bash', '-lc', step.command],
         {
           timeoutMs: SETUP_TIMEOUT_MS,
           onStdoutChunk: chunk => {
@@ -212,37 +246,7 @@ export async function runModalImageBuild (input: {
       setupStderr.flush()
       if (exitCode !== 0) {
         throw new Error(
-          `setup script failed (exit ${exitCode}).${
-            stderr.trim().length > 0 ? `\n--- stderr ---\n${stderr}` : ''
-          }`
-        )
-      }
-    } else {
-      logStep('Setup script is empty; running source sync only.')
-      const setupStdout = createLineBuffer(line => {
-        emit({ source: 'stderr', text: `[setup][stdout] ${line}\n` })
-      })
-      const setupStderr = createLineBuffer(line => {
-        emit({ source: 'stderr', text: `[setup][stderr] ${line}\n` })
-      })
-      const { exitCode, stderr } = await execText(
-        sandbox,
-        ['bash', '-lc', AGENT_SOURCE_UPDATE_COMMAND],
-        {
-          timeoutMs: SETUP_TIMEOUT_MS,
-          onStdoutChunk: chunk => {
-            setupStdout.push(chunk)
-          },
-          onStderrChunk: chunk => {
-            setupStderr.push(chunk)
-          }
-        }
-      )
-      setupStdout.flush()
-      setupStderr.flush()
-      if (exitCode !== 0) {
-        throw new Error(
-          `setup preamble failed (exit ${exitCode}).${
+          `${step.errorPrefix} failed (exit ${exitCode}).${
             stderr.trim().length > 0 ? `\n--- stderr ---\n${stderr}` : ''
           }`
         )

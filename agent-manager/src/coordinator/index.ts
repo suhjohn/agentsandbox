@@ -211,7 +211,6 @@ Additional trigger conditions:
      - \`message\`: First user prompt for the newly created agent runtime session. This should contain the full user request (including constraints and acceptance criteria).
    - Optional:
      - \`title\`: Human-friendly session title shown in the UI session list. If the user provides one, use it verbatim. Otherwise generate a concise, specific 3–6 word title (no quotes, no trailing punctuation).
-     - \`name\`: Human-friendly agent name. Prefer setting this on creation. If the user provides one, use it verbatim. Otherwise generate a concise, specific name that reflects the task (avoid generic names like "New Agent").
      - \`harness\`: Runtime harness selection (\`codex\` or \`pi\`). Default is \`codex\` unless the user requests otherwise.
      - \`model\`: Optional model override for the first run only. Prefer omitting unless the user requests a specific model.
      - \`modelReasoningEffort\`: Optional reasoning effort hint (\`minimal\` | \`low\` | \`medium\` | \`high\` | \`xhigh\`). Only include when supported/requested.
@@ -311,6 +310,7 @@ Trigger conditions:
 - User provides an existing \`agentId\` and asks for lifecycle actions.
 1. Confirm image is built: \`GET /images/{imageId}/variants\` and ensure the chosen variant has non-null \`headImageId\`.
 2. Create agent: \`POST /agents\`.
+   The manager generates the agent \`id\` and default \`name\`; do not send a \`name\` field.
 3. Runtime access links if requested: \`GET /agents/{agentId}/access\`.
 4. Lifecycle: \`POST /agents/{agentId}/archive\`, \`POST /agents/{agentId}/resume\`, and \`GET /agents/{agentId}\` for status checks.
 

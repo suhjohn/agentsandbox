@@ -140,12 +140,24 @@ export type GetUsers200 = {
   data: GetUsers200DataItem[];
 };
 
+/**
+ * @nullable
+ */
+export type GetUsersMe200WorkspaceKeybindings = {[key: string]: unknown} | null;
+
 export type GetUsersMe200 = {
   id: string;
   email: string;
   name: string;
   defaultRegion: string | string[];
+  /** @nullable */
+  workspaceKeybindings: GetUsersMe200WorkspaceKeybindings;
 };
+
+/**
+ * @nullable
+ */
+export type PatchUsersMeBodyWorkspaceKeybindings = {[key: string]: unknown} | null;
 
 export type PatchUsersMeBody = {
   /**
@@ -154,13 +166,22 @@ export type PatchUsersMeBody = {
    */
   name?: string;
   defaultRegion?: string | string[];
+  /** @nullable */
+  workspaceKeybindings?: PatchUsersMeBodyWorkspaceKeybindings;
 };
+
+/**
+ * @nullable
+ */
+export type PatchUsersMe200WorkspaceKeybindings = {[key: string]: unknown} | null;
 
 export type PatchUsersMe200 = {
   id: string;
   email: string;
   name: string;
   defaultRegion: string | string[];
+  /** @nullable */
+  workspaceKeybindings: PatchUsersMe200WorkspaceKeybindings;
 };
 
 export type PatchUsersMe404 = {
@@ -174,7 +195,16 @@ export type GetImagesParams = {
  */
 limit?: number;
 cursor?: string;
+archived?: GetImagesArchived;
 };
+
+export type GetImagesArchived = typeof GetImagesArchived[keyof typeof GetImagesArchived];
+
+
+export const GetImagesArchived = {
+  true: 'true',
+  false: 'false',
+} as const;
 
 export type GetImages200DataItemVisibility = typeof GetImages200DataItemVisibility[keyof typeof GetImages200DataItemVisibility];
 
@@ -190,7 +220,8 @@ export type GetImages200DataItem = {
   name: string;
   /** @nullable */
   description?: string | null;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
   /** @nullable */
@@ -232,7 +263,8 @@ export type PostImages201 = {
   name: string;
   /** @nullable */
   description?: string | null;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
   /** @nullable */
@@ -256,7 +288,8 @@ export type GetImagesImageId200 = {
   name: string;
   /** @nullable */
   description?: string | null;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
   /** @nullable */
@@ -295,7 +328,8 @@ export type PatchImagesImageId200 = {
   name: string;
   /** @nullable */
   description?: string | null;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
   /** @nullable */
@@ -311,6 +345,14 @@ export type PatchImagesImageId404 = {
 
 export type DeleteImagesImageId200 = {
   ok: boolean;
+};
+
+export type DeleteImagesImageId400 = {
+  error: string;
+};
+
+export type DeleteImagesImageId404 = {
+  error: string;
 };
 
 export type GetImagesImageIdVariants200DataItemScope = typeof GetImagesImageIdVariants200DataItemScope[keyof typeof GetImagesImageIdVariants200DataItemScope];
@@ -469,7 +511,8 @@ export type GetImagesImageIdVariantsVariantIdBuilds200DataItem = {
   id: string;
   imageId: string;
   variantId: string;
-  requestedByUserId: string;
+  /** @nullable */
+  requestedByUserId: string | null;
   status: GetImagesImageIdVariantsVariantIdBuilds200DataItemStatus;
   inputHash: string;
   /** @nullable */
@@ -497,6 +540,10 @@ export type DeleteImagesImageIdVariantsVariantId200 = {
 };
 
 export type DeleteImagesImageIdVariantsVariantId400 = {
+  error: string;
+};
+
+export type DeleteImagesImageIdVariantsVariantId403 = {
   error: string;
 };
 
@@ -701,7 +748,8 @@ export type PostImagesImageIdArchive200 = {
   name: string;
   /** @nullable */
   description?: string | null;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
   /** @nullable */
@@ -711,7 +759,44 @@ export type PostImagesImageIdArchive200 = {
   deletedAt?: string | null;
 };
 
+export type PostImagesImageIdArchive400 = {
+  error: string;
+};
+
 export type PostImagesImageIdArchive404 = {
+  error: string;
+};
+
+export type PostImagesImageIdUnarchive200Visibility = typeof PostImagesImageIdUnarchive200Visibility[keyof typeof PostImagesImageIdUnarchive200Visibility];
+
+
+export const PostImagesImageIdUnarchive200Visibility = {
+  public: 'public',
+  private: 'private',
+} as const;
+
+export type PostImagesImageIdUnarchive200 = {
+  id: string;
+  visibility: PostImagesImageIdUnarchive200Visibility;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
+  defaultVariantId?: string | null;
+  /** @nullable */
+  setupScript?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+};
+
+export type PostImagesImageIdUnarchive400 = {
+  error: string;
+};
+
+export type PostImagesImageIdUnarchive404 = {
   error: string;
 };
 
@@ -733,7 +818,8 @@ export type PostImagesImageIdBuild200Image = {
   name: string;
   /** @nullable */
   description?: string | null;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
   /** @nullable */
@@ -799,7 +885,8 @@ export type PostImagesImageIdClone201 = {
   name: string;
   /** @nullable */
   description?: string | null;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
   /** @nullable */
@@ -875,10 +962,13 @@ export const GetAgents200DataItemStatus = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
 export type GetAgents200DataItemCreatedByUser = {
   id: string;
   name: string;
-};
+} | null;
 
 /**
  * @nullable
@@ -898,10 +988,13 @@ export const GetAgents200DataItemSubAgentsItemStatus = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
 export type GetAgents200DataItemSubAgentsItemCreatedByUser = {
   id: string;
   name: string;
-};
+} | null;
 
 export type GetAgents200DataItemSubAgentsItem = {
   id: string;
@@ -923,7 +1016,9 @@ export type GetAgents200DataItemSubAgentsItem = {
   /** @nullable */
   region?: string | null;
   status: GetAgents200DataItemSubAgentsItemStatus;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
   createdByUser: GetAgents200DataItemSubAgentsItemCreatedByUser;
   createdAt: string;
   updatedAt: string;
@@ -949,7 +1044,9 @@ export type GetAgents200DataItem = {
   /** @nullable */
   region?: string | null;
   status: GetAgents200DataItemStatus;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
   createdByUser: GetAgents200DataItemCreatedByUser;
   createdAt: string;
   updatedAt: string;
@@ -963,11 +1060,6 @@ export type GetAgents200 = {
 };
 
 export type PostAgentsBody = {
-  /**
-   * @minLength 1
-   * @maxLength 255
-   */
-  name?: string;
   parentAgentId?: string;
   imageId: string;
   variantId?: string;
@@ -992,10 +1084,13 @@ export const PostAgents201Status = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
 export type PostAgents201CreatedByUser = {
   id: string;
   name: string;
-};
+} | null;
 
 export type PostAgents201 = {
   id: string;
@@ -1017,7 +1112,9 @@ export type PostAgents201 = {
   /** @nullable */
   region?: string | null;
   status: PostAgents201Status;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
   createdByUser: PostAgents201CreatedByUser;
   createdAt: string;
   updatedAt: string;
@@ -1071,10 +1168,13 @@ export const GetAgentsGroups200DataItemPreviewItemStatus = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
 export type GetAgentsGroups200DataItemPreviewItemCreatedByUser = {
   id: string;
   name: string;
-};
+} | null;
 
 export type GetAgentsGroups200DataItemPreviewItem = {
   id: string;
@@ -1096,7 +1196,9 @@ export type GetAgentsGroups200DataItemPreviewItem = {
   /** @nullable */
   region?: string | null;
   status: GetAgentsGroups200DataItemPreviewItemStatus;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
   createdByUser: GetAgentsGroups200DataItemPreviewItemCreatedByUser;
   createdAt: string;
   updatedAt: string;
@@ -1166,10 +1268,13 @@ export const PostAgentsAgentIdSnapshot200AgentStatus = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
 export type PostAgentsAgentIdSnapshot200AgentCreatedByUser = {
   id: string;
   name: string;
-};
+} | null;
 
 export type PostAgentsAgentIdSnapshot200Agent = {
   id: string;
@@ -1191,7 +1296,9 @@ export type PostAgentsAgentIdSnapshot200Agent = {
   /** @nullable */
   region?: string | null;
   status: PostAgentsAgentIdSnapshot200AgentStatus;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
   createdByUser: PostAgentsAgentIdSnapshot200AgentCreatedByUser;
   createdAt: string;
   updatedAt: string;
@@ -1228,10 +1335,13 @@ export const GetAgentsAgentId200Status = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
 export type GetAgentsAgentId200CreatedByUser = {
   id: string;
   name: string;
-};
+} | null;
 
 export type GetAgentsAgentId200 = {
   id: string;
@@ -1253,7 +1363,9 @@ export type GetAgentsAgentId200 = {
   /** @nullable */
   region?: string | null;
   status: GetAgentsAgentId200Status;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
   createdByUser: GetAgentsAgentId200CreatedByUser;
   createdAt: string;
   updatedAt: string;
@@ -1281,10 +1393,13 @@ export const PostAgentsAgentIdArchive200Status = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
 export type PostAgentsAgentIdArchive200CreatedByUser = {
   id: string;
   name: string;
-};
+} | null;
 
 export type PostAgentsAgentIdArchive200 = {
   id: string;
@@ -1306,7 +1421,9 @@ export type PostAgentsAgentIdArchive200 = {
   /** @nullable */
   region?: string | null;
   status: PostAgentsAgentIdArchive200Status;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
   createdByUser: PostAgentsAgentIdArchive200CreatedByUser;
   createdAt: string;
   updatedAt: string;
@@ -1334,10 +1451,13 @@ export const PostAgentsAgentIdResume200Status = {
   archived: 'archived',
 } as const;
 
+/**
+ * @nullable
+ */
 export type PostAgentsAgentIdResume200CreatedByUser = {
   id: string;
   name: string;
-};
+} | null;
 
 export type PostAgentsAgentIdResume200 = {
   id: string;
@@ -1359,7 +1479,9 @@ export type PostAgentsAgentIdResume200 = {
   /** @nullable */
   region?: string | null;
   status: PostAgentsAgentIdResume200Status;
-  createdBy: string;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
   createdByUser: PostAgentsAgentIdResume200CreatedByUser;
   createdAt: string;
   updatedAt: string;
@@ -1486,15 +1608,12 @@ export const PostSessionBodyModelReasoningEffort = {
 } as const;
 
 export type PostSessionBody = {
-  /**
-   * @minLength 1
-   * @maxLength 255
-   */
-  name?: string;
   parentAgentId?: string;
   imageId: string;
   variantId?: string;
   region?: string | string[];
+  /** @minLength 1 */
+  title?: string;
   /** @minLength 1 */
   message: string;
   harness?: PostSessionBodyHarness;
@@ -2033,6 +2152,18 @@ export type PostTerminalConnect409 = {
 
 export type PostTerminalConnect502 = {
   error: string;
+};
+
+export type GetSettingsGlobal200 = {
+  diffignore: string[];
+};
+
+export type PatchSettingsGlobalBody = {
+  diffignore: string[];
+};
+
+export type PatchSettingsGlobal200 = {
+  diffignore: string[];
 };
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
@@ -3377,13 +3508,25 @@ export type deleteImagesImageIdResponse200 = {
   data: DeleteImagesImageId200
   status: 200
 }
+
+export type deleteImagesImageIdResponse400 = {
+  data: DeleteImagesImageId400
+  status: 400
+}
+
+export type deleteImagesImageIdResponse404 = {
+  data: DeleteImagesImageId404
+  status: 404
+}
     
 export type deleteImagesImageIdResponseSuccess = (deleteImagesImageIdResponse200) & {
   headers: Headers;
 };
-;
+export type deleteImagesImageIdResponseError = (deleteImagesImageIdResponse400 | deleteImagesImageIdResponse404) & {
+  headers: Headers;
+};
 
-export type deleteImagesImageIdResponse = (deleteImagesImageIdResponseSuccess)
+export type deleteImagesImageIdResponse = (deleteImagesImageIdResponseSuccess | deleteImagesImageIdResponseError)
 
 export const getDeleteImagesImageIdUrl = (imageId: string,) => {
 
@@ -3407,7 +3550,7 @@ export const deleteImagesImageId = async (imageId: string, options?: RequestInit
 
 
 
-export const getDeleteImagesImageIdMutationOptions = <TError = unknown,
+export const getDeleteImagesImageIdMutationOptions = <TError = DeleteImagesImageId400 | DeleteImagesImageId404,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteImagesImageId>>, TError,{imageId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteImagesImageId>>, TError,{imageId: string}, TContext> => {
 
@@ -3436,12 +3579,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteImagesImageIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteImagesImageId>>>
     
-    export type DeleteImagesImageIdMutationError = unknown
+    export type DeleteImagesImageIdMutationError = DeleteImagesImageId400 | DeleteImagesImageId404
 
     /**
  * @summary Delete image
  */
-export const useDeleteImagesImageId = <TError = unknown,
+export const useDeleteImagesImageId = <TError = DeleteImagesImageId400 | DeleteImagesImageId404,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteImagesImageId>>, TError,{imageId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteImagesImageId>>,
@@ -4014,6 +4157,11 @@ export type deleteImagesImageIdVariantsVariantIdResponse400 = {
   status: 400
 }
 
+export type deleteImagesImageIdVariantsVariantIdResponse403 = {
+  data: DeleteImagesImageIdVariantsVariantId403
+  status: 403
+}
+
 export type deleteImagesImageIdVariantsVariantIdResponse404 = {
   data: DeleteImagesImageIdVariantsVariantId404
   status: 404
@@ -4022,7 +4170,7 @@ export type deleteImagesImageIdVariantsVariantIdResponse404 = {
 export type deleteImagesImageIdVariantsVariantIdResponseSuccess = (deleteImagesImageIdVariantsVariantIdResponse200) & {
   headers: Headers;
 };
-export type deleteImagesImageIdVariantsVariantIdResponseError = (deleteImagesImageIdVariantsVariantIdResponse400 | deleteImagesImageIdVariantsVariantIdResponse404) & {
+export type deleteImagesImageIdVariantsVariantIdResponseError = (deleteImagesImageIdVariantsVariantIdResponse400 | deleteImagesImageIdVariantsVariantIdResponse403 | deleteImagesImageIdVariantsVariantIdResponse404) & {
   headers: Headers;
 };
 
@@ -4052,7 +4200,7 @@ export const deleteImagesImageIdVariantsVariantId = async (imageId: string,
 
 
 
-export const getDeleteImagesImageIdVariantsVariantIdMutationOptions = <TError = DeleteImagesImageIdVariantsVariantId400 | DeleteImagesImageIdVariantsVariantId404,
+export const getDeleteImagesImageIdVariantsVariantIdMutationOptions = <TError = DeleteImagesImageIdVariantsVariantId400 | DeleteImagesImageIdVariantsVariantId403 | DeleteImagesImageIdVariantsVariantId404,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteImagesImageIdVariantsVariantId>>, TError,{imageId: string;variantId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteImagesImageIdVariantsVariantId>>, TError,{imageId: string;variantId: string}, TContext> => {
 
@@ -4081,12 +4229,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteImagesImageIdVariantsVariantIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteImagesImageIdVariantsVariantId>>>
     
-    export type DeleteImagesImageIdVariantsVariantIdMutationError = DeleteImagesImageIdVariantsVariantId400 | DeleteImagesImageIdVariantsVariantId404
+    export type DeleteImagesImageIdVariantsVariantIdMutationError = DeleteImagesImageIdVariantsVariantId400 | DeleteImagesImageIdVariantsVariantId403 | DeleteImagesImageIdVariantsVariantId404
 
     /**
  * @summary Delete image variant
  */
-export const useDeleteImagesImageIdVariantsVariantId = <TError = DeleteImagesImageIdVariantsVariantId400 | DeleteImagesImageIdVariantsVariantId404,
+export const useDeleteImagesImageIdVariantsVariantId = <TError = DeleteImagesImageIdVariantsVariantId400 | DeleteImagesImageIdVariantsVariantId403 | DeleteImagesImageIdVariantsVariantId404,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteImagesImageIdVariantsVariantId>>, TError,{imageId: string;variantId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteImagesImageIdVariantsVariantId>>,
@@ -5109,6 +5257,11 @@ export type postImagesImageIdArchiveResponse200 = {
   status: 200
 }
 
+export type postImagesImageIdArchiveResponse400 = {
+  data: PostImagesImageIdArchive400
+  status: 400
+}
+
 export type postImagesImageIdArchiveResponse404 = {
   data: PostImagesImageIdArchive404
   status: 404
@@ -5117,7 +5270,7 @@ export type postImagesImageIdArchiveResponse404 = {
 export type postImagesImageIdArchiveResponseSuccess = (postImagesImageIdArchiveResponse200) & {
   headers: Headers;
 };
-export type postImagesImageIdArchiveResponseError = (postImagesImageIdArchiveResponse404) & {
+export type postImagesImageIdArchiveResponseError = (postImagesImageIdArchiveResponse400 | postImagesImageIdArchiveResponse404) & {
   headers: Headers;
 };
 
@@ -5145,7 +5298,7 @@ export const postImagesImageIdArchive = async (imageId: string, options?: Reques
 
 
 
-export const getPostImagesImageIdArchiveMutationOptions = <TError = PostImagesImageIdArchive404,
+export const getPostImagesImageIdArchiveMutationOptions = <TError = PostImagesImageIdArchive400 | PostImagesImageIdArchive404,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdArchive>>, TError,{imageId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
 ): UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdArchive>>, TError,{imageId: string}, TContext> => {
 
@@ -5174,12 +5327,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type PostImagesImageIdArchiveMutationResult = NonNullable<Awaited<ReturnType<typeof postImagesImageIdArchive>>>
     
-    export type PostImagesImageIdArchiveMutationError = PostImagesImageIdArchive404
+    export type PostImagesImageIdArchiveMutationError = PostImagesImageIdArchive400 | PostImagesImageIdArchive404
 
     /**
  * @summary Archive image
  */
-export const usePostImagesImageIdArchive = <TError = PostImagesImageIdArchive404,
+export const usePostImagesImageIdArchive = <TError = PostImagesImageIdArchive400 | PostImagesImageIdArchive404,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdArchive>>, TError,{imageId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof postImagesImageIdArchive>>,
@@ -5188,6 +5341,100 @@ export const usePostImagesImageIdArchive = <TError = PostImagesImageIdArchive404
         TContext
       > => {
       return useMutation(getPostImagesImageIdArchiveMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Unarchive image
+ */
+export type postImagesImageIdUnarchiveResponse200 = {
+  data: PostImagesImageIdUnarchive200
+  status: 200
+}
+
+export type postImagesImageIdUnarchiveResponse400 = {
+  data: PostImagesImageIdUnarchive400
+  status: 400
+}
+
+export type postImagesImageIdUnarchiveResponse404 = {
+  data: PostImagesImageIdUnarchive404
+  status: 404
+}
+    
+export type postImagesImageIdUnarchiveResponseSuccess = (postImagesImageIdUnarchiveResponse200) & {
+  headers: Headers;
+};
+export type postImagesImageIdUnarchiveResponseError = (postImagesImageIdUnarchiveResponse400 | postImagesImageIdUnarchiveResponse404) & {
+  headers: Headers;
+};
+
+export type postImagesImageIdUnarchiveResponse = (postImagesImageIdUnarchiveResponseSuccess | postImagesImageIdUnarchiveResponseError)
+
+export const getPostImagesImageIdUnarchiveUrl = (imageId: string,) => {
+
+
+  
+
+  return `/images/${imageId}/unarchive`
+}
+
+export const postImagesImageIdUnarchive = async (imageId: string, options?: RequestInit): Promise<postImagesImageIdUnarchiveResponse> => {
+  
+  return orvalFetcher<postImagesImageIdUnarchiveResponse>(getPostImagesImageIdUnarchiveUrl(imageId),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+
+export const getPostImagesImageIdUnarchiveMutationOptions = <TError = PostImagesImageIdUnarchive400 | PostImagesImageIdUnarchive404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdUnarchive>>, TError,{imageId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdUnarchive>>, TError,{imageId: string}, TContext> => {
+
+const mutationKey = ['postImagesImageIdUnarchive'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postImagesImageIdUnarchive>>, {imageId: string}> = (props) => {
+          const {imageId} = props ?? {};
+
+          return  postImagesImageIdUnarchive(imageId,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostImagesImageIdUnarchiveMutationResult = NonNullable<Awaited<ReturnType<typeof postImagesImageIdUnarchive>>>
+    
+    export type PostImagesImageIdUnarchiveMutationError = PostImagesImageIdUnarchive400 | PostImagesImageIdUnarchive404
+
+    /**
+ * @summary Unarchive image
+ */
+export const usePostImagesImageIdUnarchive = <TError = PostImagesImageIdUnarchive400 | PostImagesImageIdUnarchive404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdUnarchive>>, TError,{imageId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postImagesImageIdUnarchive>>,
+        TError,
+        {imageId: string},
+        TContext
+      > => {
+      return useMutation(getPostImagesImageIdUnarchiveMutationOptions(options), queryClient);
     }
     
 /**
@@ -8078,4 +8325,198 @@ export const usePostTerminalConnect = <TError = PostTerminalConnect400 | PostTer
         TContext
       > => {
       return useMutation(getPostTerminalConnectMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Get global settings
+ */
+export type getSettingsGlobalResponse200 = {
+  data: GetSettingsGlobal200
+  status: 200
+}
+    
+export type getSettingsGlobalResponseSuccess = (getSettingsGlobalResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getSettingsGlobalResponse = (getSettingsGlobalResponseSuccess)
+
+export const getGetSettingsGlobalUrl = () => {
+
+
+  
+
+  return `/settings/global`
+}
+
+export const getSettingsGlobal = async ( options?: RequestInit): Promise<getSettingsGlobalResponse> => {
+  
+  return orvalFetcher<getSettingsGlobalResponse>(getGetSettingsGlobalUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getGetSettingsGlobalQueryKey = () => {
+    return [
+    `/settings/global`
+    ] as const;
+    }
+
+    
+export const getGetSettingsGlobalQueryOptions = <TData = Awaited<ReturnType<typeof getSettingsGlobal>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettingsGlobal>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSettingsGlobalQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSettingsGlobal>>> = ({ signal }) => getSettingsGlobal({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSettingsGlobal>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSettingsGlobalQueryResult = NonNullable<Awaited<ReturnType<typeof getSettingsGlobal>>>
+export type GetSettingsGlobalQueryError = unknown
+
+
+export function useGetSettingsGlobal<TData = Awaited<ReturnType<typeof getSettingsGlobal>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettingsGlobal>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSettingsGlobal>>,
+          TError,
+          Awaited<ReturnType<typeof getSettingsGlobal>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSettingsGlobal<TData = Awaited<ReturnType<typeof getSettingsGlobal>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettingsGlobal>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSettingsGlobal>>,
+          TError,
+          Awaited<ReturnType<typeof getSettingsGlobal>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSettingsGlobal<TData = Awaited<ReturnType<typeof getSettingsGlobal>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettingsGlobal>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get global settings
+ */
+
+export function useGetSettingsGlobal<TData = Awaited<ReturnType<typeof getSettingsGlobal>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSettingsGlobal>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSettingsGlobalQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Update global settings
+ */
+export type patchSettingsGlobalResponse200 = {
+  data: PatchSettingsGlobal200
+  status: 200
+}
+    
+export type patchSettingsGlobalResponseSuccess = (patchSettingsGlobalResponse200) & {
+  headers: Headers;
+};
+;
+
+export type patchSettingsGlobalResponse = (patchSettingsGlobalResponseSuccess)
+
+export const getPatchSettingsGlobalUrl = () => {
+
+
+  
+
+  return `/settings/global`
+}
+
+export const patchSettingsGlobal = async (patchSettingsGlobalBody: PatchSettingsGlobalBody, options?: RequestInit): Promise<patchSettingsGlobalResponse> => {
+  
+  return orvalFetcher<patchSettingsGlobalResponse>(getPatchSettingsGlobalUrl(),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchSettingsGlobalBody,)
+  }
+);}
+
+
+
+
+export const getPatchSettingsGlobalMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSettingsGlobal>>, TError,{data: PatchSettingsGlobalBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchSettingsGlobal>>, TError,{data: PatchSettingsGlobalBody}, TContext> => {
+
+const mutationKey = ['patchSettingsGlobal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchSettingsGlobal>>, {data: PatchSettingsGlobalBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  patchSettingsGlobal(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchSettingsGlobalMutationResult = NonNullable<Awaited<ReturnType<typeof patchSettingsGlobal>>>
+    export type PatchSettingsGlobalMutationBody = PatchSettingsGlobalBody
+    export type PatchSettingsGlobalMutationError = unknown
+
+    /**
+ * @summary Update global settings
+ */
+export const usePatchSettingsGlobal = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchSettingsGlobal>>, TError,{data: PatchSettingsGlobalBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof patchSettingsGlobal>>,
+        TError,
+        {data: PatchSettingsGlobalBody},
+        TContext
+      > => {
+      return useMutation(getPatchSettingsGlobalMutationOptions(options), queryClient);
     }

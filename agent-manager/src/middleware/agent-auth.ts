@@ -56,6 +56,9 @@ async function loadUserForAgentId(agentId: string) {
   if (!agent) {
     throw new HTTPException(404, { message: "Agent not found" });
   }
+  if (typeof agent.createdBy !== "string" || agent.createdBy.length === 0) {
+    throw new HTTPException(401, { message: "Agent owner not found" });
+  }
   const user = await getUserById(agent.createdBy);
   if (!user) {
     throw new HTTPException(401, { message: "User not found" });

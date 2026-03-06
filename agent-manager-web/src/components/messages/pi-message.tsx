@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { GetSessionId200MessagesItem } from '@/api/generated/agent'
 import type { AgentSessionEvent } from '@mariozechner/pi-coding-agent'
+import type { UserInput } from '@openai/codex-sdk'
 import type { ChatMessage } from '@/types/chat'
 import { Check, ChevronRight, X } from 'lucide-react'
 import { getCssVarAsNumber } from '@/utils/css-vars'
@@ -12,6 +13,11 @@ import {
 import { Markdown } from '@/components/markdown'
 
 type StoredSessionMessage = { readonly id: string; readonly body: unknown }
+type PiUserInputEvent = {
+  readonly type: 'user_input'
+  readonly input: readonly UserInput[]
+}
+type PiMessageBody = AgentSessionEvent | PiUserInputEvent
 
 type ParsedStoredMessage =
   | { readonly kind: 'turn_started' }
@@ -60,7 +66,38 @@ function isRecord (value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-export function isPiMessageBody (value: unknown): value is AgentSessionEvent {
+function isPiUserInput (value: unknown): value is UserInput {
+  if (!isRecord(value)) return false
+  if (value.type === 'text') return typeof value.text === 'string'
+  if (value.type === 'local_image') return typeof value.path === 'string'
+  return false
+}
+
+function isPiUserInputEvent (value: unknown): value is PiUserInputEvent {
+  if (!isRecord(value)) return false
+  if (value.type !== 'user_input') return false
+  if (!Array.isArray(value.input)) return false
+  return value.input.every(isPiUserInput)
+}
+
+function formatUserInput (input: readonly UserInput[]): string | null {
+  const parts: string[] = []
+  for (const item of input) {
+    if (item.type === 'text') {
+      if (item.text.trim().length > 0) parts.push(item.text)
+      continue
+    }
+    if (item.type === 'local_image') {
+      const path = item.path.trim()
+      if (path.length > 0) parts.push(`[image: ${path}]`)
+    }
+  }
+  const content = parts.join('\n\n').trim()
+  return content.length > 0 ? content : null
+}
+
+export function isPiMessageBody (value: unknown): value is PiMessageBody {
+  if (isPiUserInputEvent(value)) return true
   if (!isRecord(value)) return false
   const type = value.type
   return typeof type === 'string' && PI_EVENT_TYPES.has(type)
@@ -171,6 +208,15 @@ export function parsePiStoredMessage (
   raw: StoredSessionMessage
 ): ParsedStoredMessage | null {
   if (!isPiMessageBody(raw.body)) return null
+
+  if (isPiUserInputEvent(raw.body)) {
+    const text = formatUserInput(raw.body.input)
+    if (!text) return null
+    return {
+      kind: 'user',
+      message: { id: raw.id, role: 'user', content: text }
+    }
+  }
 
   const event = raw.body as AgentSessionEvent
   if (event.type === 'turn_start') return { kind: 'turn_started' }
@@ -459,7 +505,7 @@ function PiBashExecutionBlock (props: {
   )
 }
 
-function parsePiBody (raw: unknown): AgentSessionEvent | null {
+function parsePiBody (raw: unknown): PiMessageBody | null {
   if (typeof raw === 'string') {
     const trimmed = raw.trim()
     if (trimmed.length === 0) return null
@@ -478,11 +524,35 @@ function parsePiBody (raw: unknown): AgentSessionEvent | null {
 export function PiMessages (props: {
   readonly messages: readonly GetSessionId200MessagesItem[]
 }) {
-  const displayMessages = props.messages.flatMap(message => {
+  const displayMessages: Array<{
+    readonly key: string
+    readonly message: GetSessionId200MessagesItem
+    readonly body: PiMessageBody
+  }> = []
+  const indexByKey = new Map<string, number>()
+
+  for (const message of props.messages) {
     const body = parsePiBody(message.body)
-    if (!body) return []
-    return [{ key: message.id, message, body }] as const
-  })
+    if (!body) continue
+
+    let key = message.id
+    if (isPiUserInputEvent(body)) {
+      key = `turn:${message.turnId ?? 'no-turn'}:user`
+    } else if (body.type === 'message_end') {
+      const bodyMessage = getMessage(body)
+      if (getRole(bodyMessage) === 'user') {
+        key = `turn:${message.turnId ?? 'no-turn'}:user`
+      }
+    }
+
+    const existingIndex = indexByKey.get(key)
+    if (existingIndex === undefined) {
+      indexByKey.set(key, displayMessages.length)
+      displayMessages.push({ key, message, body })
+      continue
+    }
+    displayMessages[existingIndex] = { key, message, body }
+  }
 
   return (
     <>
@@ -502,10 +572,24 @@ export function PiMessages (props: {
 
 export function PiMessage (props: {
   readonly message: GetSessionId200MessagesItem
-  readonly body: AgentSessionEvent
+  readonly body: PiMessageBody
   readonly isFirst?: boolean
 }) {
   const event = props.body
+  if (isPiUserInputEvent(event)) {
+    const text = formatUserInput(event.input)
+    if (!text) return null
+    return (
+      <div
+        className={`${
+          props.isFirst ? '' : 'mt-8'
+        } w-full bg-surface-3 px-3 py-2 text-sm text-text-primary whitespace-pre-wrap break-words`}
+      >
+        {text}
+      </div>
+    )
+  }
+
   const eventType = (event as { type?: string }).type
 
   const toolExec = getToolExecution(event)
@@ -527,7 +611,9 @@ export function PiMessage (props: {
       if (!text || text.trim().length === 0) return null
       return (
         <div
-          className={`${props.isFirst ? '' : 'mt-8'} w-full bg-surface-3 px-3 py-2 text-sm text-text-primary whitespace-pre-wrap break-words`}
+          className={`${
+            props.isFirst ? '' : 'mt-8'
+          } w-full bg-surface-3 px-3 py-2 text-sm text-text-primary whitespace-pre-wrap break-words`}
         >
           {text}
         </div>

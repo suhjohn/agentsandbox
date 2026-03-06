@@ -10,7 +10,6 @@ import {
 import type { PanelDefinition, PanelProps, PanelSettingsProps } from "./types";
 
 export interface CreateAgentPanelConfig {
-  readonly name: string;
   readonly imageId: string;
   readonly region: string;
   readonly parentAgentId: string;
@@ -18,14 +17,13 @@ export interface CreateAgentPanelConfig {
 
 function deserializeCreateAgentConfig(raw: unknown): CreateAgentPanelConfig {
   if (typeof raw !== "object" || raw === null) {
-    return { name: "", imageId: "", region: "", parentAgentId: "" };
+    return { imageId: "", region: "", parentAgentId: "" };
   }
   const v = raw as Record<string, unknown>;
-  const name = typeof v.name === "string" ? v.name : "";
   const imageId = typeof v.imageId === "string" ? v.imageId : "";
   const region = typeof v.region === "string" ? v.region : "";
   const parentAgentId = typeof v.parentAgentId === "string" ? v.parentAgentId : "";
-  return { name, imageId, region, parentAgentId };
+  return { imageId, region, parentAgentId };
 }
 
 function toErrorMessage(value: unknown): string {
@@ -72,18 +70,16 @@ export function CreateAgentPanel(props: PanelProps<CreateAgentPanelConfig>) {
     const imageId = props.config.imageId.trim();
     if (!imageId) return null;
 
-    const name = props.config.name.trim();
     const parentAgentId = props.config.parentAgentId.trim();
 
     const body: PostAgentsBody = { imageId };
-    if (name) body.name = name;
     if (parentAgentId) body.parentAgentId = parentAgentId;
 
     const region = parseRegion(props.config.region);
     if (region) body.region = region;
 
     return body;
-  }, [props.config.imageId, props.config.name, props.config.parentAgentId, props.config.region]);
+  }, [props.config.imageId, props.config.parentAgentId, props.config.region]);
 
   return (
     <div className="space-y-4">
@@ -111,17 +107,6 @@ export function CreateAgentPanel(props: PanelProps<CreateAgentPanelConfig>) {
                 props.setConfig((prev) => ({ ...prev, imageId: e.target.value }))
               }
               placeholder="imageId"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <div className="text-xs text-text-tertiary">Name (optional)</div>
-            <Input
-              className="bg-surface-1 border border-border"
-              value={props.config.name}
-              onChange={(e) =>
-                props.setConfig((prev) => ({ ...prev, name: e.target.value }))
-              }
-              placeholder="My agent"
             />
           </div>
           <div className="space-y-1.5">
@@ -234,8 +219,8 @@ function CreateAgentSettings(props: PanelSettingsProps<CreateAgentPanelConfig>) 
 export const createAgentPanelDefinition: PanelDefinition<CreateAgentPanelConfig> = {
   type: "agent_create",
   title: "Create Agent",
-  configVersion: 1,
-  defaultConfig: { name: "", imageId: "", region: "", parentAgentId: "" },
+  configVersion: 2,
+  defaultConfig: { imageId: "", region: "", parentAgentId: "" },
   deserializeConfig: (raw) => deserializeCreateAgentConfig(raw),
   getTitle: () => "Create Agent",
   Component: CreateAgentPanel,
