@@ -528,13 +528,19 @@ async function fetchAgentHealthOk (agentApiUrl: string): Promise<boolean> {
     healthUrl.search = ''
     healthUrl.hash = ''
 
+    const requestInit = {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-store' },
+      signal: controller.signal,
+      // Modal tunnel hosts can present certificates Bun rejects in this environment.
+      ...(healthUrl.hostname.endsWith('.modal.host')
+        ? { tls: { rejectUnauthorized: false } }
+        : {})
+    }
+
     let response: Response
     try {
-      response = await fetch(healthUrl.toString(), {
-        method: 'GET',
-        headers: { 'Cache-Control': 'no-store' },
-        signal: controller.signal
-      })
+      response = await fetch(healthUrl.toString(), requestInit)
     } finally {
       clearTimeout(timer)
     }

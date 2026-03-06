@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode
 } from 'react'
@@ -11,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -21,7 +19,7 @@ import { Input } from '@/components/ui/input'
 import { PickerPopover } from '@/components/ui/picker-popover'
 import { Loader } from '@/components/loader'
 import { cn } from '@/lib/utils'
-import { Archive, Check, Copy, Loader2, Settings } from 'lucide-react'
+import { Archive, Loader2, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   usePostAgentsAgentIdArchive,
@@ -34,7 +32,7 @@ import {
   type GetSession200,
   type GetSessionParams
 } from '@/api/generated/agent-manager'
-import { getHealth, type GetHealth200, type GetSessionId200MessagesItem } from '@/api/generated/agent'
+import { getHealth, type GetHealth200 } from '@/api/generated/agent'
 import type { AgentRuntimeRequestInit } from '@/api/orval-agent-fetcher'
 import type {
   PanelDefinition,
@@ -45,7 +43,6 @@ import type {
 import { AgentPicker, SessionPicker } from './agent-pickers'
 import {
   AgentSessionPanel,
-  getSessionMessages,
   type AgentSessionPanelConfig
 } from './agent-session'
 import {
@@ -64,7 +61,6 @@ import {
 } from './agent-diff'
 import { useWorkspaceStore } from '../store'
 import { formatLastMessagePreview } from '@/utils/message-preview'
-import { parseBody } from './session-message-utils'
 
 export interface AgentDetailPanelConfig {
   readonly agentId: string
@@ -1032,176 +1028,6 @@ function AgentDetailSettings (
   )
 }
 
-type CopyFormat = 'json' | 'plaintext' | 'markdown'
-
-function extractTextContent (body: unknown): { role: string; text: string } | null {
-  const parsed = parseBody(body)
-  if (typeof parsed !== 'object' || parsed === null) {
-    if (typeof parsed === 'string') return { role: 'message', text: parsed }
-    return null
-  }
-  const rec = parsed as Record<string, unknown>
-  const role = typeof rec.role === 'string' ? rec.role : 'message'
-
-  if (typeof rec.content === 'string') return { role, text: rec.content }
-  if (Array.isArray(rec.content)) {
-    const textParts = rec.content
-      .filter(
-        (c: unknown) =>
-          typeof c === 'object' &&
-          c !== null &&
-          (c as Record<string, unknown>).type === 'text'
-      )
-      .map((c: unknown) => String((c as Record<string, unknown>).text ?? ''))
-    if (textParts.length > 0) return { role, text: textParts.join('\n') }
-  }
-
-  if (typeof rec.type === 'string') {
-    if (typeof rec.text === 'string') return { role: rec.type, text: rec.text }
-    return { role: rec.type, text: JSON.stringify(parsed) }
-  }
-
-  return null
-}
-
-function formatMessagesAsPlainText (
-  messages: readonly GetSessionId200MessagesItem[]
-): string {
-  return messages
-    .map(m => {
-      const extracted = extractTextContent(m.body)
-      if (!extracted) return null
-      return `[${extracted.role}]: ${extracted.text}`
-    })
-    .filter(Boolean)
-    .join('\n\n')
-}
-
-function formatMessagesAsMarkdown (
-  messages: readonly GetSessionId200MessagesItem[]
-): string {
-  return messages
-    .map(m => {
-      const extracted = extractTextContent(m.body)
-      if (!extracted) return null
-      return `**${extracted.role}**\n\n${extracted.text}`
-    })
-    .filter(Boolean)
-    .join('\n\n---\n\n')
-}
-
-function formatMessages (
-  messages: readonly GetSessionId200MessagesItem[],
-  format: CopyFormat
-): string {
-  switch (format) {
-    case 'json':
-      return JSON.stringify(messages, null, 2)
-    case 'plaintext':
-      return formatMessagesAsPlainText(messages)
-    case 'markdown':
-      return formatMessagesAsMarkdown(messages)
-  }
-}
-
-function AgentDetailActions (props: PanelHeaderProps<AgentDetailPanelConfig>) {
-  const [copied, setCopied] = useState(false)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const agentId = props.config.agentId?.trim() ?? ''
-  const sessionId = props.config.sessionId?.trim() ?? ''
-
-  const accessQuery = useGetAgentsAgentIdAccess(agentId, {
-    query: {
-      enabled: agentId.length > 0,
-      staleTime: 10_000,
-      refetchOnWindowFocus: false,
-      retry: false
-    }
-  })
-  const access = unwrapAccess(accessQuery.data)
-
-  const isVisible =
-    props.config.activeTab === 'session_detail' && sessionId.length > 0
-
-  const setOpen = useCallback(
-    (open: boolean) => {
-      setDropdownOpen(open)
-      props.onPopoverOpenChange?.(open)
-    },
-    [props.onPopoverOpenChange]
-  )
-
-  const doCopy = useCallback(
-    async (format: CopyFormat) => {
-      if (!access?.agentApiUrl) return
-      const messages = getSessionMessages(agentId, sessionId, access.agentApiUrl)
-      if (messages.length === 0) {
-        toast.error('No messages to copy')
-        return
-      }
-      const text = formatMessages(messages, format)
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      toast.success('Copied!')
-      setTimeout(() => setCopied(false), 2000)
-    },
-    [agentId, sessionId, access?.agentApiUrl]
-  )
-
-  if (!isVisible) return null
-
-  return (
-    <DropdownMenu open={dropdownOpen} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type='button'
-          variant='icon'
-          size='icon'
-          className='h-6 w-6 shrink-0'
-          title='Copy thread'
-          aria-label='Copy thread'
-          onClick={e => {
-            e.preventDefault()
-            setOpen(false)
-            void doCopy('json')
-          }}
-          onPointerEnter={() => {
-            hoverTimeoutRef.current = setTimeout(() => {
-              setOpen(true)
-            }, 300)
-          }}
-          onPointerLeave={() => {
-            if (hoverTimeoutRef.current) {
-              clearTimeout(hoverTimeoutRef.current)
-              hoverTimeoutRef.current = null
-            }
-          }}
-        >
-          {copied ? (
-            <Check className='h-3.5 w-3.5' />
-          ) : (
-            <Copy className='h-3.5 w-3.5' />
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align='end' sideOffset={4}>
-        <DropdownMenuLabel>Copy as</DropdownMenuLabel>
-        <DropdownMenuItem onClick={() => void doCopy('plaintext')}>
-          Plain text
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => void doCopy('markdown')}>
-          Markdown
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => void doCopy('json')}>
-          JSON
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 export const agentDetailPanelDefinition: PanelDefinition<AgentDetailPanelConfig> =
   {
     type: 'agent_detail',
@@ -1237,6 +1063,5 @@ export const agentDetailPanelDefinition: PanelDefinition<AgentDetailPanelConfig>
         : null,
     Component: AgentDetailPanel,
     HeaderComponent: AgentDetailHeader,
-    ActionsComponent: AgentDetailActions,
     SettingsComponent: AgentDetailSettings
   }

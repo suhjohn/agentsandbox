@@ -13,8 +13,17 @@ import {
   type QueryClient
 } from '@tanstack/react-query'
 import { getModels, getProviders } from '@mariozechner/pi-ai'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { ModelCombobox } from '@/components/ui/model-combobox'
 import { Textarea } from '@/components/ui/textarea'
+import { Check, Copy } from 'lucide-react'
 import { Loader, SandboxLoader } from '@/components/loader'
 import { toast } from 'sonner'
 import {
@@ -157,8 +166,8 @@ function resolveSelectableModels (args: {
         args.harness === 'pi' && !selectedModel.includes('/')
           ? `${selectedModel} (provider unspecified)`
           : args.harness === 'codex'
-            ? `${selectedModel} (current)`
-            : `${selectedModel.split('/').slice(1).join('/')} (current)`,
+          ? `${selectedModel} (current)`
+          : `${selectedModel.split('/').slice(1).join('/')} (current)`,
       provider:
         args.harness === 'pi' && !selectedModel.includes('/')
           ? 'saved'
@@ -535,6 +544,80 @@ function parseBody (raw: unknown): unknown {
     return JSON.parse(trimmed) as unknown
   } catch {
     return raw
+  }
+}
+
+type CopyFormat = 'json' | 'plaintext' | 'markdown'
+
+function extractTextContent (
+  body: unknown
+): { role: string; text: string } | null {
+  const parsed = parseBody(body)
+  if (typeof parsed !== 'object' || parsed === null) {
+    if (typeof parsed === 'string') return { role: 'message', text: parsed }
+    return null
+  }
+  const rec = parsed as Record<string, unknown>
+  const role = typeof rec.role === 'string' ? rec.role : 'message'
+
+  if (typeof rec.content === 'string') return { role, text: rec.content }
+  if (Array.isArray(rec.content)) {
+    const textParts = rec.content
+      .filter(
+        (c: unknown) =>
+          typeof c === 'object' &&
+          c !== null &&
+          (c as Record<string, unknown>).type === 'text'
+      )
+      .map((c: unknown) => String((c as Record<string, unknown>).text ?? ''))
+    if (textParts.length > 0) return { role, text: textParts.join('\n') }
+  }
+
+  if (typeof rec.type === 'string') {
+    if (typeof rec.text === 'string') return { role: rec.type, text: rec.text }
+    return { role: rec.type, text: JSON.stringify(parsed) }
+  }
+
+  return null
+}
+
+function formatMessagesAsPlainText (
+  messages: readonly GetSessionId200MessagesItem[]
+): string {
+  return messages
+    .map(m => {
+      const extracted = extractTextContent(m.body)
+      if (!extracted) return null
+      return `[${extracted.role}]: ${extracted.text}`
+    })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function formatMessagesAsMarkdown (
+  messages: readonly GetSessionId200MessagesItem[]
+): string {
+  return messages
+    .map(m => {
+      const extracted = extractTextContent(m.body)
+      if (!extracted) return null
+      return `**${extracted.role}**\n\n${extracted.text}`
+    })
+    .filter(Boolean)
+    .join('\n\n---\n\n')
+}
+
+function formatMessages (
+  messages: readonly GetSessionId200MessagesItem[],
+  format: CopyFormat
+): string {
+  switch (format) {
+    case 'json':
+      return JSON.stringify(messages, null, 2)
+    case 'plaintext':
+      return formatMessagesAsPlainText(messages)
+    case 'markdown':
+      return formatMessagesAsMarkdown(messages)
   }
 }
 
@@ -1077,6 +1160,30 @@ function SessionComposer (props: {
   const queryClient = useQueryClient()
 
   const [draft, setDraft] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [copyDropdownOpen, setCopyDropdownOpen] = useState(false)
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const doCopy = useCallback(
+    async (format: CopyFormat) => {
+      if (!props.access?.agentApiUrl) return
+      const messages = getSessionMessages(
+        props.agentId,
+        props.sessionId,
+        props.access.agentApiUrl
+      )
+      if (messages.length === 0) {
+        toast.error('No messages to copy')
+        return
+      }
+      const text = formatMessages(messages, format)
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      toast.success('Copied!')
+      setTimeout(() => setCopied(false), 2000)
+    },
+    [props.agentId, props.sessionId, props.access?.agentApiUrl]
+  )
 
   const createSessionMutation = useMutation({
     mutationFn: async (args: { readonly model: string }) => {
@@ -1218,6 +1325,57 @@ function SessionComposer (props: {
           models={props.availableModels}
           disabled={composerDisabled}
         />
+        <div className='flex-1' />
+        {props.sessionId.length > 0 && (
+          <DropdownMenu
+            open={copyDropdownOpen}
+            onOpenChange={setCopyDropdownOpen}
+          >
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant='icon'
+                size='icon'
+                className='h-7 w-7 shrink-0'
+                title='Copy thread'
+                aria-label='Copy thread'
+                onClick={e => {
+                  e.preventDefault()
+                  setCopyDropdownOpen(false)
+                  void doCopy('json')
+                }}
+                onPointerEnter={() => {
+                  hoverTimeoutRef.current = setTimeout(() => {
+                    setCopyDropdownOpen(true)
+                  }, 300)
+                }}
+                onPointerLeave={() => {
+                  if (hoverTimeoutRef.current) {
+                    clearTimeout(hoverTimeoutRef.current)
+                    hoverTimeoutRef.current = null
+                  }
+                }}
+              >
+                {copied ? (
+                  <Check className='h-3.5 w-3.5' />
+                ) : (
+                  <Copy className='h-3.5 w-3.5' />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end' sideOffset={4}>
+              <DropdownMenuLabel>Copy as</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => void doCopy('plaintext')}>
+                Plain text
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void doCopy('markdown')}>
+                Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void doCopy('json')}>
+                JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   )
