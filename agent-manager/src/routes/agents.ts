@@ -25,6 +25,7 @@ import {
   resolveImageVariantForUser
 } from '../services/image.service'
 import { getUserById } from '../services/user.service'
+import { startAgentSession } from '../services/session.service'
 import {
   buildModalSandboxAccessUrls,
   agentIdToAgentSessionId,
@@ -127,11 +128,43 @@ const agentRuntimeAccessSchema = z.object({
   agentAuthExpiresInSeconds: z.number().int().positive()
 })
 
+const modelReasoningEffortSchema = z.enum([
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh'
+])
+
+const startAgentSessionSchema = z.object({
+  sessionId: z.string().length(32).optional(),
+  title: z.string().min(1).optional(),
+  message: z.string().min(1),
+  harness: z.enum(['codex', 'pi']).optional(),
+  model: z.string().min(1).optional(),
+  modelReasoningEffort: modelReasoningEffortSchema.optional()
+}).strict()
+
+const startAgentSessionResponseSchema = z.object({
+  agent: agentSchema,
+  session: z.object({
+    id: z.string(),
+    streamUrl: z.string(),
+    runId: z.string(),
+    runStreamUrl: z.string()
+  })
+})
+
 function toPublicAgent<T extends Record<string, unknown>> (
   agent: T
-): Omit<T, 'sandboxAccessToken'> {
-  const { sandboxAccessToken: _token, ...rest } = agent as T & {
+): Omit<T, 'sandboxAccessToken' | 'runtimeInternalSecret'> {
+  const {
+    sandboxAccessToken: _token,
+    runtimeInternalSecret: _runtimeInternalSecret,
+    ...rest
+  } = agent as T & {
     sandboxAccessToken?: unknown
+    runtimeInternalSecret?: unknown
   }
   return rest
 }
@@ -511,7 +544,19 @@ registerRoute(
   '/:agentId/snapshot',
   async c => {
     const user = c.get('user')
+    const authMode = (c.get('authMode') ?? 'jwt') as
+      | 'jwt'
+      | 'api-key'
+      | 'runtime-internal'
+    const runtimeAgentId = c.get('runtimeAgentId') ?? null
     const agentId = c.req.param('agentId')
+    if (
+      authMode === 'runtime-internal' &&
+      runtimeAgentId !== null &&
+      runtimeAgentId !== agentId
+    ) {
+      return c.json({ error: 'Runtime internal auth agent mismatch' }, 401)
+    }
     const existing = await getAgentById(agentId)
     if (!existing) {
       return c.json({ error: 'Agent not found' }, 404)
@@ -611,6 +656,40 @@ registerRoute(
       })
       throw err
     }
+  }
+)
+
+registerRoute(
+  app,
+  {
+    method: 'post',
+    path: `${BASE}/:agentId/session`,
+    summary: 'Create a runtime session and first run on an existing agent',
+    tags: ['agents'],
+    security: [{ bearerAuth: [] }],
+    request: {
+      json: startAgentSessionSchema
+    },
+    responses: {
+      200: startAgentSessionResponseSchema,
+      404: z.object({ error: z.string() }),
+      409: z.object({ error: z.string() })
+    }
+  },
+  '/:agentId/session',
+  zValidator('json', startAgentSessionSchema),
+  async c => {
+    const user = c.get('user')
+    const agentId = c.req.param('agentId')
+    const body = c.req.valid('json' as never) as z.infer<
+      typeof startAgentSessionSchema
+    >
+    const result = await startAgentSession({
+      user,
+      agentId,
+      body
+    })
+    return c.json(result)
   }
 )
 

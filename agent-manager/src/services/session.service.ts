@@ -3,7 +3,8 @@ import { agents } from '../db/schema'
 import type { AuthUser } from '../types/context'
 import {
   createAgent,
-  getAgentById
+  getAgentById,
+  getAgentRuntimeInternalSecret
 } from './agent.service'
 import {
   agentIdToAgentSessionId,
@@ -43,11 +44,30 @@ type CreateSessionBootstrapBody = {
     | 'xhigh'
 }
 
+type StartAgentSessionBody = {
+  readonly sessionId?: string
+  readonly message: string
+  readonly title?: string
+  readonly harness?: 'codex' | 'pi'
+  readonly model?: string
+  readonly modelReasoningEffort?:
+    | 'minimal'
+    | 'low'
+    | 'medium'
+    | 'high'
+    | 'xhigh'
+}
+
 function toPublicAgent<T extends Record<string, unknown>> (
   agent: T
-): Omit<T, 'sandboxAccessToken'> {
-  const { sandboxAccessToken: _token, ...rest } = agent as T & {
+): Omit<T, 'sandboxAccessToken' | 'runtimeInternalSecret'> {
+  const {
+    sandboxAccessToken: _token,
+    runtimeInternalSecret: _runtimeInternalSecret,
+    ...rest
+  } = agent as T & {
     sandboxAccessToken?: unknown
+    runtimeInternalSecret?: unknown
   }
   return rest
 }
@@ -148,7 +168,8 @@ function getErrorMessageFromBody (body: unknown): string | null {
 
 async function callAgentApi (input: {
   readonly agentApiUrl: string
-  readonly agentAuthToken: string
+  readonly runtimeInternalSecret: string
+  readonly userId: string
   readonly path: string
   readonly method: 'POST'
   readonly body: unknown
@@ -162,7 +183,8 @@ async function callAgentApi (input: {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        'X-Agent-Auth': `Bearer ${input.agentAuthToken}`
+        'X-Agent-Internal-Auth': input.runtimeInternalSecret,
+        'X-Actor-User-Id': input.userId
       },
       body: JSON.stringify(input.body)
     })
@@ -183,6 +205,25 @@ async function callAgentApi (input: {
   }
 
   return body
+}
+
+function buildSessionResult (input: {
+  readonly agentApiUrl: string
+  readonly sessionId: string
+  readonly runId: string
+}) {
+  return {
+    id: input.sessionId,
+    streamUrl: buildAgentApiUrl(
+      input.agentApiUrl,
+      `/session/${input.sessionId}/stream`
+    ),
+    runId: input.runId,
+    runStreamUrl: buildAgentApiUrl(
+      input.agentApiUrl,
+      `/session/${input.sessionId}/message/${input.runId}/stream`
+    )
+  }
 }
 
 function parseRunId (responseBody: unknown): string {
@@ -262,9 +303,11 @@ export async function createSessionBootstrap (input: {
     createSessionBody.modelReasoningEffort = body.modelReasoningEffort
   }
 
+  const runtimeInternalSecret = await getAgentRuntimeInternalSecret(agent.id)
   await callAgentApi({
     agentApiUrl: access.agentApiUrl,
-    agentAuthToken: access.agentAuthToken,
+    runtimeInternalSecret,
+    userId: user.id,
     path: '/session',
     method: 'POST',
     body: createSessionBody
@@ -280,7 +323,8 @@ export async function createSessionBootstrap (input: {
 
   const runResponse = await callAgentApi({
     agentApiUrl: access.agentApiUrl,
-    agentAuthToken: access.agentAuthToken,
+    runtimeInternalSecret,
+    userId: user.id,
     path: `/session/${sessionId}/message`,
     method: 'POST',
     body: runBody
@@ -299,18 +343,89 @@ export async function createSessionBootstrap (input: {
 
   return {
     agent: hydrated,
-    session: {
-      id: sessionId,
-      streamUrl: buildAgentApiUrl(
-        access.agentApiUrl,
-        `/session/${sessionId}/stream`
-      ),
-      runId,
-      runStreamUrl: buildAgentApiUrl(
-        access.agentApiUrl,
-        `/session/${sessionId}/message/${runId}/stream`
-      )
-    },
+    session: buildSessionResult({
+      agentApiUrl: access.agentApiUrl,
+      sessionId,
+      runId
+    }),
     access
+  }
+}
+
+export async function startAgentSession (input: {
+  readonly user: AuthUser
+  readonly agentId: string
+  readonly body: StartAgentSessionBody
+}) {
+  const { user, body } = input
+  const agentId = input.agentId.trim()
+  if (agentId.length === 0) {
+    throw new HTTPException(400, { message: 'Agent ID is required' })
+  }
+
+  const agent = await getAgentById(agentId)
+  if (!agent) {
+    throw new HTTPException(404, { message: 'Agent not found' })
+  }
+
+  const sandbox = await ensureAgentSandbox({ agentId })
+  const runtimeInternalSecret = await getAgentRuntimeInternalSecret(agentId)
+  const sessionId =
+    body.sessionId?.trim() || crypto.randomUUID().replace(/-/g, '')
+
+  const createSessionBody: Record<string, unknown> = {
+    id: sessionId
+  }
+  if (typeof body.title === 'string' && body.title.trim().length > 0) {
+    createSessionBody.title = body.title.trim()
+  }
+  if (body.harness) createSessionBody.harness = body.harness
+  if (body.model) createSessionBody.model = body.model
+  if (body.modelReasoningEffort) {
+    createSessionBody.modelReasoningEffort = body.modelReasoningEffort
+  }
+
+  await callAgentApi({
+    agentApiUrl: sandbox.tunnels.agentApiUrl,
+    runtimeInternalSecret,
+    userId: user.id,
+    path: '/session',
+    method: 'POST',
+    body: createSessionBody
+  })
+
+  const runBody: Record<string, unknown> = {
+    input: [{ type: 'text', text: body.message }]
+  }
+  if (body.model) runBody.model = body.model
+  if (body.modelReasoningEffort) {
+    runBody.modelReasoningEffort = body.modelReasoningEffort
+  }
+
+  const runResponse = await callAgentApi({
+    agentApiUrl: sandbox.tunnels.agentApiUrl,
+    runtimeInternalSecret,
+    userId: user.id,
+    path: `/session/${sessionId}/message`,
+    method: 'POST',
+    body: runBody
+  })
+  const runId = parseRunId(runResponse)
+
+  const updatedAgent = await getAgentById(agentId)
+  if (!updatedAgent) {
+    throw new Error('Agent not found - should not happen')
+  }
+
+  return {
+    agent: await toHydratedPublicAgent(
+      { id: user.id, name: user.name },
+      updatedAgent
+    ),
+    session: buildSessionResult({
+      agentApiUrl: sandbox.tunnels.agentApiUrl,
+      sessionId,
+      runId
+    })
   }
 }

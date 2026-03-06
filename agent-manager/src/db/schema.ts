@@ -236,6 +236,7 @@ export const agents = pgTable(
     sandboxName: text("sandbox_name"),
     snapshotImageId: text("snapshot_image_id"),
     sandboxAccessToken: text("sandbox_access_token"),
+    runtimeInternalSecret: text("runtime_internal_secret"),
     region: text("region").default("us-west-2"),
     status: text("status").$type<AgentStatus>().notNull().default("active"),
     createdBy: uuid("created_by").references(() => users.id, {

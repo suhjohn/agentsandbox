@@ -5,9 +5,11 @@ import { ModalClient, Sandbox } from 'modal'
 import { resolveBaseImageRefForRegistry } from '@/clients/ghcr'
 import { DEFAULT_REGION } from '@/utils/region'
 import {
+  createAgentRuntimeInternalSecret,
   clearAgentSandboxIfMatches,
   getAgentAccessToken,
   getAgentById,
+  getAgentRuntimeInternalSecret,
   setAgentSandbox
 } from './agent.service'
 import { env } from '../env'
@@ -681,6 +683,7 @@ async function createAgentSandboxModal (input: {
   readonly dbImageId: string
   readonly imageId: string
   readonly sandboxAccessToken: string
+  readonly runtimeInternalSecret: string
   readonly region?: SandboxRegion
 }): Promise<Sandbox> {
   const agentManagerBaseUrl = await resolveAgentManagerBaseUrl()
@@ -708,7 +711,7 @@ async function createAgentSandboxModal (input: {
     SECRET_SEED: env.SANDBOX_SIGNING_SECRET,
     AGENT_RUNTIME_MODE: 'all',
     AGENT_ID: input.agentId,
-    AGENT_MANAGER_API_KEY: env.AGENT_MANAGER_API_KEY,
+    AGENT_INTERNAL_AUTH_SECRET: input.runtimeInternalSecret,
     AGENT_MANAGER_BASE_URL: agentManagerBaseUrl,
     AGENT_ALLOWED_ORIGINS: allowedOrigins
   }
@@ -746,8 +749,7 @@ async function createAgentSandboxModal (input: {
       ANTHROPIC_API_KEY: (process.env.ANTHROPIC_API_KEY ?? '').trim(),
       GOOGLE_GENERATIVE_AI_API_KEY: (
         process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? ''
-      ).trim(),
-      AGENT_MANAGER_API_KEY: (process.env.AGENT_MANAGER_API_KEY ?? '').trim()
+      ).trim()
     }
 
     const filteredKeys = Object.fromEntries(
@@ -901,12 +903,16 @@ async function createAgentSandbox (input: {
   }
 
   const sandboxAccessToken = await getAgentAccessToken(input.agentId)
+  const runtimeInternalSecret = await createAgentRuntimeInternalSecret(
+    input.agentId
+  )
 
   const sandbox = await createAgentSandboxModal({
     agentId: input.agentId,
     dbImageId: agent.imageId!,
     imageId: input.imageId,
     sandboxAccessToken,
+    runtimeInternalSecret,
     region: input.region
   })
 
@@ -939,7 +945,11 @@ async function createAgentSandbox (input: {
 
   await Promise.all([
     setCachedSandboxTunnels(sandbox.sandboxId, tunnels),
-    setAgentSandbox({ id: input.agentId, currentSandboxId: sandbox.sandboxId })
+    setAgentSandbox({
+      id: input.agentId,
+      currentSandboxId: sandbox.sandboxId,
+      runtimeInternalSecret
+    })
   ])
   AGENT_ID_TO_SANDBOX.delete(input.agentId)
   AGENT_ID_TO_SANDBOX.set(input.agentId, sandbox)

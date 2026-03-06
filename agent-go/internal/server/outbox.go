@@ -61,7 +61,12 @@ func newEventOutbox(store *store, client *http.Client, cfg serveConfig) *eventOu
 		store:              store,
 		client:             client,
 		managerBaseURL:     normalizeBaseURL(cfg.AgentManagerBaseURL),
-		managerAuthHeaders: buildManagerAuthHeaders(cfg.AgentManagerAPIKey, cfg.AgentManagerAuthToken),
+		managerAuthHeaders: buildManagerAuthHeaders(
+			cfg.AgentInternalAuthSecret,
+			cfg.AgentID,
+			cfg.AgentManagerAPIKey,
+			cfg.AgentManagerAuthToken,
+		),
 	}
 }
 
@@ -202,7 +207,12 @@ func (s *server) queueManagerSessionSync(sessionID string) {
 	if baseURL == "" {
 		return
 	}
-	if !hasManagerAuthConfig(s.cfg.AgentManagerAPIKey, s.cfg.AgentManagerAuthToken) {
+	if !hasManagerAuthConfig(
+		s.cfg.AgentInternalAuthSecret,
+		s.cfg.AgentID,
+		s.cfg.AgentManagerAPIKey,
+		s.cfg.AgentManagerAuthToken,
+	) {
 		return
 	}
 	session, err := s.store.getSessionByID(sessionID)
@@ -236,7 +246,12 @@ func (s *server) queueManagerSnapshot(sessionID string) {
 	if baseURL == "" {
 		return
 	}
-	if !hasManagerAuthConfig(s.cfg.AgentManagerAPIKey, s.cfg.AgentManagerAuthToken) {
+	if !hasManagerAuthConfig(
+		s.cfg.AgentInternalAuthSecret,
+		s.cfg.AgentID,
+		s.cfg.AgentManagerAPIKey,
+		s.cfg.AgentManagerAuthToken,
+	) {
 		return
 	}
 	session, err := s.store.getSessionByID(sessionID)
@@ -265,7 +280,16 @@ func normalizeBaseURL(raw string) string {
 	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, path)
 }
 
-func buildManagerAuthHeaders(apiKey, authToken string) map[string]string {
+func buildManagerAuthHeaders(internalSecret, agentID, apiKey, authToken string) map[string]string {
+	if secret := strings.TrimSpace(internalSecret); secret != "" {
+		headers := map[string]string{
+			"X-Agent-Internal-Auth": secret,
+		}
+		if agent := strings.TrimSpace(agentID); agent != "" {
+			headers["X-Agent-Id"] = agent
+		}
+		return headers
+	}
 	if key := strings.TrimSpace(apiKey); key != "" {
 		return map[string]string{"x-agent-manager-api-key": key}
 	}
@@ -279,8 +303,8 @@ func buildManagerAuthHeaders(apiKey, authToken string) map[string]string {
 	return map[string]string{"Authorization": "Bearer " + token}
 }
 
-func hasManagerAuthConfig(apiKey, authToken string) bool {
-	return len(buildManagerAuthHeaders(apiKey, authToken)) > 0
+func hasManagerAuthConfig(internalSecret, agentID, apiKey, authToken string) bool {
+	return len(buildManagerAuthHeaders(internalSecret, agentID, apiKey, authToken)) > 0
 }
 
 func isManagerCallbackURL(managerBaseURL, targetURL string) bool {

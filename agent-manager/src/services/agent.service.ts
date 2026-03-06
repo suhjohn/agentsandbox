@@ -25,7 +25,7 @@ import { DEFAULT_REGION, serializeRegion } from "../utils/region";
 import { generateUuid7 } from "../utils/uuid7";
 import { env } from "../env";
 
-function generateSandboxAccessToken(): string {
+function generateOpaqueSecret(): string {
   // 32 hex chars, URL-safe and fine for use in query params.
   return crypto.randomUUID().replace(/-/g, "");
 }
@@ -49,25 +49,25 @@ function isUniqueAgentIdViolation(err: unknown): boolean {
   return candidate.code === "23505" && candidate.constraint === "agents_pkey";
 }
 
-const SANDBOX_ACCESS_TOKEN_PREFIX = "enc:v1:";
-const sandboxAccessTokenKey = createHash("sha256")
+const ENCRYPTED_SECRET_PREFIX = "enc:v1:";
+const encryptedSecretKey = createHash("sha256")
   .update(env.SANDBOX_TOKEN_ENCRYPTION_SECRET)
   .digest();
 
-function encryptSandboxAccessToken(token: string): string {
+function encryptOpaqueSecret(token: string): string {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", sandboxAccessTokenKey, iv);
+  const cipher = createCipheriv("aes-256-gcm", encryptedSecretKey, iv);
   const ciphertext = Buffer.concat([
     cipher.update(token, "utf8"),
     cipher.final(),
   ]);
   const tag = cipher.getAuthTag();
-  return `${SANDBOX_ACCESS_TOKEN_PREFIX}${iv.toString("base64")}:${ciphertext.toString("base64")}:${tag.toString("base64")}`;
+  return `${ENCRYPTED_SECRET_PREFIX}${iv.toString("base64")}:${ciphertext.toString("base64")}:${tag.toString("base64")}`;
 }
 
-function decryptSandboxAccessToken(stored: string): string {
-  if (!stored.startsWith(SANDBOX_ACCESS_TOKEN_PREFIX)) return stored;
-  const payload = stored.slice(SANDBOX_ACCESS_TOKEN_PREFIX.length);
+function decryptOpaqueSecret(stored: string): string {
+  if (!stored.startsWith(ENCRYPTED_SECRET_PREFIX)) return stored;
+  const payload = stored.slice(ENCRYPTED_SECRET_PREFIX.length);
   const [ivB64, ciphertextB64, tagB64] = payload.split(":");
   if (!ivB64 || !ciphertextB64 || !tagB64) {
     throw new Error("Invalid encrypted sandbox access token format");
@@ -75,7 +75,7 @@ function decryptSandboxAccessToken(stored: string): string {
 
   const decipher = createDecipheriv(
     "aes-256-gcm",
-    sandboxAccessTokenKey,
+    encryptedSecretKey,
     Buffer.from(ivB64, "base64"),
   );
   decipher.setAuthTag(Buffer.from(tagB64, "base64"));
@@ -85,6 +85,30 @@ function decryptSandboxAccessToken(stored: string): string {
     decipher.final(),
   ]);
   return plaintext.toString("utf8");
+}
+
+function generateSandboxAccessToken(): string {
+  return generateOpaqueSecret();
+}
+
+function encryptSandboxAccessToken(token: string): string {
+  return encryptOpaqueSecret(token);
+}
+
+function decryptSandboxAccessToken(stored: string): string {
+  return decryptOpaqueSecret(stored);
+}
+
+function generateRuntimeInternalSecret(): string {
+  return generateOpaqueSecret();
+}
+
+function encryptRuntimeInternalSecret(secret: string): string {
+  return encryptOpaqueSecret(secret);
+}
+
+function decryptRuntimeInternalSecret(stored: string): string {
+  return decryptOpaqueSecret(stored);
 }
 
 // ── CRUD ────────────────────────────────────────────────────────────────────
@@ -113,6 +137,7 @@ export async function createAgent(input: {
           imageVariantId: input.imageVariantId ?? null,
           createdBy: input.createdBy,
           sandboxAccessToken: encryptSandboxAccessToken(sandboxAccessToken),
+          runtimeInternalSecret: null,
           region: serializedRegion ?? DEFAULT_REGION,
         })
         .returning();
@@ -475,11 +500,15 @@ export async function updateAgent(id: string, input: { name?: string }) {
 export async function setAgentSandbox(input: {
   id: string;
   currentSandboxId: string;
+  runtimeInternalSecret: string;
 }) {
   const [updated] = await db
     .update(agents)
     .set({
       currentSandboxId: input.currentSandboxId,
+      runtimeInternalSecret: encryptRuntimeInternalSecret(
+        input.runtimeInternalSecret,
+      ),
       updatedAt: new Date(),
     })
     .where(eq(agents.id, input.id))
@@ -495,6 +524,29 @@ export async function getAgentAccessToken(id: string): Promise<string> {
   return decryptSandboxAccessToken(existing.sandboxAccessToken).trim();
 }
 
+export async function getAgentRuntimeInternalSecret(id: string): Promise<string> {
+  const existing = await getAgentById(id);
+  if (!existing) throw new Error("Agent not found");
+  if (!existing.runtimeInternalSecret) {
+    throw new Error("Agent has no runtime internal secret");
+  }
+  return decryptRuntimeInternalSecret(existing.runtimeInternalSecret).trim();
+}
+
+export async function createAgentRuntimeInternalSecret(id: string): Promise<string> {
+  const secret = generateRuntimeInternalSecret();
+  const [updated] = await db
+    .update(agents)
+    .set({
+      runtimeInternalSecret: encryptRuntimeInternalSecret(secret),
+      updatedAt: new Date(),
+    })
+    .where(eq(agents.id, id))
+    .returning({ id: agents.id });
+  if (!updated) throw new Error("Agent not found");
+  return secret;
+}
+
 export async function setAgentSnapshot(input: {
   id: string;
   snapshotImageId: string;
@@ -504,6 +556,7 @@ export async function setAgentSnapshot(input: {
     .set({
       snapshotImageId: input.snapshotImageId,
       currentSandboxId: null,
+      runtimeInternalSecret: null,
       updatedAt: new Date(),
     })
     .where(eq(agents.id, input.id))
@@ -529,7 +582,11 @@ export async function setAgentCheckpointSnapshot(input: {
 export async function clearAgentSandbox(id: string) {
   const [updated] = await db
     .update(agents)
-    .set({ currentSandboxId: null, updatedAt: new Date() })
+    .set({
+      currentSandboxId: null,
+      runtimeInternalSecret: null,
+      updatedAt: new Date(),
+    })
     .where(eq(agents.id, id))
     .returning();
   return updated ?? null;
@@ -541,7 +598,11 @@ export async function clearAgentSandboxIfMatches(input: {
 }) {
   const [updated] = await db
     .update(agents)
-    .set({ currentSandboxId: null, updatedAt: new Date() })
+    .set({
+      currentSandboxId: null,
+      runtimeInternalSecret: null,
+      updatedAt: new Date(),
+    })
     .where(and(eq(agents.id, input.id), eq(agents.currentSandboxId, input.currentSandboxId)))
     .returning();
   return updated ?? null;

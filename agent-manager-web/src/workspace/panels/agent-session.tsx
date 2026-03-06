@@ -43,6 +43,7 @@ export interface AgentSessionPanelConfig {
   readonly sessionId: string
   readonly sessionTitle?: string
   readonly sessionModel?: string
+  readonly sessionHarness?: string
 }
 
 type StreamPhase = 'idle' | 'connecting' | 'connected'
@@ -1303,9 +1304,11 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
     return 'unknown'
   }, [sessionQuery.data?.harness])
   const sessionHarness = useMemo((): 'codex' | 'pi' => {
+    if (props.config.sessionHarness === 'pi') return 'pi'
+    if (props.config.sessionHarness === 'codex') return 'codex'
     const harness = sessionQuery.data?.harness?.trim().toLowerCase()
     return harness === 'pi' ? 'pi' : 'codex'
-  }, [sessionQuery.data?.harness])
+  }, [props.config.sessionHarness, sessionQuery.data?.harness])
   const selectedSessionModel = useMemo(() => {
     if (typeof props.config.sessionModel === 'string') {
       return props.config.sessionModel.trim()

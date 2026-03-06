@@ -251,6 +251,7 @@ type SessionPickerProps = {
   readonly onChange: (next: {
     readonly sessionId: string;
     readonly sessionTitle?: string | null;
+    readonly sessionHarness?: string | null;
   }) => void;
   readonly access: {
     readonly agentApiUrl: string;
@@ -397,6 +398,7 @@ export function SessionPicker(props: SessionPickerProps) {
     props.onChange({
       sessionId,
       sessionTitle: selected?.title ?? null,
+      sessionHarness: selected?.harness ?? null,
     });
     setOpen(false);
   }

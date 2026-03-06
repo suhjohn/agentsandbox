@@ -45,12 +45,12 @@
                     ]
                   },
                   "model": {
-                    "type": "string",
-                    "minLength": 1
+                    "type": "string"
                   },
                   "modelReasoningEffort": {
                     "type": "string",
                     "enum": [
+                      "off",
                       "minimal",
                       "low",
                       "medium",
@@ -114,6 +114,7 @@
                         "null"
                       ],
                       "enum": [
+                        "off",
                         "minimal",
                         "low",
                         "medium",
@@ -286,6 +287,7 @@
                               "null"
                             ],
                             "enum": [
+                              "off",
                               "minimal",
                               "low",
                               "medium",
@@ -448,6 +450,7 @@
                         "null"
                       ],
                       "enum": [
+                        "off",
                         "minimal",
                         "low",
                         "medium",
@@ -837,12 +840,12 @@
                     "minItems": 1
                   },
                   "model": {
-                    "type": "string",
-                    "minLength": 1
+                    "type": "string"
                   },
                   "modelReasoningEffort": {
                     "type": "string",
                     "enum": [
+                      "off",
                       "minimal",
                       "low",
                       "medium",

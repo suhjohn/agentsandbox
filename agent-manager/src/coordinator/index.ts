@@ -42,7 +42,9 @@ Act as autonomously as possible: proactively choose and execute the best availab
 - Use \`coordinator_read_file\` and \`coordinator_write_file\` for coordinator workspace file I/O when needed.
 - Use \`agent_sandbox_bash\` only for runtime inspection or file/process work inside an agent sandbox.
 - For manager API calls, always authenticate as the current user via \`$USER_AUTHORIZATION_HEADER\`.
-- For \`coordinator_api_request\`, Authorization is auto-applied from current user context.
+- For \`coordinator_api_request\`, Authorization is auto-applied only for manager-origin requests.
+- For sandbox runtime HTTP calls, prefer \`coordinator_api_request\` with an absolute \`https://...\` runtime URL and pass \`X-Agent-Auth\` manually.
+- Do not use \`coordinator_bash\` + \`curl\` for runtime API calls unless you are explicitly diagnosing network behavior.
 - If you intentionally use \`curl\` in \`coordinator_bash\`, pass auth exactly as an HTTP header:
   - Correct: \`curl -H "$USER_AUTHORIZATION_HEADER" "$AGENT_MANAGER_BASE_URL/..."\`
   - Incorrect: \`curl ... $USER_AUTHORIZATION_HEADER ...\` (this does not set the header).
@@ -323,12 +325,12 @@ Trigger conditions:
 2. Read \`agentApiUrl\` and \`agentAuthToken\` from response.
 3. Compute deterministic runtime \`sessionId\` by removing hyphens from \`agentId\`.
 4. Send runtime message:
-   - \`POST {agentApiUrl}/session/{sessionId}/message\`
+   - Use \`coordinator_api_request\` with \`path: "{agentApiUrl}/session/{sessionId}/message"\`
    - Header: \`X-Agent-Auth: Bearer <agentAuthToken>\`
    - Body:
      \`{"input":[{"type":"text","text":"<follow-up>"}]}\`
 5. If runtime returns missing session (for example, \`404\`), create runtime session and retry once:
-   - \`POST {agentApiUrl}/session\` with \`{ "id": sessionId }\`
+   - Use \`coordinator_api_request\` to \`POST {agentApiUrl}/session\` with \`{ "id": sessionId }\`
    - Retry \`POST /session/{sessionId}/message\` exactly once.
 6. Return concrete identifiers in final response:
    - \`agentId\`, \`sessionId\`, and new \`runId\`.
@@ -679,7 +681,7 @@ async function readStreamLimited (
   return { text: text.trim(), truncated }
 }
 
-function createCoordinatorApiRequestTool (input: {
+export function createCoordinatorApiRequestTool (input: {
   baseUrl: string
   userAuthHeader: string
 }): Tool {
@@ -711,7 +713,7 @@ function createCoordinatorApiRequestTool (input: {
         path: {
           type: 'string',
           description:
-            'Absolute manager route path starting with "/". Example: "/images/{imageId}".'
+            'Manager route path starting with "/" or an absolute http/https URL. Examples: "/images/{imageId}", "https://runtime.example.com/session".'
         },
         query: {
           type: 'object',
@@ -729,7 +731,7 @@ function createCoordinatorApiRequestTool (input: {
           type: 'object',
           additionalProperties: { type: 'string' },
           description:
-            'Optional extra headers (Authorization is always forced from current user context).'
+            'Optional extra headers. Authorization is auto-applied only for manager-origin requests.'
         },
         json: {
           description:
@@ -755,8 +757,14 @@ function createCoordinatorApiRequestTool (input: {
 
       const path = request.path.trim()
       if (path.length === 0) throw new Error('path is required')
-      if (!path.startsWith('/')) {
-        throw new Error('path must start with "/"')
+      if (
+        !path.startsWith('/') &&
+        !path.startsWith('http://') &&
+        !path.startsWith('https://')
+      ) {
+        throw new Error(
+          'path must start with "/" or be an absolute http/https URL'
+        )
       }
 
       if (
@@ -773,7 +781,9 @@ function createCoordinatorApiRequestTool (input: {
           : 30_000
       const timeoutMs = Math.max(1_000, Math.min(120_000, timeoutMsRaw))
 
-      const url = new URL(path, `${managerOrigin}/`)
+      const url = path.startsWith('http://') || path.startsWith('https://')
+        ? new URL(path)
+        : new URL(path, `${managerOrigin}/`)
       if (request.query && typeof request.query === 'object') {
         for (const [key, value] of Object.entries(request.query)) {
           const k = key.trim()
@@ -801,7 +811,11 @@ function createCoordinatorApiRequestTool (input: {
         }
       }
 
-      if (userAuthHeader.length > 0) {
+      if (
+        userAuthHeader.length > 0 &&
+        url.origin === managerOrigin &&
+        !headers.has('Authorization')
+      ) {
         headers.set('Authorization', userAuthHeader)
       }
 

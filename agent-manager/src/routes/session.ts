@@ -512,13 +512,28 @@ registerRoute(
   zValidator('param', sessionIdParamsSchema),
   zValidator('json', upsertSessionContentSchema),
   async c => {
-    const authMode = (c.get('authMode') ?? 'jwt') as 'jwt' | 'api-key'
+    const authMode = (c.get('authMode') ?? 'jwt') as
+      | 'jwt'
+      | 'api-key'
+      | 'runtime-internal'
+    const runtimeAgentId = c.get('runtimeAgentId') ?? null
     const { id } = c.req.valid('param' as never) as z.infer<
       typeof sessionIdParamsSchema
     >
     const body = c.req.valid('json' as never) as z.infer<
       typeof upsertSessionContentSchema
     >
+
+    if (
+      authMode === 'runtime-internal' &&
+      runtimeAgentId !== null &&
+      body.agentId !== runtimeAgentId
+    ) {
+      return c.json(
+        { error: 'Runtime internal auth agent mismatch' },
+        401
+      )
+    }
 
     const targetAgent = await getAgentById(body.agentId)
     if (!targetAgent) {

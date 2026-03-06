@@ -74,6 +74,7 @@ export interface AgentDetailPanelConfig {
   readonly sessionId: string
   readonly sessionTitle?: string
   readonly sessionModel?: string
+  readonly sessionHarness?: string
   readonly diffStyle?: 'split' | 'unified'
 }
 
@@ -131,7 +132,8 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
       sessionLimit: 20,
       sessionId: '',
       sessionTitle: '',
-      sessionModel: undefined
+      sessionModel: undefined,
+      sessionHarness: undefined
     }
   }
   const v = raw as Record<string, unknown>
@@ -148,6 +150,10 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
   const sessionTitle = typeof v.sessionTitle === 'string' ? v.sessionTitle : ''
   const sessionModel =
     typeof v.sessionModel === 'string' ? v.sessionModel : undefined
+  const sessionHarness =
+    v.sessionHarness === 'pi' || v.sessionHarness === 'codex'
+      ? v.sessionHarness
+      : undefined
   const diffStyle =
     v.diffStyle === 'unified' || v.diffStyle === 'split'
       ? v.diffStyle
@@ -160,6 +166,7 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
     sessionId,
     sessionTitle,
     sessionModel,
+    sessionHarness,
     diffStyle
   }
 }
@@ -247,14 +254,16 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
       agentName: props.config.agentName,
       sessionId: resolvedSessionId,
       sessionTitle: props.config.sessionTitle,
-      sessionModel: props.config.sessionModel
+      sessionModel: props.config.sessionModel,
+      sessionHarness: props.config.sessionHarness
     }),
     [
       props.config.agentId,
       props.config.agentName,
       resolvedSessionId,
       props.config.sessionTitle,
-      props.config.sessionModel
+      props.config.sessionModel,
+      props.config.sessionHarness
     ]
   )
   const terminalConfig: AgentTerminalPanelConfig = useMemo(
@@ -288,7 +297,8 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
           agentName: prev.agentName,
           sessionId: prev.sessionId,
           sessionTitle: prev.sessionTitle,
-          sessionModel: prev.sessionModel
+          sessionModel: prev.sessionModel,
+          sessionHarness: prev.sessionHarness
         })
         return {
           ...prev,
@@ -296,7 +306,8 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
           agentName: next.agentName,
           sessionId: next.sessionId,
           sessionTitle: next.sessionTitle,
-          sessionModel: next.sessionModel
+          sessionModel: next.sessionModel,
+          sessionHarness: next.sessionHarness
         }
       })
     },
@@ -524,7 +535,8 @@ function AgentDetailSessionListView (props: {
               activeTab: 'session_detail',
               sessionId: 'new',
               sessionTitle: '',
-              sessionModel: undefined
+              sessionModel: undefined,
+              sessionHarness: undefined
             }))
           }
         >
@@ -551,7 +563,11 @@ function AgentDetailSessionListView (props: {
                   activeTab: 'session_detail',
                   sessionId: s.id,
                   sessionTitle: s.title?.trim() || '',
-                  sessionModel: s.model?.trim() || undefined
+                  sessionModel: s.model?.trim() || undefined,
+                  sessionHarness:
+                    s.harness === 'pi' || s.harness === 'codex'
+                      ? s.harness
+                      : undefined
                 }))
               }
             />
@@ -670,7 +686,8 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
             activeTab: 'session_list',
             sessionId: '',
             sessionTitle: '',
-            sessionModel: undefined
+            sessionModel: undefined,
+            sessionHarness: undefined
           }))
         }
         onOpenChange={handleAgentPickerOpenChange}
@@ -780,7 +797,11 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
                 activeTab: 'session_detail',
                 sessionId: next.sessionId,
                 sessionTitle: next.sessionTitle?.trim() || '',
-                sessionModel: undefined
+                sessionModel: undefined,
+                sessionHarness:
+                  next.sessionHarness === 'pi' || next.sessionHarness === 'codex'
+                    ? next.sessionHarness
+                    : undefined
               }))
             }
           />
@@ -1193,7 +1214,8 @@ export const agentDetailPanelDefinition: PanelDefinition<AgentDetailPanelConfig>
       sessionLimit: 20,
       sessionId: '',
       sessionTitle: '',
-      sessionModel: undefined
+      sessionModel: undefined,
+      sessionHarness: undefined
     },
     deserializeConfig: raw => deserializeAgentDetailConfig(raw),
     getTitle: config => {

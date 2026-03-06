@@ -104,6 +104,7 @@ describe("/agents/:agentId/access (integration)", () => {
     await setAgentSandbox({
       id: agent.id,
       currentSandboxId: sandboxId,
+      runtimeInternalSecret: crypto.randomUUID().replaceAll("-", ""),
     });
 
     const sandboxSpy = vi
@@ -163,6 +164,7 @@ describe("/agents/:agentId/access (integration)", () => {
     await setAgentSandbox({
       id: agent.id,
       currentSandboxId: sandboxId,
+      runtimeInternalSecret: crypto.randomUUID().replaceAll("-", ""),
     });
 
     vi.spyOn(sandboxService, "ensureAgentSandbox").mockRejectedValue(
@@ -201,6 +203,7 @@ describe("/agents/:agentId/access (integration)", () => {
     await setAgentSandbox({
       id: agent.id,
       currentSandboxId: sandboxId,
+      runtimeInternalSecret: crypto.randomUUID().replaceAll("-", ""),
     });
 
     await db

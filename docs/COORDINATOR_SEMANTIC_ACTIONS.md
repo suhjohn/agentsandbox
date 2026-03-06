@@ -39,6 +39,7 @@ Current client tools:
 Policy:
 1. Use semantic actions first (`ui_run_action`).
 2. Use `ui_browser_*` tools only when semantic actions cannot express the interaction.
+3. Backend runtime-host HTTP work remains a server-tool concern: prefer `coordinator_api_request` with absolute runtime URLs plus `X-Agent-Auth`, not browser tools or shell `curl`.
 
 ### 3.1 Action Definition
 ```ts

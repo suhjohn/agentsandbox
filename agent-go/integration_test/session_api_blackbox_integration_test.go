@@ -29,6 +29,21 @@ type messageRow struct {
 	Body      string
 }
 
+func loadSessionRow(t *testing.T, dbPath, sessionID string) sessionRow {
+	t.Helper()
+	db := sqliteOpenReadOnly(t, dbPath)
+	defer db.Close()
+	row := db.QueryRow(`
+    SELECT lower(hex(id)), agent_id, created_by, status, harness, model, model_reasoning_effort, first_user_message_body, last_message_body
+    FROM sessions WHERE lower(hex(id)) = lower(?)
+  `, sessionID)
+	var rec sessionRow
+	if err := row.Scan(&rec.ID, &rec.AgentID, &rec.CreatedBy, &rec.Status, &rec.Harness, &rec.Model, &rec.ModelReasoningEffort, &rec.FirstUserMessageBody, &rec.LastMessageBody); err != nil {
+		t.Fatalf("scan session row: %v", err)
+	}
+	return rec
+}
+
 func TestSessionAPIBlackbox_CreateSessionPersists(t *testing.T) {
 	srv := startAgentGoServer(t)
 	defer stopAgentGoServer(t, srv)
@@ -57,16 +72,7 @@ func TestSessionAPIBlackbox_CreateSessionPersists(t *testing.T) {
 		t.Fatalf("unexpected createdBy: %#v", created)
 	}
 
-	db := sqliteOpenReadOnly(t, srv.dbPath)
-	defer db.Close()
-	row := db.QueryRow(`
-    SELECT lower(hex(id)), agent_id, created_by, status, harness, model, model_reasoning_effort, first_user_message_body, last_message_body
-    FROM sessions WHERE lower(hex(id)) = lower(?)
-  `, sessionID)
-	var rec sessionRow
-	if err := row.Scan(&rec.ID, &rec.AgentID, &rec.CreatedBy, &rec.Status, &rec.Harness, &rec.Model, &rec.ModelReasoningEffort, &rec.FirstUserMessageBody, &rec.LastMessageBody); err != nil {
-		t.Fatalf("scan session row: %v", err)
-	}
+	rec := loadSessionRow(t, srv.dbPath, sessionID)
 	if rec.CreatedBy != "integration-user" || rec.Harness != "codex" {
 		t.Fatalf("unexpected db session row: %+v", rec)
 	}
@@ -78,6 +84,77 @@ func TestSessionAPIBlackbox_CreateSessionPersists(t *testing.T) {
 	}
 	if rec.FirstUserMessageBody != nil || rec.LastMessageBody != nil {
 		t.Fatalf("expected null first/last message bodies, got first=%v last=%v", rec.FirstUserMessageBody, rec.LastMessageBody)
+	}
+}
+
+func TestSessionAPIBlackbox_CreateSessionAllowsEmptyModelDefault(t *testing.T) {
+	srv := startAgentGoServer(t)
+	defer stopAgentGoServer(t, srv)
+
+	sessionID := newSessionID()
+	auth := sandboxAuthHeader(t, sessionID, "integration-user", srv.secretSeed, srv.agentID)
+
+	res := httpJSON(t, http.MethodPost, srv.baseURL+"/session", auth, map[string]any{
+		"id":                   sessionID,
+		"harness":              "codex",
+		"model":                "   ",
+		"modelReasoningEffort": "medium",
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+
+	rec := loadSessionRow(t, srv.dbPath, sessionID)
+	if rec.Model != nil {
+		t.Fatalf("expected empty model override to persist as nil, got %+v", rec.Model)
+	}
+	if rec.ModelReasoningEffort == nil || *rec.ModelReasoningEffort != "medium" {
+		t.Fatalf("expected effort medium, got %+v", rec.ModelReasoningEffort)
+	}
+}
+
+func TestSessionAPIBlackbox_CreateSessionRejectsNonOpenAIModelForCodex(t *testing.T) {
+	srv := startAgentGoServer(t)
+	defer stopAgentGoServer(t, srv)
+
+	sessionID := newSessionID()
+	auth := sandboxAuthHeader(t, sessionID, "integration-user", srv.secretSeed, srv.agentID)
+
+	res := httpJSON(t, http.MethodPost, srv.baseURL+"/session", auth, map[string]any{
+		"id":      sessionID,
+		"harness": "codex",
+		"model":   "anthropic/claude-opus-4-6",
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", res.StatusCode)
+	}
+}
+
+func TestSessionAPIBlackbox_CreateSessionNormalizesPIModel(t *testing.T) {
+	srv := startAgentGoServer(t)
+	defer stopAgentGoServer(t, srv)
+
+	sessionID := newSessionID()
+	auth := sandboxAuthHeader(t, sessionID, "integration-user", srv.secretSeed, srv.agentID)
+
+	res := httpJSON(t, http.MethodPost, srv.baseURL+"/session", auth, map[string]any{
+		"id":      sessionID,
+		"harness": "pi",
+		"model":   "openai/gpt-5.2:high",
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+
+	rec := loadSessionRow(t, srv.dbPath, sessionID)
+	if rec.Model == nil || *rec.Model != "openai/gpt-5.2" {
+		t.Fatalf("expected normalized pi model openai/gpt-5.2, got %+v", rec.Model)
+	}
+	if rec.ModelReasoningEffort == nil || *rec.ModelReasoningEffort != "high" {
+		t.Fatalf("expected high effort, got %+v", rec.ModelReasoningEffort)
 	}
 }
 
@@ -291,14 +368,7 @@ func TestSessionAPIBlackbox_MessageRunPersistsFields(t *testing.T) {
 		t.Fatalf("expected persisted provider event item.completed: %#v", messages)
 	}
 
-	var rec sessionRow
-	row := db.QueryRow(`
-    SELECT lower(hex(id)), agent_id, created_by, status, harness, model, model_reasoning_effort, first_user_message_body, last_message_body
-    FROM sessions WHERE lower(hex(id)) = lower(?)
-  `, sessionID)
-	if err := row.Scan(&rec.ID, &rec.AgentID, &rec.CreatedBy, &rec.Status, &rec.Harness, &rec.Model, &rec.ModelReasoningEffort, &rec.FirstUserMessageBody, &rec.LastMessageBody); err != nil {
-		t.Fatalf("scan session row: %v", err)
-	}
+	rec := loadSessionRow(t, srv.dbPath, sessionID)
 	if rec.Model == nil || *rec.Model != "gpt-5.2" {
 		t.Fatalf("expected session model gpt-5.2, got %+v", rec.Model)
 	}
@@ -322,6 +392,71 @@ func TestSessionAPIBlackbox_MessageRunPersistsFields(t *testing.T) {
 	}
 	if ct := streamRes.Header.Get("Content-Type"); !strings.Contains(ct, "text/event-stream") {
 		t.Fatalf("expected SSE content-type, got %q", ct)
+	}
+}
+
+func TestSessionAPIBlackbox_MessageRunAllowsClearingModelOverride(t *testing.T) {
+	srv := startAgentGoServer(t)
+	defer stopAgentGoServer(t, srv)
+
+	sessionID := newSessionID()
+	auth := sandboxAuthHeader(t, sessionID, "integration-user", srv.secretSeed, srv.agentID)
+
+	createRes := httpJSON(t, http.MethodPost, srv.baseURL+"/session", auth, map[string]any{
+		"id":                   sessionID,
+		"harness":              "codex",
+		"model":                "gpt-5.2",
+		"modelReasoningEffort": "high",
+	})
+	createRes.Body.Close()
+	if createRes.StatusCode != http.StatusCreated {
+		t.Fatalf("expected create 201, got %d", createRes.StatusCode)
+	}
+
+	runRes := httpJSON(t, http.MethodPost, srv.baseURL+"/session/"+sessionID+"/message", auth, map[string]any{
+		"input": []map[string]any{{"type": "text", "text": "Reply with exactly: ok"}},
+		"model": "",
+	})
+	defer runRes.Body.Close()
+	if runRes.StatusCode != http.StatusOK {
+		t.Fatalf("expected run 200, got %d", runRes.StatusCode)
+	}
+
+	rec := loadSessionRow(t, srv.dbPath, sessionID)
+	if rec.Model != nil {
+		t.Fatalf("expected cleared model override, got %+v", rec.Model)
+	}
+	if rec.ModelReasoningEffort == nil || *rec.ModelReasoningEffort != "high" {
+		t.Fatalf("expected effort high to remain, got %+v", rec.ModelReasoningEffort)
+	}
+}
+
+func TestSessionAPIBlackbox_MessageRunRejectsConflictingThinkingLevels(t *testing.T) {
+	srv := startAgentGoServer(t)
+	defer stopAgentGoServer(t, srv)
+
+	sessionID := newSessionID()
+	auth := sandboxAuthHeader(t, sessionID, "integration-user", srv.secretSeed, srv.agentID)
+
+	createRes := httpJSON(t, http.MethodPost, srv.baseURL+"/session", auth, map[string]any{"id": sessionID, "harness": "pi"})
+	createRes.Body.Close()
+	if createRes.StatusCode != http.StatusCreated {
+		t.Fatalf("expected create 201, got %d", createRes.StatusCode)
+	}
+
+	runRes := httpJSON(t, http.MethodPost, srv.baseURL+"/session/"+sessionID+"/message", auth, map[string]any{
+		"input":                []map[string]any{{"type": "text", "text": "Reply with exactly: ok"}},
+		"model":                "openai/gpt-5.2:high",
+		"modelReasoningEffort": "medium",
+	})
+	defer runRes.Body.Close()
+	if runRes.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected run 400, got %d", runRes.StatusCode)
+	}
+
+	rec := loadSessionRow(t, srv.dbPath, sessionID)
+	if rec.Model != nil || rec.ModelReasoningEffort != nil {
+		t.Fatalf("expected conflicting request to leave defaults unchanged, got %+v", rec)
 	}
 }
 

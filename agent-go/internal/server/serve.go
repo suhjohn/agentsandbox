@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -53,6 +54,7 @@ type serveConfig struct {
 	AgentID               string
 	DatabasePath          string
 	SecretSeed            string
+	AgentInternalAuthSecret string
 	DefaultCodexModel     string
 	OpenAIAPIKey          string
 	PIDir                 string
@@ -201,6 +203,7 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	managerBaseURL := strings.TrimSpace(os.Getenv("AGENT_MANAGER_BASE_URL"))
 	managerAPIKey := strings.TrimSpace(os.Getenv("AGENT_MANAGER_API_KEY"))
 	managerAuthToken := strings.TrimSpace(os.Getenv("AGENT_MANAGER_AUTH_TOKEN"))
+	internalAuthSecret := strings.TrimSpace(os.Getenv("AGENT_INTERNAL_AUTH_SECRET"))
 	allowedOriginsRaw := strings.TrimSpace(os.Getenv("AGENT_ALLOWED_ORIGINS"))
 	piDir := strings.TrimSpace(os.Getenv("PI_DIR"))
 
@@ -217,6 +220,7 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	fs.StringVar(&cfg.AgentManagerBaseURL, "agent-manager-base-url", managerBaseURL, "Manager base URL for session sync")
 	fs.StringVar(&cfg.AgentManagerAPIKey, "agent-manager-api-key", managerAPIKey, "Manager API key")
 	fs.StringVar(&cfg.AgentManagerAuthToken, "agent-manager-auth-token", managerAuthToken, "Manager bearer auth token")
+	fs.StringVar(&cfg.AgentInternalAuthSecret, "agent-internal-auth-secret", internalAuthSecret, "Shared manager/runtime secret for internal auth")
 	fs.StringVar(&allowedOriginsRaw, "allowed-origins", allowedOriginsRaw, "Comma-separated browser origins allowed for CORS and /terminal (overrides AGENT_MANAGER_BASE_URL-derived defaults when set)")
 
 	if err := fs.Parse(args); err != nil {
@@ -232,6 +236,10 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	cfg.AgentID = strings.TrimSpace(cfg.AgentID)
 	if cfg.AgentID == "" {
 		return serveConfig{}, errors.New("AGENT_ID must be set")
+	}
+	cfg.AgentInternalAuthSecret = strings.TrimSpace(cfg.AgentInternalAuthSecret)
+	if cfg.AgentInternalAuthSecret != "" && len(cfg.AgentInternalAuthSecret) < 32 {
+		return serveConfig{}, errors.New("AGENT_INTERNAL_AUTH_SECRET must be at least 32 chars when set")
 	}
 	if cfg.Port <= 0 {
 		return serveConfig{}, errors.New("port must be positive")
@@ -390,7 +398,7 @@ func (s *server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Agent-Auth")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Agent-Auth, X-Agent-Internal-Auth, X-Actor-User-Id")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -483,8 +491,19 @@ func (s *server) handleCreateSession(w http.ResponseWriter, r *http.Request) err
 	if input.Harness != "codex" && input.Harness != "pi" {
 		return fail(http.StatusBadRequest, "Invalid harness")
 	}
-	if input.ModelReasoningEffort != "" && !isValidReasoningEffort(input.ModelReasoningEffort) {
-		return fail(http.StatusBadRequest, "Invalid modelReasoningEffort")
+
+	var rawEffort *string
+	if strings.TrimSpace(input.ModelReasoningEffort) != "" {
+		rawEffort = &input.ModelReasoningEffort
+	}
+	selection, err := normalizeSessionModelSelection(input.Harness, input.Model, rawEffort)
+	if err != nil {
+		return err
+	}
+	input.Model = selection.Model
+	input.ModelReasoningEffort = ""
+	if selection.Effort != nil {
+		input.ModelReasoningEffort = *selection.Effort
 	}
 
 	if input.ID != "" {
@@ -617,32 +636,25 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) error {
 	if len(req.Input) == 0 {
 		return fail(http.StatusBadRequest, "input is required")
 	}
-	if req.ModelReasoningEffort != nil && *req.ModelReasoningEffort != "" && !isValidReasoningEffort(*req.ModelReasoningEffort) {
-		return fail(http.StatusBadRequest, "Invalid modelReasoningEffort")
-	}
 
 	normalized, err := s.normalizeInputs(sessionID, req.Input)
 	if err != nil {
 		return fail(http.StatusBadRequest, err.Error())
 	}
 
-	if req.Model != nil || req.ModelReasoningEffort != nil {
+	selection, err := normalizeSessionModelSelection(session.Harness, req.Model, req.ModelReasoningEffort)
+	if err != nil {
+		return err
+	}
+
+	if selection.HasModel || selection.HasEffort {
 		nextModel := session.Model
-		if req.Model != nil {
-			trimmed := strings.TrimSpace(*req.Model)
-			if trimmed == "" {
-				return fail(http.StatusBadRequest, "model must be non-empty")
-			}
-			nextModel = &trimmed
+		if selection.HasModel {
+			nextModel = selection.Model
 		}
 		nextEffort := session.ModelReasoningEffort
-		if req.ModelReasoningEffort != nil {
-			trimmed := strings.TrimSpace(*req.ModelReasoningEffort)
-			if trimmed == "" {
-				nextEffort = nil
-			} else {
-				nextEffort = &trimmed
-			}
+		if selection.HasEffort {
+			nextEffort = selection.Effort
 		}
 		if err := s.store.updateSessionDefaults(sessionID, nextModel, nextEffort); err != nil {
 			return err
@@ -804,14 +816,18 @@ func (s *server) executeModelRun(ctx context.Context, session *sessionRecord, in
 
 func (s *server) executeCodexCLIRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
 	prompt := promptFromInputs(input)
+	resolvedModel, resolvedEffort, err := resolveSessionDefaultsForExecution("codex", session.Model, session.ModelReasoningEffort)
+	if err != nil {
+		return modelRunResult{}, err
+	}
 	model := strings.TrimSpace(s.cfg.DefaultCodexModel)
-	if session.Model != nil && strings.TrimSpace(*session.Model) != "" {
-		model = strings.TrimSpace(*session.Model)
+	if resolvedModel != nil && strings.TrimSpace(*resolvedModel) != "" {
+		model = strings.TrimSpace(*resolvedModel)
 	}
 
 	config := []string{}
-	if session.ModelReasoningEffort != nil && strings.TrimSpace(*session.ModelReasoningEffort) != "" {
-		config = append(config, fmt.Sprintf("model_reasoning_effort=%q", strings.TrimSpace(*session.ModelReasoningEffort)))
+	if resolvedEffort != nil && strings.TrimSpace(*resolvedEffort) != "" {
+		config = append(config, fmt.Sprintf("model_reasoning_effort=%q", strings.TrimSpace(*resolvedEffort)))
 	}
 
 	resumeSessionID := ""
@@ -868,7 +884,7 @@ func (s *server) executeCodexCLIRun(ctx context.Context, session *sessionRecord,
 		}
 	}
 
-	_, err := s.codex.RunJSONL(ctx, args, nil, func(evt CodexJSONLEvent) {
+	_, err = s.codex.RunJSONL(ctx, args, nil, func(evt CodexJSONLEvent) {
 		if id := codexExternalSessionIDFromEvent(evt.Value); id != "" {
 			persistExternalSessionID(id)
 		}
@@ -913,6 +929,10 @@ func (s *server) executeCodexCLIRun(ctx context.Context, session *sessionRecord,
 
 func (s *server) executePiCLIRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
 	prompt := promptFromInputs(input)
+	resolvedModel, resolvedEffort, err := resolveSessionDefaultsForExecution("pi", session.Model, session.ModelReasoningEffort)
+	if err != nil {
+		return modelRunResult{}, err
+	}
 	sessionFile := ""
 	if session.ExternalSessionID != nil {
 		sessionFile = strings.TrimSpace(*session.ExternalSessionID)
@@ -932,15 +952,15 @@ func (s *server) executePiCLIRun(ctx context.Context, session *sessionRecord, in
 		SessionDir: filepath.Dir(sessionFile),
 		Messages:   []string{prompt},
 	}
-	if session.Model != nil {
-		opts.Model = strings.TrimSpace(*session.Model)
+	if resolvedModel != nil {
+		opts.Model = strings.TrimSpace(*resolvedModel)
 	}
-	if session.ModelReasoningEffort != nil {
-		opts.Thinking = strings.TrimSpace(*session.ModelReasoningEffort)
+	if resolvedEffort != nil {
+		opts.Thinking = strings.TrimSpace(*resolvedEffort)
 	}
 
 	var textBuilder strings.Builder
-	_, err := s.pi.RunJSONL(ctx, s.pi.Args(opts), nil, func(evt PiJSONLEvent) {
+	_, err = s.pi.RunJSONL(ctx, s.pi.Args(opts), nil, func(evt PiJSONLEvent) {
 		if onEvent != nil {
 			if compact, ok := compactPIEventForStream(evt.Value); ok {
 				onEvent(compact)
@@ -1811,6 +1831,23 @@ type authContext struct {
 }
 
 func (s *server) requireAuth(r *http.Request) (authContext, error) {
+	if internalSecret := strings.TrimSpace(r.Header.Get("X-Agent-Internal-Auth")); internalSecret != "" {
+		if s.cfg.AgentInternalAuthSecret == "" {
+			return authContext{}, fail(http.StatusUnauthorized, "Unauthorized")
+		}
+		if subtle.ConstantTimeCompare(
+			[]byte(internalSecret),
+			[]byte(s.cfg.AgentInternalAuthSecret),
+		) != 1 {
+			return authContext{}, fail(http.StatusUnauthorized, "Unauthorized")
+		}
+		actorUserID := strings.TrimSpace(r.Header.Get("X-Actor-User-Id"))
+		if actorUserID == "" {
+			return authContext{}, fail(http.StatusUnauthorized, "Unauthorized")
+		}
+		return authContext{AgentID: s.cfg.AgentID, UserID: actorUserID}, nil
+	}
+
 	token := readAuthToken(r)
 	if token == "" {
 		return authContext{}, fail(http.StatusUnauthorized, "Unauthorized")

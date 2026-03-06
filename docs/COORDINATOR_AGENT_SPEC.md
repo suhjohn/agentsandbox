@@ -74,6 +74,7 @@ Keep a single backend AI SDK planner (`streamText`) and expose tools based on ru
 1. Server tools (always eligible when authorized)
 - Existing coordinator tools (`coordinator_bash`, `coordinator_api_request`, file tools, manager API paths, etc.)
   - Default manager API transport: `coordinator_api_request` for all endpoint calls.
+  - `coordinator_api_request` also supports absolute sandbox runtime URLs; manager bearer auth is only auto-applied for same-origin manager requests.
   - `coordinator_bash` is primarily for shell/discovery/diagnostics and non-API command execution.
 2. Client tools (eligible only when browser is available)
 - Semantic UI tools, executed by frontend executor.
