@@ -494,9 +494,59 @@ EOF
   chmod +x "${service_dir}/run"
 }
 
+install_runit_command_service() {
+  local service_name="${1:-}"
+  shift || true
+  local service_dir="${RUNITSV_SERVICE_DIR}/${service_name}"
+  local quoted_cmd=""
+  local arg=""
+
+  mkdir -p "${service_dir}"
+  for arg in "$@"; do
+    if [[ -n "${quoted_cmd}" ]]; then
+      quoted_cmd+=" "
+    fi
+    quoted_cmd+="$(printf '%q' "${arg}")"
+  done
+
+  cat >"${service_dir}/run" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+EOF
+
+  if [[ "${service_name}" == "agent-server" ]] && [[ "${AGENT_SERVER_LOG_ENABLED}" == "1" ]]; then
+    cat >>"${service_dir}/run" <<EOF
+mkdir -p "\$(dirname -- "${AGENT_SERVER_LOG_FILE}")" 2>/dev/null || true
+touch "${AGENT_SERVER_LOG_FILE}" 2>/dev/null || true
+exec > >(tee -a "${AGENT_SERVER_LOG_FILE}") 2>&1
+echo "[agent-runit] Starting agent-server service: ${quoted_cmd}"
+EOF
+  fi
+
+  cat >>"${service_dir}/run" <<EOF
+exec ${quoted_cmd}
+EOF
+  chmod +x "${service_dir}/run"
+}
+
+is_server_command() {
+  if [[ "$#" -eq 0 ]]; then
+    return 1
+  fi
+  local cmd="${1:-}"
+  local cmd_base=""
+  cmd_base="$(basename "${cmd}")"
+  [[ "${cmd_base}" == "agent-server" ]]
+}
+
 setup_runit_services() {
+  local maybe_server_cmd=("$@")
   rm -rf "${RUNITSV_SERVICE_DIR}" 2>/dev/null || true
   mkdir -p "${RUNITSV_SERVICE_DIR}"
+
+  if is_server_command "${maybe_server_cmd[@]}"; then
+    install_runit_command_service "agent-server" "${maybe_server_cmd[@]}"
+  fi
 
   if [[ "${AGENT_RUNTIME_MODE}" == "server" ]]; then
     return
@@ -518,20 +568,10 @@ setup_runit_services() {
   fi
 }
 
-setup_runit_services
+setup_runit_services "$@"
 
 has_runit_services() {
   find "${RUNITSV_SERVICE_DIR}" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null | grep -q .
-}
-
-is_server_command() {
-  if [[ "$#" -eq 0 ]]; then
-    return 1
-  fi
-  local cmd="${1:-}"
-  local cmd_base=""
-  cmd_base="$(basename "${cmd}")"
-  [[ "${cmd_base}" == "agent-server" ]]
 }
 
 setup_server_log_capture() {
@@ -550,6 +590,14 @@ setup_server_log_capture() {
 if [[ "$#" -eq 0 ]]; then
   if ! has_runit_services; then
     echo "No runit services configured and no command provided." >&2
+    exit 1
+  fi
+  exec runsvdir -P "${RUNITSV_SERVICE_DIR}"
+fi
+
+if is_server_command "$@"; then
+  if ! has_runit_services; then
+    echo "No runit services configured for server command." >&2
     exit 1
   fi
   exec runsvdir -P "${RUNITSV_SERVICE_DIR}"

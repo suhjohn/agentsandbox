@@ -64,8 +64,8 @@ Pull, rebuild, stop the existing standalone binary process, and start the new on
 ./agent-go/scripts/restart-agent-server.sh
 ```
 
-This helper is for the standalone compiled-binary flow. It is not used by the Docker
-launcher path, which runs `go run ./cmd/agent-go` on startup.
+In the container runtime, the entrypoint now runs the main agent API under `runit`,
+so this helper will restart that `agent-server` service in place when available.
 
 ## Docker image (source-driven server launcher)
 
@@ -125,7 +125,7 @@ Runtime behavior intentionally keeps the same entrypoint/runit stack used by `ag
 - workspace tools sync + Codex `AGENTS.md` generation
 
 The API server command remains `/app/agent-server`, but this is now an executable launcher
-that runs `go run ./cmd/agent-go ...` from the source checkout in the image.
+that builds and runs the compiled `agent-go` binary from the source checkout in the image.
 OpenVSCode proxying still uses the same command path (`/app/agent-server openvscode-proxy`).
 
 ### Entrypoint + `AGENT_RUNTIME_MODE`
@@ -134,9 +134,12 @@ OpenVSCode/noVNC are **not** started by `agent-server serve` itself. They come u
 are installed/launched by the container entrypoint (`agent-entrypoint`).
 
 - Docker `ENTRYPOINT` is `agent-entrypoint` (`agent-go/Dockerfile`).
-- `agent-entrypoint` sets up runit services when `AGENT_RUNTIME_MODE=all` (default), and intentionally
-  skips them when `AGENT_RUNTIME_MODE=server` (`agent-go/docker/entrypoint.sh`).
+- `agent-entrypoint` always installs the main `agent-server` service when the container command is
+  `agent-server ...`. In `AGENT_RUNTIME_MODE=all` (default), it also installs the UI/OpenVSCode services.
+- When the container command is `agent-server ...`, `agent-entrypoint` now installs that command
+  as the `agent-server` runit service and keeps `runsvdir` as the foreground process.
 - In `all` mode, relevant runit services include:
+  - `agent-server` (main API service, installed dynamically from the container command)
   - `openvscode-server` (`agent-go/docker/runit/openvscode-server.sh`)
   - `openvscode-proxy` (`agent-go/docker/runit/openvscode-proxy.sh`, runs `/app/agent-server openvscode-proxy`)
   - `ui-stack` (Xvfb/VNC/noVNC/Chromium) (`agent-go/docker/runit/ui-stack.sh`)

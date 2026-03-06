@@ -13,11 +13,14 @@ STOP_TIMEOUT_SEC=20
 FORCE_KILL=0
 DO_PULL=1
 START_ARGS=()
+RUNIT_SERVICE_DIR=""
 
 usage() {
   cat <<'EOF'
-Pull the latest agent-go source, rebuild the standalone agent-server binary,
-stop the currently running process, and start the new binary.
+Pull the latest agent-go source, rebuild the agent-server binary, and restart
+the running server. When a runit-managed agent-server service is present, the
+script restarts that service in place. Otherwise it falls back to replacing a
+standalone process by PID or command match.
 
 Usage:
   restart-agent-server.sh [options] [-- [agent-server args...]]
@@ -28,6 +31,8 @@ Options:
   --log-file PATH        Log file path (default: OUTPUT_DIR/agent-server.log)
   --match STRING         Fixed command-line substring used to find the running process
                          (default: resolved output path)
+  --service-dir PATH     Runit service dir to restart instead of PID replacement
+                         (default: \$RUNITSV_SERVICE_DIR/agent-server or \$ROOT_DIR/runit/services/agent-server)
   --timeout SEC          Seconds to wait after SIGTERM before failing (default: 20)
   --force-kill           Send SIGKILL if the process does not exit after timeout
   --no-pull              Skip git pull
@@ -56,6 +61,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --match)
       MATCH_SUBSTRING="$2"
+      shift 2
+      ;;
+    --service-dir)
+      RUNIT_SERVICE_DIR="$2"
       shift 2
       ;;
     --timeout)
@@ -122,6 +131,17 @@ if [[ -z "${MATCH_SUBSTRING}" ]]; then
   MATCH_SUBSTRING="${OUTPUT_PATH}"
 fi
 
+if [[ -z "${RUNIT_SERVICE_DIR}" ]]; then
+  if [[ -n "${RUNITSV_SERVICE_DIR:-}" ]]; then
+    RUNIT_SERVICE_DIR="${RUNITSV_SERVICE_DIR}/agent-server"
+  else
+    root_dir="${ROOT_DIR:-/home/agent/runtime}"
+    RUNIT_SERVICE_DIR="${root_dir}/runit/services/agent-server"
+  fi
+elif [[ "${RUNIT_SERVICE_DIR}" != /* ]]; then
+  RUNIT_SERVICE_DIR="${CALLER_DIR}/${RUNIT_SERVICE_DIR}"
+fi
+
 find_running_pids() {
   ps -axo pid=,command= | awk -v needle="${MATCH_SUBSTRING}" '
     index($0, needle) { print $1 }
@@ -175,6 +195,13 @@ if [[ "${DO_PULL}" == "1" ]]; then
 fi
 
 "${MODULE_DIR}/scripts/build-agent-server.sh" --output "${OUTPUT_PATH}"
+
+if [[ -d "${RUNIT_SERVICE_DIR}" ]] && command -v sv >/dev/null 2>&1; then
+  echo "restarting runit service ${RUNIT_SERVICE_DIR}"
+  sv restart "${RUNIT_SERVICE_DIR}"
+  echo "service restarted"
+  exit 0
+fi
 
 existing_pid="$(find_existing_pid || true)"
 if [[ -n "${existing_pid}" ]]; then
