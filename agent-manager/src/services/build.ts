@@ -27,9 +27,7 @@ const MAX_LOG_CHARS = 12_000
 const AGENT_SOURCE_UPDATE_COMMAND = [
   'if command -v agent-go-update-source >/dev/null 2>&1; then',
   '  echo "[agent-go] syncing source checkout..."',
-  '  if ! agent-go-update-source; then',
-  '    echo "[agent-go] warning: source sync failed; continuing with current checkout" >&2;',
-  '  fi;',
+  '  agent-go-update-source',
   'fi'
 ].join('\n')
 

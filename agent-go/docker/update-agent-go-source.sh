@@ -29,14 +29,17 @@ run_update() {
   local branch=""
   branch="$(git -C "${REPO_DIR}" symbolic-ref --short -q HEAD || true)"
   if [[ -n "${branch}" ]]; then
-    log "pulling latest commits for branch ${branch}"
-    git -C "${REPO_DIR}" pull --ff-only
+    log "syncing branch ${branch} to origin/${branch}"
+    git -C "${REPO_DIR}" fetch --depth=1 origin "${branch}"
+    git -C "${REPO_DIR}" reset --hard "origin/${branch}"
+    git -C "${REPO_DIR}" clean -fd
     return 0
   fi
 
-  log "detached HEAD; fetching ${PULL_REF} from origin"
+  log "detached HEAD; syncing ${PULL_REF} from origin"
   git -C "${REPO_DIR}" fetch --depth=1 origin "${PULL_REF}"
   git -C "${REPO_DIR}" checkout -B "${PULL_REF}" "origin/${PULL_REF}"
+  git -C "${REPO_DIR}" clean -fd
 }
 
 if command -v flock >/dev/null 2>&1; then
