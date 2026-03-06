@@ -398,7 +398,7 @@ registerRoute(
     path: `${BASE}`,
     summary: 'Create agent',
     tags: ['agents'],
-    security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+    security: [{ bearerAuth: [] }],
     request: { json: createAgentSchema },
     responses: {
       201: agentSchema,
@@ -470,7 +470,7 @@ registerRoute(
     path: `${BASE}/:agentId/access`,
     summary: 'Get editor/browser access for an agent sandbox',
     tags: ['agents'],
-    security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+    security: [{ bearerAuth: [] }],
     responses: {
       200: agentRuntimeAccessSchema,
       404: z.object({ error: z.string() }),
@@ -531,7 +531,7 @@ registerRoute(
     path: `${BASE}/:agentId/snapshot`,
     summary: 'Snapshot an agent sandbox filesystem',
     tags: ['agents'],
-    security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+    security: [{ bearerAuth: [] }],
     responses: {
       200: z.object({
         snapshotImageId: z.string(),
@@ -701,7 +701,7 @@ registerRoute(
     path: `${BASE}/:agentId`,
     summary: 'Get agent',
     tags: ['agents'],
-    security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+    security: [{ bearerAuth: [] }],
     responses: {
       200: agentSchema,
       404: z.object({ error: z.string() })
@@ -731,7 +731,7 @@ registerRoute(
     path: `${BASE}/:agentId/archive`,
     summary: 'Archive agent',
     tags: ['agents'],
-    security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+    security: [{ bearerAuth: [] }],
     responses: {
       200: agentSchema,
       404: z.object({ error: z.string() })
@@ -776,7 +776,7 @@ registerRoute(
     path: `${BASE}/:agentId/resume`,
     summary: 'Resume agent',
     tags: ['agents'],
-    security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+    security: [{ bearerAuth: [] }],
     responses: {
       200: agentSchema,
       404: z.object({ error: z.string() })

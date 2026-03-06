@@ -10,11 +10,6 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
-      },
-      "apiKeyAuth": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "x-agent-manager-api-key"
       }
     },
     "schemas": {},
@@ -4447,9 +4442,6 @@
         "security": [
           {
             "bearerAuth": []
-          },
-          {
-            "apiKeyAuth": []
           }
         ],
         "requestBody": {
@@ -4968,9 +4960,6 @@
         "security": [
           {
             "bearerAuth": []
-          },
-          {
-            "apiKeyAuth": []
           }
         ],
         "parameters": [
@@ -5071,9 +5060,6 @@
         "security": [
           {
             "bearerAuth": []
-          },
-          {
-            "apiKeyAuth": []
           }
         ],
         "parameters": [
@@ -5282,6 +5268,292 @@
         }
       }
     },
+    "/agents/{agentId}/session": {
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "Create a runtime session and first run on an existing agent",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 32
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "harness": {
+                    "type": "string",
+                    "enum": [
+                      "codex",
+                      "pi"
+                    ]
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "modelReasoningEffort": {
+                    "type": "string",
+                    "enum": [
+                      "minimal",
+                      "low",
+                      "medium",
+                      "high",
+                      "xhigh"
+                    ]
+                  }
+                },
+                "required": [
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agent": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "parentAgentId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "uuid"
+                        },
+                        "imageId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "imageVariantId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "uuid"
+                        },
+                        "image": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ]
+                        },
+                        "currentSandboxId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "sandboxName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "snapshotImageId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "region": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "snapshotting",
+                            "completed",
+                            "archived"
+                          ]
+                        },
+                        "createdBy": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "createdByUser": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ]
+                        },
+                        "createdAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          ]
+                        },
+                        "updatedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "status",
+                        "createdBy",
+                        "createdByUser",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "session": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "streamUrl": {
+                          "type": "string"
+                        },
+                        "runId": {
+                          "type": "string"
+                        },
+                        "runStreamUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "streamUrl",
+                        "runId",
+                        "runStreamUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "agent",
+                    "session"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agents/{agentId}": {
       "get": {
         "tags": [
@@ -5291,9 +5563,6 @@
         "security": [
           {
             "bearerAuth": []
-          },
-          {
-            "apiKeyAuth": []
           }
         ],
         "parameters": [
@@ -5481,9 +5750,6 @@
         "security": [
           {
             "bearerAuth": []
-          },
-          {
-            "apiKeyAuth": []
           }
         ],
         "parameters": [
@@ -5671,9 +5937,6 @@
         "security": [
           {
             "bearerAuth": []
-          },
-          {
-            "apiKeyAuth": []
           }
         ],
         "parameters": [
@@ -6844,9 +7107,6 @@
         "security": [
           {
             "bearerAuth": []
-          },
-          {
-            "apiKeyAuth": []
           }
         ],
         "parameters": [

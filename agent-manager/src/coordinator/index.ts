@@ -320,24 +320,18 @@ Trigger conditions:
 Trigger conditions:
 - User says "continue", "keep going", "resume", or asks to send a follow-up prompt to an existing agent.
 - User provides \`agentId\` and expects work to continue in the sandbox runtime.
-1. Get runtime access via manager API:
-   \`GET /agents/{agentId}/access\` using \`$USER_AUTHORIZATION_HEADER\`.
-2. Read \`agentApiUrl\` and \`agentAuthToken\` from response.
-3. Compute deterministic runtime \`sessionId\` by removing hyphens from \`agentId\`.
-4. Send runtime message:
-   - Use \`coordinator_api_request\` with \`path: "{agentApiUrl}/session/{sessionId}/message"\`
-   - Header: \`X-Agent-Auth: Bearer <agentAuthToken>\`
-   - Body:
-     \`{"input":[{"type":"text","text":"<follow-up>"}]}\`
-5. If runtime returns missing session (for example, \`404\`), create runtime session and retry once:
-   - Use \`coordinator_api_request\` to \`POST {agentApiUrl}/session\` with \`{ "id": sessionId }\`
-   - Retry \`POST /session/{sessionId}/message\` exactly once.
-6. Return concrete identifiers in final response:
-   - \`agentId\`, \`sessionId\`, and new \`runId\`.
+1. Call manager API:
+   \`POST /agents/{agentId}/session\`
+2. Body:
+   \`{"message":"<follow-up>","title":"<optional>","sessionId":"<optional 32-hex>"}\`
+3. The manager creates the runtime session if needed, sends the first message using internal manager/runtime auth, and returns the new \`session.id\` and \`runId\`.
+4. Return concrete identifiers in final response:
+   - \`agentId\`, \`session.id\`, and \`session.runId\`.
 
 Auth guardrails:
 - Manager APIs use \`Authorization\` (\`$USER_AUTHORIZATION_HEADER\`).
-- Runtime APIs use \`X-Agent-Auth\` with \`agentAuthToken\`.
+- Browser/runtime APIs use \`X-Agent-Auth\` with \`agentAuthToken\`.
+- Manager-internal runtime calls use a dedicated internal secret and are not exposed through coordinator tool arguments.
 - Never send manager bearer token directly to runtime \`/session/*\` APIs.
 
 UI fallback:

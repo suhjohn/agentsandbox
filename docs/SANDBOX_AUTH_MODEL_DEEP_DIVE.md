@@ -260,12 +260,12 @@ HTTP/SSE runtime calls from frontend are made with `X-Agent-Auth` in:
 
 Auth headers are injected at dispatch time, not stored in event rows:
 
-- prefer `x-agent-manager-api-key`
-- fallback `Authorization: Bearer ...` if bearer token is configured
+- prefer `X-Agent-Internal-Auth` + `X-Agent-Id`
+- fallback legacy manager auth headers only when no runtime-internal secret is configured
 
 Persisted event rows store event-declared headers (for current callbacks, typically `content-type`) and not injected manager auth credentials.
 
-Note: manager sandbox provisioning currently injects `AGENT_MANAGER_API_KEY`, not `AGENT_MANAGER_AUTH_TOKEN`.
+Agent sandboxes now receive a per-runtime `AGENT_INTERNAL_AUTH_SECRET` and use it for both manager -> runtime and runtime -> manager traffic.
 
 ## 6. Setup/Build Sandbox Auth Flow
 
@@ -370,8 +370,8 @@ runtime terminal verifies same sandbox-agent contract.
 
 runtime mutation/session paths queue events ->
 `eventOutbox.dispatchEvent` merges stored event headers +
-manager auth headers when callback URL matches manager base ->
-manager receives callbacks under `sessionAuth` / `agentAuth` policy.
+runtime-internal auth headers when callback URL matches manager base ->
+manager receives callbacks under runtime-internal auth in `sessionAuth`.
 
 ## 10. Transport Matrix (Current)
 
@@ -382,9 +382,9 @@ manager receives callbacks under `sessionAuth` / `agentAuth` policy.
 | Manager -> Browser runtime access payload | sandbox-agent JWT | `HMAC(SANDBOX_SIGNING_SECRET, "sandbox-agent:<sid>")` | JSON body |
 | Browser -> Runtime REST/SSE | sandbox-agent JWT | same | `X-Agent-Auth` (or `Authorization`) |
 | Browser -> Runtime terminal WS | sandbox-agent JWT | same | `Sec-WebSocket-Protocol` token |
-| Manager -> Runtime internal calls | sandbox-agent JWT | same | `X-Agent-Auth` header |
+| Manager -> Runtime internal calls | opaque per-runtime secret | encrypted on `agents.runtime_internal_secret` | `X-Agent-Internal-Auth` + `X-Actor-User-Id` |
 | Manager -> OpenVSCode/noVNC links | sandbox access token | encrypted by `SANDBOX_TOKEN_ENCRYPTION_SECRET` at rest | URL query (`tkn`, `password`) |
-| Runtime -> Manager callbacks | manager API key / manager bearer | `AGENT_MANAGER_API_KEY` or `AGENT_MANAGER_AUTH_TOKEN` | headers injected at dispatch |
+| Runtime -> Manager callbacks | opaque per-runtime secret | encrypted on `agents.runtime_internal_secret` | `X-Agent-Internal-Auth` + `X-Agent-Id` |
 
 ## 11. Drift Corrections and Open Constraints
 

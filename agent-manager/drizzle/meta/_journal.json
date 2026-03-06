@@ -176,6 +176,13 @@
       "when": 1772788551976,
       "tag": "0024_images_run_script",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1772823491123,
+      "tag": "0025_red_stature",
+      "breakpoints": true
     }
   ]
 }

@@ -497,7 +497,7 @@ registerRoute(
     path: `${BASE}/{id}`,
     summary: 'Upsert session content',
     tags: ['session'],
-    security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+    security: [{ bearerAuth: [] }],
     request: {
       params: sessionIdParamsSchema,
       json: upsertSessionContentSchema
@@ -514,7 +514,6 @@ registerRoute(
   async c => {
     const authMode = (c.get('authMode') ?? 'jwt') as
       | 'jwt'
-      | 'api-key'
       | 'runtime-internal'
     const runtimeAgentId = c.get('runtimeAgentId') ?? null
     const { id } = c.req.valid('param' as never) as z.infer<
@@ -550,7 +549,7 @@ registerRoute(
       .limit(1)
     const existingRow = existing[0] ?? null
 
-    if (existingRow && authMode !== 'api-key') {
+    if (existingRow && authMode === 'jwt') {
       const existingAgent = await getAgentById(existingRow.agentId)
       if (!existingAgent) return c.json({ error: 'Session not found' }, 404)
     }

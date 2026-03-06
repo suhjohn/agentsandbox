@@ -58,9 +58,9 @@ type eventOutbox struct {
 
 func newEventOutbox(store *store, client *http.Client, cfg serveConfig) *eventOutbox {
 	return &eventOutbox{
-		store:              store,
-		client:             client,
-		managerBaseURL:     normalizeBaseURL(cfg.AgentManagerBaseURL),
+		store:          store,
+		client:         client,
+		managerBaseURL: normalizeBaseURL(cfg.AgentManagerBaseURL),
 		managerAuthHeaders: buildManagerAuthHeaders(
 			cfg.AgentInternalAuthSecret,
 			cfg.AgentID,

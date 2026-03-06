@@ -11,7 +11,7 @@ extendZodWithOpenApi(z);
 
 type HttpMethod = "get" | "post" | "patch" | "put" | "delete";
 
-type SecuritySchemeName = "bearerAuth" | "apiKeyAuth";
+type SecuritySchemeName = "bearerAuth";
 type RouteSecurity = ReadonlyArray<
   Readonly<Partial<Record<SecuritySchemeName, ReadonlyArray<string>>>>
 >;
@@ -142,11 +142,6 @@ export function generateOpenApiSpec(input: {
     type: "http",
     scheme: "bearer",
     bearerFormat: "JWT",
-  });
-  registry.registerComponent("securitySchemes", "apiKeyAuth", {
-    type: "apiKey",
-    in: "header",
-    name: "x-agent-manager-api-key",
   });
 
   const generator = new OpenApiGeneratorV31(registry.definitions);

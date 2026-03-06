@@ -9,7 +9,6 @@ import {
   clearAgentSandboxIfMatches,
   getAgentAccessToken,
   getAgentById,
-  getAgentRuntimeInternalSecret,
   setAgentSandbox
 } from './agent.service'
 import { env } from '../env'

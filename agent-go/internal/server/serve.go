@@ -50,21 +50,21 @@ const (
 )
 
 type serveConfig struct {
-	Port                  int
-	AgentID               string
-	DatabasePath          string
-	SecretSeed            string
+	Port                    int
+	AgentID                 string
+	DatabasePath            string
+	SecretSeed              string
 	AgentInternalAuthSecret string
-	DefaultCodexModel     string
-	OpenAIAPIKey          string
-	PIDir                 string
-	WorkspacesDir         string
-	RuntimeDir            string
-	DefaultWorkingDir     string
-	CORSAllowedOrigins    []string
-	AgentManagerBaseURL   string
-	AgentManagerAPIKey    string
-	AgentManagerAuthToken string
+	DefaultCodexModel       string
+	OpenAIAPIKey            string
+	PIDir                   string
+	WorkspacesDir           string
+	RuntimeDir              string
+	DefaultWorkingDir       string
+	CORSAllowedOrigins      []string
+	AgentManagerBaseURL     string
+	AgentManagerAPIKey      string
+	AgentManagerAuthToken   string
 }
 
 type apiError struct {

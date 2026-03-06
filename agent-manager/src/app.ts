@@ -90,7 +90,6 @@ app.use(
     allowHeaders: [
       "Authorization",
       "Content-Type",
-      "X-Agent-Manager-Api-Key",
       "X-Agent-Internal-Auth",
       "X-Agent-Id",
       "X-Refresh-Csrf",
