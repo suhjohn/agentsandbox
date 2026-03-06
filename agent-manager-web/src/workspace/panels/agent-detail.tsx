@@ -73,6 +73,7 @@ export interface AgentDetailPanelConfig {
   readonly sessionLimit: number
   readonly sessionId: string
   readonly sessionTitle?: string
+  readonly sessionModel?: string
   readonly diffStyle?: 'split' | 'unified'
 }
 
@@ -129,7 +130,8 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
       activeTab: 'session_list',
       sessionLimit: 20,
       sessionId: '',
-      sessionTitle: ''
+      sessionTitle: '',
+      sessionModel: undefined
     }
   }
   const v = raw as Record<string, unknown>
@@ -144,6 +146,8 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
     sessionId: rawSessionId
   })
   const sessionTitle = typeof v.sessionTitle === 'string' ? v.sessionTitle : ''
+  const sessionModel =
+    typeof v.sessionModel === 'string' ? v.sessionModel : undefined
   const diffStyle =
     v.diffStyle === 'unified' || v.diffStyle === 'split'
       ? v.diffStyle
@@ -155,6 +159,7 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
     sessionLimit,
     sessionId,
     sessionTitle,
+    sessionModel,
     diffStyle
   }
 }
@@ -241,13 +246,15 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
       agentId: props.config.agentId,
       agentName: props.config.agentName,
       sessionId: resolvedSessionId,
-      sessionTitle: props.config.sessionTitle
+      sessionTitle: props.config.sessionTitle,
+      sessionModel: props.config.sessionModel
     }),
     [
       props.config.agentId,
       props.config.agentName,
       resolvedSessionId,
-      props.config.sessionTitle
+      props.config.sessionTitle,
+      props.config.sessionModel
     ]
   )
   const terminalConfig: AgentTerminalPanelConfig = useMemo(
@@ -280,14 +287,16 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
           agentId: prev.agentId,
           agentName: prev.agentName,
           sessionId: prev.sessionId,
-          sessionTitle: prev.sessionTitle
+          sessionTitle: prev.sessionTitle,
+          sessionModel: prev.sessionModel
         })
         return {
           ...prev,
           agentId: next.agentId,
           agentName: next.agentName,
           sessionId: next.sessionId,
-          sessionTitle: next.sessionTitle
+          sessionTitle: next.sessionTitle,
+          sessionModel: next.sessionModel
         }
       })
     },
@@ -514,7 +523,8 @@ function AgentDetailSessionListView (props: {
               ...prev,
               activeTab: 'session_detail',
               sessionId: 'new',
-              sessionTitle: ''
+              sessionTitle: '',
+              sessionModel: undefined
             }))
           }
         >
@@ -540,7 +550,8 @@ function AgentDetailSessionListView (props: {
                   ...prev,
                   activeTab: 'session_detail',
                   sessionId: s.id,
-                  sessionTitle: s.title?.trim() || ''
+                  sessionTitle: s.title?.trim() || '',
+                  sessionModel: s.model?.trim() || undefined
                 }))
               }
             />
@@ -658,7 +669,8 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
             agentName: next.agentName?.trim() || '',
             activeTab: 'session_list',
             sessionId: '',
-            sessionTitle: ''
+            sessionTitle: '',
+            sessionModel: undefined
           }))
         }
         onOpenChange={handleAgentPickerOpenChange}
@@ -767,7 +779,8 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
                 ...prev,
                 activeTab: 'session_detail',
                 sessionId: next.sessionId,
-                sessionTitle: next.sessionTitle?.trim() || ''
+                sessionTitle: next.sessionTitle?.trim() || '',
+                sessionModel: undefined
               }))
             }
           />
@@ -1179,7 +1192,8 @@ export const agentDetailPanelDefinition: PanelDefinition<AgentDetailPanelConfig>
       activeTab: 'session_list',
       sessionLimit: 20,
       sessionId: '',
-      sessionTitle: ''
+      sessionTitle: '',
+      sessionModel: undefined
     },
     deserializeConfig: raw => deserializeAgentDetailConfig(raw),
     getTitle: config => {

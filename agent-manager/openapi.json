@@ -766,6 +766,12 @@
                               "null"
                             ]
                           },
+                          "runScript": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "createdAt": {
                             "anyOf": [
                               {
@@ -858,6 +864,9 @@
                   "setupScript": {
                     "type": "string"
                   },
+                  "runScript": {
+                    "type": "string"
+                  },
                   "baseImageId": {
                     "type": "string"
                   }
@@ -910,6 +919,12 @@
                       "format": "uuid"
                     },
                     "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "runScript": {
                       "type": [
                         "string",
                         "null"
@@ -1034,6 +1049,12 @@
                         "null"
                       ]
                     },
+                    "runScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "createdAt": {
                       "anyOf": [
                         {
@@ -1140,6 +1161,9 @@
                   },
                   "setupScript": {
                     "type": "string"
+                  },
+                  "runScript": {
+                    "type": "string"
                   }
                 }
               }
@@ -1187,6 +1211,12 @@
                       "format": "uuid"
                     },
                     "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "runScript": {
                       "type": [
                         "string",
                         "null"
@@ -3347,6 +3377,12 @@
                         "null"
                       ]
                     },
+                    "runScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "createdAt": {
                       "anyOf": [
                         {
@@ -3497,6 +3533,12 @@
                       "format": "uuid"
                     },
                     "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "runScript": {
                       "type": [
                         "string",
                         "null"
@@ -3673,6 +3715,12 @@
                           "format": "uuid"
                         },
                         "setupScript": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "runScript": {
                           "type": [
                             "string",
                             "null"
@@ -3908,6 +3956,12 @@
                       "format": "uuid"
                     },
                     "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "runScript": {
                       "type": [
                         "string",
                         "null"

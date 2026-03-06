@@ -32,6 +32,14 @@ Behavior:
 
 ## image.service.ts
 
+### `createImage(input)` / `updateImage(id, input)` / `cloneImage(input)`
+
+Behavior:
+- Image records now persist two separate script fields:
+  - `setupScript`: runs during image build.
+  - `runScript`: runs each time an agent sandbox starts from that image.
+- `cloneImage` copies both script fields onto the cloned image.
+
 ### `runBuild(input)`
 
 ```ts
@@ -108,6 +116,7 @@ Behavior:
   - named default secret `openinspect-build-secret` (if present),
   - inline API key secret object (OpenAI/Anthropic/Google/manager API keys when configured),
   - image-bound environment secrets from `listEnvironmentSecrets(agent.imageId)`.
+- When the source image has a non-empty `runScript`, sandbox startup is wrapped so that script runs once before `agent-server serve`.
 - If an agent no longer has an owner (`created_by` is `NULL`), sandbox creation fails with `409 Agent owner is missing`.
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.
 - Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).

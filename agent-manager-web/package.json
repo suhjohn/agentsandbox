@@ -14,6 +14,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@mariozechner/pi-ai": "^0.56.3",
     "@mariozechner/pi-coding-agent": "^0.52.9",
     "@openai/codex-sdk": "^0.88.0",
     "@pierre/diffs": "1.0.10",

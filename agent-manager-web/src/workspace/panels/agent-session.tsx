@@ -12,6 +12,8 @@ import {
   useQueryClient,
   type QueryClient
 } from '@tanstack/react-query'
+import { getModels, getProviders } from '@mariozechner/pi-ai'
+import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader, SandboxLoader } from '@/components/loader'
 import { toast } from 'sonner'
@@ -30,15 +32,8 @@ import {
   type GetSessionId200MessagesItem,
   type PostSession201
 } from '@/api/generated/agent'
-import {
-  CodexMessages,
-  isCodexMessageBody
-} from '@/components/messages/codex-message'
-import {
-  PiMessages,
-  isPiMessageBody,
-  parsePiStreamEvent
-} from '@/components/messages/pi-message'
+import { CodexMessages } from '@/components/messages/codex-message'
+import { PiMessages } from '@/components/messages/pi-message'
 import type { PanelProps } from './types'
 import { parseBody as parseBodyUtil } from './session-message-utils'
 
@@ -47,6 +42,7 @@ export interface AgentSessionPanelConfig {
   readonly agentName?: string
   readonly sessionId: string
   readonly sessionTitle?: string
+  readonly sessionModel?: string
 }
 
 type StreamPhase = 'idle' | 'connecting' | 'connected'
@@ -71,6 +67,28 @@ const OPTIMISTIC_ECHO_CLOCK_SKEW_MS = 30_000
 const STICKY_SCROLL_BOTTOM_THRESHOLD_PX = 120
 const SESSION_STATUS_PROCESSING = 'processing'
 const SESSION_STATUS_INITIAL = 'initial'
+
+type CatalogModel = {
+  readonly id: string
+  readonly name: string
+  readonly provider: string
+}
+
+const ALL_MODELS: readonly CatalogModel[] = getProviders()
+  .flatMap(provider =>
+    getModels(provider).map(model => ({
+      id: model.id,
+      name: model.name,
+      provider: model.provider
+    }))
+  )
+  .sort((a, b) => {
+    const providerCompare = a.provider.localeCompare(b.provider)
+    if (providerCompare !== 0) return providerCompare
+    return a.name.localeCompare(b.name)
+  })
+
+const OPENAI_MODELS = ALL_MODELS.filter(model => model.provider === 'openai')
 
 type SessionStreamConfig = {
   readonly agentId: string
@@ -106,6 +124,38 @@ export function getSessionMessages (
 function makeSessionStreamKey (config: SessionStreamConfig): string {
   // Token rotation should not create a brand-new stream identity.
   return `${config.agentApiUrl}|${config.agentId}|${config.sessionId}`
+}
+
+function getAvailableModelsForHarness (
+  harness: 'codex' | 'pi'
+): readonly CatalogModel[] {
+  return harness === 'codex' ? OPENAI_MODELS : ALL_MODELS
+}
+
+function resolveSelectableModels (args: {
+  readonly harness: 'codex' | 'pi'
+  readonly selectedModel: string
+}): readonly CatalogModel[] {
+  const available = getAvailableModelsForHarness(args.harness)
+  const selectedModel = args.selectedModel.trim()
+  if (
+    selectedModel.length === 0 ||
+    available.some(model => model.id === selectedModel)
+  ) {
+    return available
+  }
+
+  return [
+    {
+      id: selectedModel,
+      name:
+        args.harness === 'codex'
+          ? `${selectedModel} (current)`
+          : selectedModel,
+      provider: 'current'
+    },
+    ...available
+  ]
 }
 
 function parseSseChunk (
@@ -724,6 +774,7 @@ type SessionWorkspacePatch = {
   readonly status?: string
   readonly title?: string | null
   readonly lastMessageBody?: string | null
+  readonly model?: string | null
   readonly updatedAt?: string
 }
 
@@ -747,6 +798,10 @@ function patchSessionRecord (
     next.lastMessageBody !== patch.lastMessageBody
   ) {
     next = { ...next, lastMessageBody: patch.lastMessageBody }
+    changed = true
+  }
+  if ('model' in patch && next.model !== patch.model) {
+    next = { ...next, model: patch.model }
     changed = true
   }
   if (
@@ -997,9 +1052,12 @@ function SessionComposer (props: {
   readonly agentId: string
   readonly sessionId: string
   readonly access: GetAgentsAgentIdAccess200
+  readonly harness: 'codex' | 'pi'
+  readonly selectedModel: string
+  readonly availableModels: readonly CatalogModel[]
   readonly setConfig: PanelProps<AgentSessionPanelConfig>['setConfig']
   readonly isSendingOptimistic: boolean
-  readonly messageType: 'codex' | 'pi' | 'unknown'
+  readonly onSelectedModelChange: (model: string) => void
   readonly onOptimisticMessageChange: (
     message: GetSessionId200MessagesItem | null
   ) => void
@@ -1011,14 +1069,20 @@ function SessionComposer (props: {
   const [draft, setDraft] = useState('')
 
   const createSessionMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (args: { readonly model: string }) => {
       if (!props.access?.agentApiUrl || !props.access.agentAuthToken) {
         throw new Error('Missing agent runtime access')
       }
-      return await postSession({}, {
-        baseUrl: props.access.agentApiUrl,
-        agentAuthToken: props.access.agentAuthToken
-      } as unknown as RequestInit)
+      return await postSession(
+        {
+          harness: props.harness,
+          ...(args.model.length > 0 ? { model: args.model } : {})
+        },
+        {
+          baseUrl: props.access.agentApiUrl,
+          agentAuthToken: props.access.agentAuthToken
+        } as unknown as RequestInit
+      )
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -1037,7 +1101,12 @@ function SessionComposer (props: {
       }
       return await postSessionIdMessage(
         args.sessionId,
-        { input: [{ type: 'text', text: args.text }] },
+        {
+          input: [{ type: 'text', text: args.text }],
+          ...(props.selectedModel.length > 0
+            ? { model: props.selectedModel }
+            : {})
+        },
         {
           baseUrl: props.access.agentApiUrl,
           agentAuthToken: props.access.agentAuthToken
@@ -1049,7 +1118,9 @@ function SessionComposer (props: {
   async function ensureSessionId (): Promise<string> {
     if (props.sessionId.length > 0) return props.sessionId
     const created = unwrapCreatedSession(
-      await createSessionMutation.mutateAsync()
+      await createSessionMutation.mutateAsync({
+        model: props.selectedModel
+      })
     )
     if (!created) throw new Error('Unexpected response shape (createSession).')
     props.setConfig(prev => ({
@@ -1077,7 +1148,8 @@ function SessionComposer (props: {
       applySessionPatchToWorkspaceCaches(queryClient, nextSessionId, {
         status: SESSION_STATUS_PROCESSING,
         updatedAt: optimisticMessage.createdAt,
-        lastMessageBody: toStoredMessageBody(optimisticMessage.body)
+        lastMessageBody: toStoredMessageBody(optimisticMessage.body),
+        model: props.selectedModel.length > 0 ? props.selectedModel : null
       })
       props.onOptimisticMessageChange(optimisticMessage)
       await sendMutation.mutateAsync({ sessionId: nextSessionId, text })
@@ -1123,6 +1195,31 @@ function SessionComposer (props: {
           disabled={composerDisabled}
           className='resize-none bg-transparent border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 px-4 py-3 text-sm'
         />
+      </div>
+      <div className='border-t border-border/60 px-4 py-2'>
+        <div className='flex items-center gap-3'>
+          <div className='shrink-0 text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary'>
+            Model
+          </div>
+          <Select
+            value={props.selectedModel}
+            onChange={e => {
+              props.onSelectedModelChange(e.target.value)
+            }}
+            variant='borderless'
+            disabled={composerDisabled}
+            className='h-8 min-w-0 flex-1 px-0 py-0 text-xs text-text-secondary'
+          >
+            <option value=''>Default model</option>
+            {props.availableModels.map(model => (
+              <option key={model.id} value={model.id}>
+                {model.provider === 'openai' || model.provider === 'current'
+                  ? model.name
+                  : `${model.name} (${model.provider})`}
+              </option>
+            ))}
+          </Select>
+        </div>
       </div>
     </div>
   )
@@ -1205,6 +1302,24 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
     if (harness === 'pi') return 'pi'
     return 'unknown'
   }, [sessionQuery.data?.harness])
+  const sessionHarness = useMemo((): 'codex' | 'pi' => {
+    const harness = sessionQuery.data?.harness?.trim().toLowerCase()
+    return harness === 'pi' ? 'pi' : 'codex'
+  }, [sessionQuery.data?.harness])
+  const selectedSessionModel = useMemo(() => {
+    if (typeof props.config.sessionModel === 'string') {
+      return props.config.sessionModel.trim()
+    }
+    return sessionQuery.data?.model?.trim() ?? ''
+  }, [props.config.sessionModel, sessionQuery.data?.model])
+  const availableModels = useMemo(
+    () =>
+      resolveSelectableModels({
+        harness: sessionHarness,
+        selectedModel: selectedSessionModel
+      }),
+    [selectedSessionModel, sessionHarness]
+  )
   const displayedMessages = useMemo(
     () =>
       resolveDisplayedMessages({
@@ -1244,11 +1359,13 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
       readonly sessionId: string
       readonly agentId: string
       readonly harness: string
+      readonly model: string | null
     }) => {
       await putSessionId(args.sessionId, {
         agentId: args.agentId,
         status: 'initial',
-        harness: args.harness
+        harness: args.harness,
+        model: args.model
       })
     },
     onError: async () => {
@@ -1286,6 +1403,7 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
     const patch: SessionWorkspacePatch = {
       status: SESSION_STATUS_INITIAL,
       updatedAt: latestUpdatedAt,
+      model: selectedSessionModel.length > 0 ? selectedSessionModel : null,
       ...(typeof lastMessageBody !== 'undefined' ? { lastMessageBody } : {}),
       ...(sessionTitleValue.length > 0 ? { title: sessionTitleValue } : {})
     }
@@ -1297,10 +1415,12 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
     resetSessionStatusMutation.mutate({
       sessionId,
       agentId,
-      harness
+      harness,
+      model: selectedSessionModel.length > 0 ? selectedSessionModel : null
     })
   }, [
     agentId,
+    selectedSessionModel,
     queryClient,
     resetSessionStatusMutation,
     sessionId,
@@ -1486,9 +1606,17 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
               agentId={agentId}
               sessionId={sessionId}
               access={access}
+              harness={sessionHarness}
+              selectedModel={selectedSessionModel}
+              availableModels={availableModels}
               setConfig={props.setConfig}
               isSendingOptimistic={isOptimisticSending}
-              messageType={messageType}
+              onSelectedModelChange={model => {
+                props.setConfig(prev => ({
+                  ...prev,
+                  sessionModel: model
+                }))
+              }}
               onOptimisticMessageChange={setOptimisticMessage}
               onOptimisticSendingChange={setIsOptimisticSending}
               inputRef={composerInputRef}

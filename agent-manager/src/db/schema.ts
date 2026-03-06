@@ -68,6 +68,7 @@ export const images = pgTable(
     name: text("name").default(sql`gen_random_uuid()::text`).notNull(),
     description: text("description"),
     setupScript: text("setup_script"),
+    runScript: text("run_script"),
     defaultVariantId: uuid("default_variant_id"),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",

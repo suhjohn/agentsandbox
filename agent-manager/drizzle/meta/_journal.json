@@ -169,6 +169,13 @@
       "when": 1772762670188,
       "tag": "0023_next_the_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1772788551976,
+      "tag": "0024_images_run_script",
+      "breakpoints": true
     }
   ]
 }

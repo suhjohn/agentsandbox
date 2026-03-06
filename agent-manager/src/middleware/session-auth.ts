@@ -16,6 +16,10 @@ function isApiKeySessionPutRoute (method: string, path: string): boolean {
   return /^\/session\/[^/]+$/.test(path)
 }
 
+function isApiKeyAgentRoute (path: string): boolean {
+  return path === '/agents' || path.startsWith('/agents/')
+}
+
 export const sessionAuth = createMiddleware<AppEnv>(async (c, next) => {
   const suppliedApiKey = readApiKeyHeader(c)
   if (suppliedApiKey !== null) {
@@ -26,9 +30,12 @@ export const sessionAuth = createMiddleware<AppEnv>(async (c, next) => {
     if (suppliedApiKey !== configuredApiKey) {
       throw new HTTPException(401, { message: 'Invalid API key' })
     }
-    if (!isApiKeySessionPutRoute(c.req.method, c.req.path)) {
+    if (
+      !isApiKeySessionPutRoute(c.req.method, c.req.path) &&
+      !isApiKeyAgentRoute(c.req.path)
+    ) {
       throw new HTTPException(401, {
-        message: 'API key auth is only supported for PUT /session/:id'
+        message: 'API key auth is only supported for PUT /session/:id and /agents routes'
       })
     }
 

@@ -530,6 +530,7 @@ export async function createImage(input: {
   readonly name: string;
   readonly description?: string;
   readonly setupScript?: string;
+  readonly runScript?: string;
   readonly baseImageId?: string | null;
   readonly createdBy: string;
 }) {
@@ -539,6 +540,7 @@ export async function createImage(input: {
       name: input.name,
       description: input.description,
       setupScript: normalizeNullableText(input.setupScript),
+      runScript: normalizeNullableText(input.runScript),
       createdBy: input.createdBy,
     })
     .returning();
@@ -592,6 +594,7 @@ export async function updateImage(
     readonly name?: string;
     readonly description?: string;
     readonly setupScript?: string | null;
+    readonly runScript?: string | null;
   },
 ) {
   if (!isUuid(id)) return null;
@@ -604,6 +607,9 @@ export async function updateImage(
         : {}),
       ...(Object.prototype.hasOwnProperty.call(input, "setupScript")
         ? { setupScript: normalizeNullableText(input.setupScript) }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, "runScript")
+        ? { runScript: normalizeNullableText(input.runScript) }
         : {}),
       updatedAt: new Date(),
     })
@@ -699,6 +705,7 @@ export async function cloneImage(input: {
       description: source.description,
       visibility: "private",
       setupScript: source.setupScript,
+      runScript: source.runScript,
       createdBy: input.clonedByUserId,
     })
     .returning();

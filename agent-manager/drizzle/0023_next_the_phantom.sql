@@ -1,12 +1,12 @@
-ALTER TABLE "agents" DROP CONSTRAINT "agents_created_by_users_id_fk";
+ALTER TABLE "agents" DROP CONSTRAINT IF EXISTS "agents_created_by_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "coordinator_sessions" DROP CONSTRAINT "coordinator_sessions_created_by_users_id_fk";
+ALTER TABLE "coordinator_sessions" DROP CONSTRAINT IF EXISTS "coordinator_sessions_created_by_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "image_variant_builds" DROP CONSTRAINT "image_variant_builds_requested_by_user_id_users_id_fk";
+ALTER TABLE "image_variant_builds" DROP CONSTRAINT IF EXISTS "image_variant_builds_requested_by_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "image_variants" DROP CONSTRAINT "image_variants_owner_user_id_users_id_fk";
+ALTER TABLE "image_variants" DROP CONSTRAINT IF EXISTS "image_variants_owner_user_id_users_id_fk";
 --> statement-breakpoint
-ALTER TABLE "images" DROP CONSTRAINT "images_created_by_users_id_fk";
+ALTER TABLE "images" DROP CONSTRAINT IF EXISTS "images_created_by_users_id_fk";
 --> statement-breakpoint
 ALTER TABLE "agents" ALTER COLUMN "created_by" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "coordinator_sessions" ALTER COLUMN "created_by" DROP NOT NULL;--> statement-breakpoint

@@ -133,6 +133,7 @@ type ImageDraft = {
   readonly description: string
   readonly visibility: ImageVisibility
   readonly setupScript: string
+  readonly runScript: string
 }
 
 type SecretTabDraft = {
@@ -150,7 +151,8 @@ function toDraft (image: Image): ImageDraft {
     name: image.name,
     description: image.description ?? '',
     visibility: image.visibility,
-    setupScript: image.setupScript ?? ''
+    setupScript: image.setupScript ?? '',
+    runScript: image.runScript ?? ''
   }
 }
 
@@ -159,6 +161,7 @@ type ImagePatch = {
   readonly description?: string
   readonly visibility?: ImageVisibility
   readonly setupScript?: string
+  readonly runScript?: string
 }
 
 function buildPatch (initial: ImageDraft, draft: ImageDraft): ImagePatch {
@@ -171,6 +174,9 @@ function buildPatch (initial: ImageDraft, draft: ImageDraft): ImagePatch {
 
   if (draft.setupScript !== initial.setupScript) {
     patch.setupScript = draft.setupScript
+  }
+  if (draft.runScript !== initial.runScript) {
+    patch.runScript = draft.runScript
   }
 
   return patch as ImagePatch
@@ -628,6 +634,23 @@ export function SettingsImageDetailPage () {
     }
   })
 
+  const saveRunScriptMutation = useMutation({
+    mutationFn: async (runScript: string) =>
+      auth.api.updateImage(imageId, { runScript }),
+    onMutate: () => {
+      toast.loading('Autosaving…', { id: AUTOSAVE_TOAST_ID })
+    },
+    onSuccess: (_, runScript) => {
+      setInitial(prev => (prev ? { ...prev, runScript } : prev))
+      toast.success('Saved', { id: AUTOSAVE_TOAST_ID, duration: 1200 })
+    },
+    onError: err => {
+      const msg =
+        err instanceof Error ? err.message : 'Failed to auto-save run script'
+      toast.error(msg, { id: AUTOSAVE_TOAST_ID })
+    }
+  })
+
   const buildStreamMutation = useMutation({
     mutationFn: async () => {
       if (!selectedVariantId) throw new Error('Select a variant first.')
@@ -778,6 +801,24 @@ export function SettingsImageDetailPage () {
     initial?.setupScript,
     saveSetupScriptMutation.isPending,
     saveSetupScriptMutation.mutate
+  ])
+
+  useEffect(() => {
+    if (!canEdit || !draft || !initial) return
+    if (draft.runScript === initial.runScript) return
+    if (saveRunScriptMutation.isPending) return
+
+    const timeout = window.setTimeout(() => {
+      saveRunScriptMutation.mutate(draft.runScript)
+    }, SETUP_SCRIPT_AUTOSAVE_DEBOUNCE_MS)
+
+    return () => window.clearTimeout(timeout)
+  }, [
+    canEdit,
+    draft?.runScript,
+    initial?.runScript,
+    saveRunScriptMutation.isPending,
+    saveRunScriptMutation.mutate
   ])
 
   const cloneMutation = useMutation({
@@ -1471,6 +1512,9 @@ export function SettingsImageDetailPage () {
         if (Object.prototype.hasOwnProperty.call(patch, 'setupScript')) {
           await saveSetupScriptMutation.mutateAsync(draft.setupScript)
         }
+        if (Object.prototype.hasOwnProperty.call(patch, 'runScript')) {
+          await saveRunScriptMutation.mutateAsync(draft.runScript)
+        }
         return { saved: true as const }
       },
       revert: async () => {
@@ -1635,6 +1679,7 @@ export function SettingsImageDetailPage () {
     nameValidationError,
     removeLocalSecretTab,
     saveSecretMutation,
+    saveRunScriptMutation,
     saveSetupScriptMutation,
     secretTabKeys,
     secretTabs,
@@ -1970,6 +2015,54 @@ export function SettingsImageDetailPage () {
                 {!draftValue.setupScript && (
                   <div className='absolute top-3 left-14 text-text-tertiary text-[13px] pointer-events-none select-none'>
                     # Install dependencies, configure environment, etc.
+                  </div>
+                )}
+              </div>
+            )}
+          </SettingsPanel>
+        </SettingsSection>
+        <SettingsSection
+          title={
+            <div className='flex items-center gap-2'>
+              <p>Run Script</p>
+            </div>
+          }
+          description={
+            <div>
+              Shell commands that run each time an agent sandbox starts from
+              this image.
+            </div>
+          }
+        >
+          <SettingsPanel>
+            {!draftValue || !initialValue ? (
+              <SettingsPanelBody className='text-sm text-text-secondary'>
+                Loading...
+              </SettingsPanelBody>
+            ) : (
+              <div className='overflow-hidden h-[300px] relative'>
+                <Editor
+                  height='100%'
+                  defaultLanguage='shell'
+                  value={draftValue.runScript}
+                  onChange={value =>
+                    setDraft(prev =>
+                      prev ? { ...prev, runScript: value ?? '' } : prev
+                    )
+                  }
+                  theme='vs-dark'
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    lineNumbers: 'on',
+                    scrollBeyondLastLine: false,
+                    readOnly: isBusy,
+                    padding: { top: 12, bottom: 12 }
+                  }}
+                />
+                {!draftValue.runScript && (
+                  <div className='absolute top-3 left-14 text-text-tertiary text-[13px] pointer-events-none select-none'>
+                    # Prepare runtime state before agent-server starts.
                   </div>
                 )}
               </div>

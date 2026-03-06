@@ -14,6 +14,7 @@ import { env } from '../env'
 import {
   canUserAccessImageVariant,
   getImageById,
+  getImageByIdIncludingArchived,
   getImageVariantForImage,
   listEnvironmentSecrets,
   resolveImageVariantForUser,
@@ -228,6 +229,7 @@ const SETUP_TUNNELS_RPC_TIMEOUT_SECONDS = 3
 const SETUP_TUNNELS_READY_TIMEOUT_MS = 20_000
 const SETUP_TUNNELS_RETRY_INTERVAL_MS = 400
 const SETUP_SECRET_NAME = 'openinspect-build-secret'
+const SANDBOX_RUN_SCRIPT_PATH = '/tmp/agent-run.sh'
 
 function splitCommaList (raw: string | null | undefined): string[] {
   return (raw ?? '')
@@ -247,6 +249,40 @@ function normalizeSecretNames (rawNames: readonly string[]): string[] {
     normalized.push(name)
   }
   return normalized
+}
+
+function normalizeNullableText (value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function shellQuote (value: string): string {
+  return `'${value.replace(/'/g, `'\"'\"'`)}'`
+}
+
+function buildSandboxStartCommand (runScript: string | null | undefined): readonly string[] {
+  const normalizedRunScript = normalizeNullableText(runScript)
+  if (!normalizedRunScript) return [...SANDBOX_START_COMMAND]
+
+  const heredocTerminator = '__AGENT_MANAGER_RUN_SCRIPT__'
+  const serverCommand = SANDBOX_START_COMMAND.map(part => shellQuote(part)).join(' ')
+
+  return [
+    'bash',
+    '-lc',
+    [
+      'set -euo pipefail',
+      `cat > ${shellQuote(SANDBOX_RUN_SCRIPT_PATH)} <<'${heredocTerminator}'`,
+      normalizedRunScript,
+      heredocTerminator,
+      `chmod 700 ${shellQuote(SANDBOX_RUN_SCRIPT_PATH)}`,
+      'echo "[sandbox-run] running image run script..." >&2',
+      `bash ${shellQuote(SANDBOX_RUN_SCRIPT_PATH)}`,
+      'echo "[sandbox-run] image run script complete." >&2',
+      `exec ${serverCommand}`
+    ].join('\n')
+  ]
 }
 
 function buildAllowedOrigins (agentManagerBaseUrl: string): string {
@@ -699,6 +735,11 @@ async function createAgentSandboxModal (input: {
       MODAL_SANDBOX_CREATE_STEP_TIMEOUT_MS,
       `image lookup (${input.imageId})`
     )
+    const imageRecord = await getImageByIdIncludingArchived(input.dbImageId)
+    if (!imageRecord) {
+      throw new HTTPException(404, { message: 'Image not found' })
+    }
+    const sandboxStartCommand = buildSandboxStartCommand(imageRecord.runScript)
 
     const apiKeys = {
       OPENAI_API_KEY: (process.env.OPENAI_API_KEY ?? '').trim(),
@@ -781,7 +822,7 @@ async function createAgentSandboxModal (input: {
 
     const sandbox = await withTimeout(
       modalClient.sandboxes.create(app, image, {
-        command: [...SANDBOX_START_COMMAND],
+        command: [...sandboxStartCommand],
         experimentalOptions: { enable_docker: true },
         env: sandboxEnv,
         secrets,

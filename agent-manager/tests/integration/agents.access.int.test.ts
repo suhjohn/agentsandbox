@@ -1,6 +1,9 @@
 import "../setup.test";
 import { describe, it, expect, beforeAll, afterAll, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import { app } from "../../src/app";
+import { db } from "../../src/db";
+import { agents } from "../../src/db/schema";
 import * as sandboxService from "../../src/services/sandbox.service";
 import { createImage, deleteImage } from "../../src/services/image.service";
 import {
@@ -170,5 +173,61 @@ describe("/agents/:agentId/access (integration)", () => {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     expect(res.status).toBe(502);
+  });
+
+  it("allows API key access when the agent has no owner", async () => {
+    const apiKey = process.env.AGENT_MANAGER_API_KEY ?? "";
+    expect(apiKey.length).toBeGreaterThan(0);
+
+    const { userId } = await registerUser(server.baseUrl);
+
+    const image = await createImage({
+      name: `access api key image ${new Date().toISOString()}`,
+      createdBy: userId,
+    });
+    cleanup.push(async () => {
+      await deleteImage(image.id);
+    });
+
+    const agent = await createAgent({
+      imageId: image.id,
+      createdBy: userId,
+    });
+    cleanup.push(async () => {
+      await deleteAgent(agent.id);
+    });
+
+    const sandboxId = `sb-${crypto.randomUUID()}`;
+    await setAgentSandbox({
+      id: agent.id,
+      currentSandboxId: sandboxId,
+    });
+
+    await db
+      .update(agents)
+      .set({ createdBy: null })
+      .where(eq(agents.id, agent.id));
+
+    vi.spyOn(sandboxService, "ensureAgentSandbox").mockResolvedValue({
+      tunnels: {
+        openVscodeUrl: "https://openvscode.example.com/",
+        noVncUrl: "https://novnc.example.com/vnc.html",
+        agentApiUrl: healthServer.baseUrl,
+      },
+      sandboxAccessToken: "sandbox-access-token",
+      sandbox: { sandboxId } as unknown as any,
+    });
+
+    const res = await fetch(`${server.baseUrl}/agents/${agent.id}/access`, {
+      headers: { "X-Agent-Manager-Api-Key": apiKey },
+    });
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as {
+      agentApiUrl: string;
+      agentAuthToken: string;
+    };
+    expect(body.agentApiUrl).toBe(healthServer.baseUrl);
+    expect(body.agentAuthToken.length).toBeGreaterThan(0);
   });
 });

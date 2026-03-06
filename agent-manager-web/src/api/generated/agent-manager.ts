@@ -226,6 +226,8 @@ export type GetImages200DataItem = {
   defaultVariantId?: string | null;
   /** @nullable */
   setupScript?: string | null;
+  /** @nullable */
+  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -246,6 +248,7 @@ export type PostImagesBody = {
   /** @maxLength 2000 */
   description?: string;
   setupScript?: string;
+  runScript?: string;
   baseImageId?: string;
 };
 
@@ -269,6 +272,8 @@ export type PostImages201 = {
   defaultVariantId?: string | null;
   /** @nullable */
   setupScript?: string | null;
+  /** @nullable */
+  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -294,6 +299,8 @@ export type GetImagesImageId200 = {
   defaultVariantId?: string | null;
   /** @nullable */
   setupScript?: string | null;
+  /** @nullable */
+  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -312,6 +319,7 @@ export type PatchImagesImageIdBody = {
   /** @maxLength 2000 */
   description?: string;
   setupScript?: string;
+  runScript?: string;
 };
 
 export type PatchImagesImageId200Visibility = typeof PatchImagesImageId200Visibility[keyof typeof PatchImagesImageId200Visibility];
@@ -334,6 +342,8 @@ export type PatchImagesImageId200 = {
   defaultVariantId?: string | null;
   /** @nullable */
   setupScript?: string | null;
+  /** @nullable */
+  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -754,6 +764,8 @@ export type PostImagesImageIdArchive200 = {
   defaultVariantId?: string | null;
   /** @nullable */
   setupScript?: string | null;
+  /** @nullable */
+  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -787,6 +799,8 @@ export type PostImagesImageIdUnarchive200 = {
   defaultVariantId?: string | null;
   /** @nullable */
   setupScript?: string | null;
+  /** @nullable */
+  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -824,6 +838,8 @@ export type PostImagesImageIdBuild200Image = {
   defaultVariantId?: string | null;
   /** @nullable */
   setupScript?: string | null;
+  /** @nullable */
+  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -891,6 +907,8 @@ export type PostImagesImageIdClone201 = {
   defaultVariantId?: string | null;
   /** @nullable */
   setupScript?: string | null;
+  /** @nullable */
+  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;

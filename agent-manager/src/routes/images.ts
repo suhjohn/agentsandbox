@@ -76,13 +76,15 @@ const createImageSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(2000).optional(),
   setupScript: z.string().optional(),
+  runScript: z.string().optional(),
   baseImageId: z.string().optional()
 })
 
 const updateImageSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().max(2000).optional(),
-  setupScript: z.string().optional()
+  setupScript: z.string().optional(),
+  runScript: z.string().optional()
 })
 
 const listImagesQuery = z.object({
@@ -117,6 +119,7 @@ const imageSchema = z.object({
   createdBy: z.string().nullable(),
   defaultVariantId: z.string().uuid().nullable().optional(),
   setupScript: z.string().nullable().optional(),
+  runScript: z.string().nullable().optional(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
   deletedAt: z.string().or(z.date()).nullable().optional()
@@ -315,6 +318,7 @@ registerRoute(
       name: body.name,
       description: body.description,
       setupScript: body.setupScript,
+      runScript: body.runScript,
       baseImageId: body.baseImageId,
       createdBy: user.id
     })
@@ -873,6 +877,7 @@ registerRoute(
       readonly name?: string
       readonly description?: string
       readonly setupScript?: string | null
+      readonly runScript?: string | null
     } = {
       ...(typeof body.name === 'string' ? { name: body.name } : {}),
       ...(typeof body.description === 'string'
@@ -880,6 +885,9 @@ registerRoute(
         : {}),
       ...(Object.prototype.hasOwnProperty.call(body, 'setupScript')
         ? { setupScript: body.setupScript }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(body, 'runScript')
+        ? { runScript: body.runScript }
         : {})
     }
     const image = await updateImage(imageId, {
