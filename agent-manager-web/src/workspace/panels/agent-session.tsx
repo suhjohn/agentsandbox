@@ -13,7 +13,7 @@ import {
   type QueryClient
 } from '@tanstack/react-query'
 import { getModels, getProviders } from '@mariozechner/pi-ai'
-import { Select } from '@/components/ui/select'
+import { ModelCombobox } from '@/components/ui/model-combobox'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader, SandboxLoader } from '@/components/loader'
 import { toast } from 'sonner'
@@ -130,7 +130,11 @@ function makeSessionStreamKey (config: SessionStreamConfig): string {
 function getAvailableModelsForHarness (
   harness: 'codex' | 'pi'
 ): readonly CatalogModel[] {
-  return harness === 'codex' ? OPENAI_MODELS : ALL_MODELS
+  if (harness === 'codex') return OPENAI_MODELS
+  return ALL_MODELS.map(model => ({
+    ...model,
+    id: `${model.provider}/${model.id}`
+  }))
 }
 
 function resolveSelectableModels (args: {
@@ -150,10 +154,15 @@ function resolveSelectableModels (args: {
     {
       id: selectedModel,
       name:
-        args.harness === 'codex'
-          ? `${selectedModel} (current)`
-          : selectedModel,
-      provider: 'current'
+        args.harness === 'pi' && !selectedModel.includes('/')
+          ? `${selectedModel} (provider unspecified)`
+          : args.harness === 'codex'
+            ? `${selectedModel} (current)`
+            : `${selectedModel.split('/').slice(1).join('/')} (current)`,
+      provider:
+        args.harness === 'pi' && !selectedModel.includes('/')
+          ? 'saved'
+          : 'current'
     },
     ...available
   ]
@@ -1197,30 +1206,18 @@ function SessionComposer (props: {
           className='resize-none bg-transparent border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 px-4 py-3 text-sm'
         />
       </div>
-      <div className='border-t border-border/60 px-4 py-2'>
+      <div className='px-4 flex items-center gap-3'>
         <div className='flex items-center gap-3'>
-          <div className='shrink-0 text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary'>
-            Model
-          </div>
-          <Select
-            value={props.selectedModel}
-            onChange={e => {
-              props.onSelectedModelChange(e.target.value)
-            }}
-            variant='borderless'
-            disabled={composerDisabled}
-            className='h-8 min-w-0 flex-1 px-0 py-0 text-xs text-text-secondary'
-          >
-            <option value=''>Default model</option>
-            {props.availableModels.map(model => (
-              <option key={model.id} value={model.id}>
-                {model.provider === 'openai' || model.provider === 'current'
-                  ? model.name
-                  : `${model.name} (${model.provider})`}
-              </option>
-            ))}
-          </Select>
+          <p className='text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary'>
+            {props.harness}
+          </p>
         </div>
+        <ModelCombobox
+          value={props.selectedModel}
+          onChange={props.onSelectedModelChange}
+          models={props.availableModels}
+          disabled={composerDisabled}
+        />
       </div>
     </div>
   )
@@ -1591,7 +1588,10 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
               )
             ) : (
               <>
-                <SessionMessages messages={messages} messageType={messageType} />
+                <SessionMessages
+                  messages={messages}
+                  messageType={messageType}
+                />
                 {stream.isRunning === true ||
                 isOptimisticSending ||
                 hasVisibleOptimisticMessage ? (
