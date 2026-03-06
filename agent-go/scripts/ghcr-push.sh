@@ -94,11 +94,6 @@ elif [[ -n "${GHCR_TOKEN:-}" || -n "${GITHUB_USERNAME:-}" ]]; then
   exit 1
 fi
 
-"${REPO_ROOT}/agent-go/scripts/build-agent-server.sh" \
-  --goos linux \
-  --goarch amd64 \
-  --output "${REPO_ROOT}/agent-go/build-artifacts/agent-server"
-
 build_args=(
   --platform linux/amd64
   --push

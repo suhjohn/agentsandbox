@@ -14,8 +14,6 @@
 !**/.env.example
 
 # VCS
-.git
-**/.git
 **/.gitignore
 
 # Python

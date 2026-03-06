@@ -169,12 +169,24 @@ const SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS = envInt(
   process.env.AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS != null
     ? 'AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS'
     : 'SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS',
-  60 * 1000
+  5 * 60 * 1000
 )
 const SESSION_SANDBOX_POST_CREATE_HEALTH_RETRY_MS = envInt(
   process.env.AGENT_SANDBOX_POST_CREATE_HEALTH_RETRY_MS != null
     ? 'AGENT_SANDBOX_POST_CREATE_HEALTH_RETRY_MS'
     : 'SESSION_SANDBOX_POST_CREATE_HEALTH_RETRY_MS',
+  1000
+)
+const SETUP_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS = envInt(
+  process.env.AGENT_SETUP_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS != null
+    ? 'AGENT_SETUP_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS'
+    : 'SETUP_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS',
+  5 * 60 * 1000
+)
+const SETUP_SANDBOX_POST_CREATE_HEALTH_RETRY_MS = envInt(
+  process.env.AGENT_SETUP_SANDBOX_POST_CREATE_HEALTH_RETRY_MS != null
+    ? 'AGENT_SETUP_SANDBOX_POST_CREATE_HEALTH_RETRY_MS'
+    : 'SETUP_SANDBOX_POST_CREATE_HEALTH_RETRY_MS',
   1000
 )
 function parseSandboxStartCommand (): readonly string[] {
@@ -1180,6 +1192,14 @@ export async function createSetupSandbox (input: {
       ? [...input.region]
       : undefined
   const agentManagerBaseUrl = await resolveAgentManagerBaseUrl()
+  const setupStartupWaitSeconds = Math.max(
+    1,
+    Math.ceil(SETUP_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS / 1000)
+  )
+  const setupStartupRetrySeconds = Math.max(
+    1,
+    Math.ceil(SETUP_SANDBOX_POST_CREATE_HEALTH_RETRY_MS / 1000)
+  )
 
   const sandbox = await modalClient.sandboxes.create(app, modalImage, {
     command: [...SETUP_SERVER_COMMAND],
@@ -1209,14 +1229,15 @@ export async function createSetupSandbox (input: {
         'bash',
         '-lc',
         [
-          `for i in {1..30}; do`,
+          `deadline=$((SECONDS + ${setupStartupWaitSeconds}))`,
+          `while [ "$SECONDS" -lt "$deadline" ]; do`,
           `  curl -fsS "http://127.0.0.1:${SETUP_TERMINAL_PORT}/health" >/dev/null 2>&1 && exit 0;`,
-          `  sleep 0.5;`,
+          `  sleep ${setupStartupRetrySeconds};`,
           `done;`,
           `exit 1;`
         ].join('\n')
       ],
-      { timeoutMs: 20_000 }
+      { timeoutMs: SETUP_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS + 10_000 }
     )
     const exitCode = await probe.wait()
     if (exitCode !== 0) throw new Error(`startup probe exited ${exitCode}`)

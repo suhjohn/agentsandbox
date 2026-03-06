@@ -100,22 +100,6 @@ func runCmd(t *testing.T, cmd []string, dir string, env []string, allowFail bool
 	return result
 }
 
-func ensureDockerAgentServerBinary(t *testing.T, root string) string {
-	t.Helper()
-	relPath := filepath.Join("agent-go", "build-artifacts", "agent-server")
-	absPath := filepath.Join(root, relPath)
-	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
-		t.Fatalf("mkdir build-artifacts: %v", err)
-	}
-	moduleDir := filepath.Join(root, "agent-go")
-	runCmd(t, []string{"go", "build", "-trimpath", "-ldflags=-s -w", "-o", absPath, "./cmd/agent-go"}, moduleDir, []string{
-		"CGO_ENABLED=0",
-		"GOOS=linux",
-		"GOARCH=" + runtime.GOARCH,
-	}, false)
-	return filepath.ToSlash(relPath)
-}
-
 func waitFor(t *testing.T, timeout time.Duration, fn func() error) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)

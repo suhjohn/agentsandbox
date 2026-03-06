@@ -24,6 +24,15 @@ const SNAPSHOT_TIMEOUT_MS = 10 * 60 * 1000
 
 const MAX_LOG_CHARS = 12_000
 
+const AGENT_SOURCE_UPDATE_COMMAND = [
+  'if command -v agent-go-update-source >/dev/null 2>&1; then',
+  '  echo "[agent-go] syncing source checkout..."',
+  '  if ! agent-go-update-source; then',
+  '    echo "[agent-go] warning: source sync failed; continuing with current checkout" >&2;',
+  '  fi;',
+  'fi'
+].join(' ')
+
 export type BuildChunk = {
   readonly source: 'stdout' | 'stderr'
   readonly text: string
@@ -177,7 +186,7 @@ export async function runModalImageBuild (input: {
     if (input.setupScript.trim().length > 0) {
       const setupScriptPath = '/tmp/image-setup.sh'
       await writeFile(sandbox, setupScriptPath, input.setupScript)
-      const setupCommand = `chmod 700 ${shellQuote(
+      const setupCommand = `${AGENT_SOURCE_UPDATE_COMMAND} && chmod 700 ${shellQuote(
         setupScriptPath
       )} && ${shellQuote(setupScriptPath)}`
       const setupStdout = createLineBuffer(line => {
@@ -209,7 +218,35 @@ export async function runModalImageBuild (input: {
         )
       }
     } else {
-      logStep('Setup script is empty; skipping setup execution.')
+      logStep('Setup script is empty; running source sync only.')
+      const setupStdout = createLineBuffer(line => {
+        emit({ source: 'stderr', text: `[setup][stdout] ${line}\n` })
+      })
+      const setupStderr = createLineBuffer(line => {
+        emit({ source: 'stderr', text: `[setup][stderr] ${line}\n` })
+      })
+      const { exitCode, stderr } = await execText(
+        sandbox,
+        ['bash', '-lc', AGENT_SOURCE_UPDATE_COMMAND],
+        {
+          timeoutMs: SETUP_TIMEOUT_MS,
+          onStdoutChunk: chunk => {
+            setupStdout.push(chunk)
+          },
+          onStderrChunk: chunk => {
+            setupStderr.push(chunk)
+          }
+        }
+      )
+      setupStdout.flush()
+      setupStderr.flush()
+      if (exitCode !== 0) {
+        throw new Error(
+          `setup preamble failed (exit ${exitCode}).${
+            stderr.trim().length > 0 ? `\n--- stderr ---\n${stderr}` : ''
+          }`
+        )
+      }
     }
 
     const fileSecrets = parseFileSecrets(input.fileSecrets)

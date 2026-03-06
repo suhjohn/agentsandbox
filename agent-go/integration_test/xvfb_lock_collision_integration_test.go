@@ -19,9 +19,8 @@ func TestContainerBootsWithX11LockPIDCollision(t *testing.T) {
 	baseTag := "agent-go:it-xvfb-base"
 	derivedTag := "agent-go:it-xvfb-stale"
 	containerName := fmt.Sprintf("agent_go_it_xvfb_%d", time.Now().UnixNano())
-	agentBinary := ensureDockerAgentServerBinary(t, root)
 
-	runCmd(t, []string{"docker", "build", "-f", "agent-go/Dockerfile", "--build-arg", "PORT=3131", "--build-arg", "AGENT_SERVER_BINARY=" + agentBinary, "-t", baseTag, "."}, root, nil, false)
+	runCmd(t, []string{"docker", "build", "-f", "agent-go/Dockerfile", "--build-arg", "PORT=3131", "-t", baseTag, "."}, root, nil, false)
 	runCmd(t, []string{"docker", "build", "--build-arg", "BASE_IMAGE=" + baseTag, "-f", "agent-go/integration_test/Dockerfile.xvfb-stale", "-t", derivedTag, "."}, root, nil, false)
 	defer runCmd(t, []string{"docker", "rm", "-f", containerName}, root, nil, true)
 

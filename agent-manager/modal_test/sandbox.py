@@ -61,9 +61,9 @@ try:
     print("Running agent-entrypoint --init …")
     run("/usr/local/bin/agent-entrypoint --init", "init")
 
-    # 2. Copy agent-server binary into /home/agent
+    # 2. Copy agent-server launcher into /home/agent
     print("Copying /app/agent-server → /home/agent …")
-    run(f"cp /app/agent-server {AGENT_HOME}/agent-server", "copy-binary")
+    run(f"cp /app/agent-server {AGENT_HOME}/agent-server", "copy-launcher")
 
     # 3. Show what was created
     print("\n--- /home/agent after init ---")

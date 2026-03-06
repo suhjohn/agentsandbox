@@ -25,6 +25,7 @@ Behavior:
   - `input.environmentSecretNames`.
 - Missing secret names are logged to build stderr and ignored.
 - Materializes `fileSecrets` into `.env` files in the sandbox before snapshotting.
+- Runs an agent source sync preamble (`agent-go-update-source` when available) before executing `setupScript`.
 
 ## image.service.ts
 
@@ -62,3 +63,4 @@ Behavior:
   - inline API key secret object (OpenAI/Anthropic/Google/manager API keys when configured),
   - image-bound environment secrets from `listEnvironmentSecrets(agent.imageId)`.
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.
+- Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).

@@ -5,7 +5,6 @@ GO ?= go
 DOCKER ?= docker
 DOCKER_IMAGE ?= agent-go:dev
 DOCKER_CONTAINER ?= agent-go-dev
-AGENT_SERVER_BINARY ?= agent-go/build-artifacts/agent-server
 ENV_FILE ?= .env
 
 .PHONY: help run serve proxy build test test-docker fmt vet openapi build-server build-server-docker build-server-linux-amd64 build-server-linux-arm64 docker-build docker-run docker-run-server docker-stop ghcr-push ghcr-push-amd64 check-env-file
@@ -25,7 +24,7 @@ help:
 	@echo "  make build-server-docker     # scripts/build-agent-server.sh --output ./build-artifacts/agent-server"
 	@echo "  make build-server-linux-amd64"
 	@echo "  make build-server-linux-arm64"
-	@echo "  make docker-build            # build image (includes build-server-docker)"
+	@echo "  make docker-build            # build image"
 	@echo "  make docker-run              # run full container stack using ENV_FILE=$(ENV_FILE)"
 	@echo "  make docker-run-server       # run API server only mode using ENV_FILE=$(ENV_FILE)"
 	@echo "  make docker-stop             # stop/remove $(DOCKER_CONTAINER)"
@@ -70,8 +69,8 @@ build-server-linux-amd64:
 build-server-linux-arm64:
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 ./scripts/build-agent-server.sh
 
-docker-build: build-server-docker
-	$(DOCKER) build -f Dockerfile -t "$(DOCKER_IMAGE)" --build-arg AGENT_SERVER_BINARY="$(AGENT_SERVER_BINARY)" ..
+docker-build:
+	$(DOCKER) build -f Dockerfile -t "$(DOCKER_IMAGE)" ..
 
 check-env-file:
 	@test -f "$(ENV_FILE)" || (echo "missing env file: $(ENV_FILE)" && exit 1)

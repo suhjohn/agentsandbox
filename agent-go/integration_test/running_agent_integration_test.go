@@ -226,8 +226,7 @@ func startRunningAgentContainer(t *testing.T, root, secretSeed string, liveAI bo
 	t.Helper()
 	imageTag := fmt.Sprintf("agent-go:it-dev-%d", time.Now().UnixNano())
 	containerName := fmt.Sprintf("agent_go_it_dev_%d", time.Now().UnixNano())
-	agentBinary := ensureDockerAgentServerBinary(t, root)
-	runCmd(t, []string{"docker", "build", "-f", "agent-go/Dockerfile", "--build-arg", "AGENT_SERVER_BINARY=" + agentBinary, "-t", imageTag, "."}, root, nil, false)
+	runCmd(t, []string{"docker", "build", "-f", "agent-go/Dockerfile", "-t", imageTag, "."}, root, nil, false)
 	defer runCmd(t, []string{"docker", "image", "rm", "-f", imageTag}, root, nil, true)
 
 	envArgs := []string{"-e", "PORT=3131", "-e", "NOVNC_PORT=6080", "-e", "OPENVSCODE_SERVER_PORT=39393", "-e", "SECRET_SEED=" + secretSeed}

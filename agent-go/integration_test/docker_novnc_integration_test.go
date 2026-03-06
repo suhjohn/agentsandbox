@@ -21,9 +21,8 @@ func TestDockerNoVNCSmokeAndBasicAPIs(t *testing.T) {
 	secretSeed := strings.Repeat("x", 32)
 	imageTag := "agent-go:it-novnc"
 	containerName := fmt.Sprintf("agent_go_it_%d", time.Now().UnixNano())
-	agentBinary := ensureDockerAgentServerBinary(t, root)
 
-	runCmd(t, []string{"docker", "build", "-f", "agent-go/Dockerfile", "--build-arg", "AGENT_SERVER_BINARY=" + agentBinary, "-t", imageTag, "."}, root, nil, false)
+	runCmd(t, []string{"docker", "build", "-f", "agent-go/Dockerfile", "-t", imageTag, "."}, root, nil, false)
 	defer runCmd(t, []string{"docker", "rm", "-f", containerName}, root, nil, true)
 
 	runCmd(t, []string{

@@ -25,8 +25,7 @@ func TestPIHarnessCreateSessionAndStream(t *testing.T) {
 
 	imageTag := "agent-go:it-pi"
 	containerName := fmt.Sprintf("agent_go_it_pi_%d", time.Now().UnixNano())
-	agentBinary := ensureDockerAgentServerBinary(t, root)
-	runCmd(t, []string{"docker", "build", "-f", "agent-go/Dockerfile", "--build-arg", "PORT=3131", "--build-arg", "AGENT_SERVER_BINARY=" + agentBinary, "-t", imageTag, "."}, root, nil, false)
+	runCmd(t, []string{"docker", "build", "-f", "agent-go/Dockerfile", "--build-arg", "PORT=3131", "-t", imageTag, "."}, root, nil, false)
 	defer runCmd(t, []string{"docker", "rm", "-f", containerName}, root, nil, true)
 
 	openaiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))

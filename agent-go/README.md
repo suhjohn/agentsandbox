@@ -58,12 +58,11 @@ Build to a specific output path (example used by Docker below):
 ./agent-go/scripts/build-agent-server.sh --output ./agent-go/build-artifacts/agent-server
 ```
 
-## Docker image (binary-only server)
+## Docker image (source-driven server launcher)
 
 Build with the repository root as context:
 
 ```bash
-./agent-go/scripts/build-agent-server.sh --output ./agent-go/build-artifacts/agent-server
 docker build -f agent-go/Dockerfile -t agent-go:dev .
 ```
 
@@ -116,8 +115,9 @@ Runtime behavior intentionally keeps the same entrypoint/runit stack used by `ag
 - optional dockerd service
 - workspace tools sync + Codex `AGENTS.md` generation
 
-But the API server process is only the compiled Go binary (`/app/agent-server`), not Bun.
-OpenVSCode proxying is also handled by the same Go binary (`/app/agent-server openvscode-proxy`).
+The API server command remains `/app/agent-server`, but this is now an executable launcher
+that runs `go run ./cmd/agent-go ...` from the source checkout in the image.
+OpenVSCode proxying still uses the same command path (`/app/agent-server openvscode-proxy`).
 
 ### Entrypoint + `AGENT_RUNTIME_MODE`
 
