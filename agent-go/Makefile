@@ -7,7 +7,7 @@ DOCKER_IMAGE ?= agent-go:dev
 DOCKER_CONTAINER ?= agent-go-dev
 ENV_FILE ?= .env
 
-.PHONY: help run serve proxy build test test-docker fmt vet openapi build-server build-server-docker build-server-linux-amd64 build-server-linux-arm64 docker-build docker-run docker-run-server docker-stop ghcr-push ghcr-push-amd64 check-env-file
+.PHONY: help run serve proxy build test test-docker fmt vet openapi build-server restart-server build-server-docker build-server-linux-amd64 build-server-linux-arm64 docker-build docker-run docker-run-server docker-stop ghcr-push ghcr-push-amd64 check-env-file
 
 help:
 	@echo "agent-go make targets"
@@ -21,6 +21,7 @@ help:
 	@echo "  make vet                     # go vet ./..."
 	@echo "  make openapi                 # print OpenAPI spec path"
 	@echo "  make build-server            # scripts/build-agent-server.sh"
+	@echo "  make restart-server          # scripts/restart-agent-server.sh"
 	@echo "  make build-server-docker     # scripts/build-agent-server.sh --output ./build-artifacts/agent-server"
 	@echo "  make build-server-linux-amd64"
 	@echo "  make build-server-linux-arm64"
@@ -59,6 +60,9 @@ openapi:
 
 build-server:
 	./scripts/build-agent-server.sh
+
+restart-server:
+	./scripts/restart-agent-server.sh
 
 build-server-docker:
 	./scripts/build-agent-server.sh --output ./build-artifacts/agent-server

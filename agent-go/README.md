@@ -58,6 +58,15 @@ Build to a specific output path (example used by Docker below):
 ./agent-go/scripts/build-agent-server.sh --output ./agent-go/build-artifacts/agent-server
 ```
 
+Pull, rebuild, stop the existing standalone binary process, and start the new one:
+
+```bash
+./agent-go/scripts/restart-agent-server.sh
+```
+
+This helper is for the standalone compiled-binary flow. It is not used by the Docker
+launcher path, which runs `go run ./cmd/agent-go` on startup.
+
 ## Docker image (source-driven server launcher)
 
 Build with the repository root as context:
