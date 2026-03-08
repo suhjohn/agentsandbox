@@ -136,7 +136,7 @@ COPY . ${AGENT_REPO_DIR}
 # Symlink docker/tools to /app for backwards compatibility
 RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/docker" /app/docker \
   && ln -sfn "${AGENT_REPO_DIR}/agent-go/tools" /app/tools \
-  && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/agent-server.sh" /app/agent-server \
+  && ln -sfn "${AGENT_REPO_DIR}/agent-go/docker/agent-server.sh" /app/agent-server \
   && ln -sfn /app/agent-server /usr/local/bin/agent-server \
   && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/update-agent-go-source.sh" /usr/local/bin/agent-go-update-source \
   && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/entrypoint.sh" /usr/local/bin/agent-entrypoint \

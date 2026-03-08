@@ -27,7 +27,7 @@ Behavior:
 - Always runs an internal setup sequence before snapshotting:
   - source sync via `agent-go-update-source` when available, forcing the checkout to match the remote branch and failing the build if sync fails,
   - then `input.setupScript` if non-empty,
-  - then builds the `agent-go` binary to `/app/agent-server`.
+  - then removes any launcher symlink at `/app/agent-server` and builds the `agent-go` binary there.
 - Materializes `fileSecrets` into secret files at their exact configured paths in the sandbox before snapshotting.
 
 ## image.service.ts

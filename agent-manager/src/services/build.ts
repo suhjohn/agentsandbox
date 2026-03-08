@@ -36,6 +36,7 @@ const AGENT_SERVER_BUILD_COMMAND = [
   '  echo "[agent-go] build script missing: /opt/agentsandbox/agent-go/scripts/dev.sh" >&2;',
   '  exit 1;',
   'fi',
+  'rm -f /app/agent-server',
   '/opt/agentsandbox/agent-go/scripts/dev.sh build-server --output /app/agent-server'
 ].join('\n')
 
