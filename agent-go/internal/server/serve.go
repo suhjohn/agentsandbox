@@ -108,7 +108,7 @@ func runServe(args []string) error {
 		app.codex.Env = append(app.codex.Env, "OPENAI_API_KEY="+strings.TrimSpace(cfg.OpenAIAPIKey))
 	}
 	if strings.TrimSpace(cfg.PIDir) != "" {
-		app.pi.Env = append(app.pi.Env, "PI_DIR="+strings.TrimSpace(cfg.PIDir))
+		app.pi.Env = append(app.pi.Env, "PI_CODING_AGENT_DIR="+strings.TrimSpace(cfg.PIDir))
 	}
 	app.outbox = newEventOutbox(store, httpClient, cfg)
 	app.outbox.start()
@@ -205,7 +205,7 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	managerAuthToken := strings.TrimSpace(os.Getenv("AGENT_MANAGER_AUTH_TOKEN"))
 	internalAuthSecret := strings.TrimSpace(os.Getenv("AGENT_INTERNAL_AUTH_SECRET"))
 	allowedOriginsRaw := strings.TrimSpace(os.Getenv("AGENT_ALLOWED_ORIGINS"))
-	piDir := strings.TrimSpace(os.Getenv("PI_DIR"))
+	piDir := strings.TrimSpace(os.Getenv("PI_CODING_AGENT_DIR"))
 
 	cfg := serveConfig{}
 	fs.IntVar(&cfg.Port, "port", portDefault, "Server port")

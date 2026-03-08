@@ -121,7 +121,7 @@ agents
 | `agent-go/internal/openapi/openapi.json` | OpenAPI contract served by `/openapi.json` |
 | `agent-go/Dockerfile` | Base runtime image build (writes `/etc/agent-image-version`) |
 | `agent-go/docker/entrypoint.sh` | Runtime env setup (exports `AGENT_IMAGE_VERSION`, starts services) |
-| `agent-go/scripts/build-agent-server.sh` | Build script for the agent-go server binary |
+| `agent-go/scripts/dev.sh` | Unified local workflow script for agent-go build, restart, Docker, and publish flows |
 
 ### Current Limitations
 
@@ -158,7 +158,7 @@ agent-go/
 │   └── agent-go/
 │       └── main.go         # MODIFY: Add "version" command
 └── scripts/
-    └── build-agent-server.sh  # MODIFY: Inject version via ldflags
+    └── dev.sh                 # MODIFY: Inject version via ldflags in build-server flow
 ```
 
 **agent-go/internal/version/version.go:**

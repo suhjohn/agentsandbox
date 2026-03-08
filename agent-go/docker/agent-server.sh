@@ -39,7 +39,7 @@ if [[ -x "${BINARY_PATH}" ]]; then
 fi
 
 if [[ "${should_rebuild}" == "1" ]]; then
-  "${REPO_DIR}/scripts/build-agent-server.sh" --output "${BINARY_PATH}"
+  "${REPO_DIR}/scripts/dev.sh" build-server --output "${BINARY_PATH}"
   if [[ -n "${current_rev}" ]] && [[ "${current_dirty}" == "0" ]]; then
     printf '%s\n' "${current_rev}" >"${BINARY_REV_FILE}"
   else

@@ -252,7 +252,9 @@ function normalizeSecretNames (rawNames: readonly string[]): string[] {
   return normalized
 }
 
-function normalizeNullableText (value: string | null | undefined): string | null {
+function normalizeNullableText (
+  value: string | null | undefined
+): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
@@ -262,12 +264,16 @@ function shellQuote (value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`
 }
 
-function buildSandboxStartCommand (runScript: string | null | undefined): readonly string[] {
+function buildSandboxStartCommand (
+  runScript: string | null | undefined
+): readonly string[] {
   const normalizedRunScript = normalizeNullableText(runScript)
   if (!normalizedRunScript) return [...SANDBOX_START_COMMAND]
 
   const heredocTerminator = '__AGENT_MANAGER_RUN_SCRIPT__'
-  const serverCommand = SANDBOX_START_COMMAND.map(part => shellQuote(part)).join(' ')
+  const serverCommand = SANDBOX_START_COMMAND.map(part =>
+    shellQuote(part)
+  ).join(' ')
 
   return [
     'bash',
@@ -462,7 +468,9 @@ export async function getSandboxAgentToken (input: {
   const now = Math.floor(Date.now() / 1000)
   const desiredExpiresInSeconds = Math.max(
     30,
-    Math.floor(input.expiresInSeconds ?? DEFAULT_SANDBOX_AGENT_TOKEN_TTL_SECONDS)
+    Math.floor(
+      input.expiresInSeconds ?? DEFAULT_SANDBOX_AGENT_TOKEN_TTL_SECONDS
+    )
   )
 
   const exp = now + desiredExpiresInSeconds
@@ -708,8 +716,8 @@ async function createAgentSandboxModal (input: {
     IMAGE_ID: input.dbImageId,
     DOCKERD_BRIDGE: 'none',
     AGENT_DOCKER_FORCE_HOST_NETWORK: '1',
-    ...((process.env.PI_DIR ?? '').trim().length > 0
-      ? { PI_DIR: (process.env.PI_DIR ?? '').trim() }
+    ...((process.env.PI_CODING_AGENT_DIR ?? '').trim().length > 0
+      ? { PI_CODING_AGENT_DIR: (process.env.PI_CODING_AGENT_DIR ?? '').trim() }
       : {}),
     OPENVSCODE_CONNECTION_TOKEN: input.sandboxAccessToken,
     VNC_PASSWORD: input.sandboxAccessToken,
@@ -991,7 +999,10 @@ export async function ensureAgentSandbox (input: {
       if (input.imageId) {
         candidateImageIds = [input.imageId]
       } else {
-        if (typeof agent.createdBy !== 'string' || agent.createdBy.length === 0) {
+        if (
+          typeof agent.createdBy !== 'string' ||
+          agent.createdBy.length === 0
+        ) {
           throw new HTTPException(409, { message: 'Agent owner is missing' })
         }
         const baseVariant =

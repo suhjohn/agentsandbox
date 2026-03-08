@@ -1335,6 +1335,115 @@ export type PostAgentsAgentIdSnapshot409 = {
   error: string;
 };
 
+export type PostAgentsAgentIdSessionBodyHarness = typeof PostAgentsAgentIdSessionBodyHarness[keyof typeof PostAgentsAgentIdSessionBodyHarness];
+
+
+export const PostAgentsAgentIdSessionBodyHarness = {
+  codex: 'codex',
+  pi: 'pi',
+} as const;
+
+export type PostAgentsAgentIdSessionBodyModelReasoningEffort = typeof PostAgentsAgentIdSessionBodyModelReasoningEffort[keyof typeof PostAgentsAgentIdSessionBodyModelReasoningEffort];
+
+
+export const PostAgentsAgentIdSessionBodyModelReasoningEffort = {
+  minimal: 'minimal',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  xhigh: 'xhigh',
+} as const;
+
+export type PostAgentsAgentIdSessionBody = {
+  /**
+   * @minLength 32
+   * @maxLength 32
+   */
+  sessionId?: string;
+  /** @minLength 1 */
+  title?: string;
+  /** @minLength 1 */
+  message: string;
+  harness?: PostAgentsAgentIdSessionBodyHarness;
+  /** @minLength 1 */
+  model?: string;
+  modelReasoningEffort?: PostAgentsAgentIdSessionBodyModelReasoningEffort;
+};
+
+/**
+ * @nullable
+ */
+export type PostAgentsAgentIdSession200AgentImage = {
+  id: string;
+  name: string;
+} | null;
+
+export type PostAgentsAgentIdSession200AgentStatus = typeof PostAgentsAgentIdSession200AgentStatus[keyof typeof PostAgentsAgentIdSession200AgentStatus];
+
+
+export const PostAgentsAgentIdSession200AgentStatus = {
+  active: 'active',
+  snapshotting: 'snapshotting',
+  completed: 'completed',
+  archived: 'archived',
+} as const;
+
+/**
+ * @nullable
+ */
+export type PostAgentsAgentIdSession200AgentCreatedByUser = {
+  id: string;
+  name: string;
+} | null;
+
+export type PostAgentsAgentIdSession200Agent = {
+  id: string;
+  name: string;
+  /** @nullable */
+  parentAgentId?: string | null;
+  /** @nullable */
+  imageId?: string | null;
+  /** @nullable */
+  imageVariantId?: string | null;
+  /** @nullable */
+  image?: PostAgentsAgentIdSession200AgentImage;
+  /** @nullable */
+  currentSandboxId?: string | null;
+  /** @nullable */
+  sandboxName?: string | null;
+  /** @nullable */
+  snapshotImageId?: string | null;
+  /** @nullable */
+  region?: string | null;
+  status: PostAgentsAgentIdSession200AgentStatus;
+  /** @nullable */
+  createdBy: string | null;
+  /** @nullable */
+  createdByUser: PostAgentsAgentIdSession200AgentCreatedByUser;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PostAgentsAgentIdSession200Session = {
+  id: string;
+  streamUrl: string;
+  runId: string;
+  runStreamUrl: string;
+};
+
+export type PostAgentsAgentIdSession200 = {
+  agent: PostAgentsAgentIdSession200Agent;
+  session: PostAgentsAgentIdSession200Session;
+};
+
+export type PostAgentsAgentIdSession404 = {
+  error: string;
+};
+
+export type PostAgentsAgentIdSession409 = {
+  error: string;
+};
+
 /**
  * @nullable
  */
@@ -6261,6 +6370,102 @@ export const usePostAgentsAgentIdSnapshot = <TError = PostAgentsAgentIdSnapshot4
         TContext
       > => {
       return useMutation(getPostAgentsAgentIdSnapshotMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Create a runtime session and first run on an existing agent
+ */
+export type postAgentsAgentIdSessionResponse200 = {
+  data: PostAgentsAgentIdSession200
+  status: 200
+}
+
+export type postAgentsAgentIdSessionResponse404 = {
+  data: PostAgentsAgentIdSession404
+  status: 404
+}
+
+export type postAgentsAgentIdSessionResponse409 = {
+  data: PostAgentsAgentIdSession409
+  status: 409
+}
+    
+export type postAgentsAgentIdSessionResponseSuccess = (postAgentsAgentIdSessionResponse200) & {
+  headers: Headers;
+};
+export type postAgentsAgentIdSessionResponseError = (postAgentsAgentIdSessionResponse404 | postAgentsAgentIdSessionResponse409) & {
+  headers: Headers;
+};
+
+export type postAgentsAgentIdSessionResponse = (postAgentsAgentIdSessionResponseSuccess | postAgentsAgentIdSessionResponseError)
+
+export const getPostAgentsAgentIdSessionUrl = (agentId: string,) => {
+
+
+  
+
+  return `/agents/${agentId}/session`
+}
+
+export const postAgentsAgentIdSession = async (agentId: string,
+    postAgentsAgentIdSessionBody: PostAgentsAgentIdSessionBody, options?: RequestInit): Promise<postAgentsAgentIdSessionResponse> => {
+  
+  return orvalFetcher<postAgentsAgentIdSessionResponse>(getPostAgentsAgentIdSessionUrl(agentId),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      postAgentsAgentIdSessionBody,)
+  }
+);}
+
+
+
+
+export const getPostAgentsAgentIdSessionMutationOptions = <TError = PostAgentsAgentIdSession404 | PostAgentsAgentIdSession409,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAgentsAgentIdSession>>, TError,{agentId: string;data: PostAgentsAgentIdSessionBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof postAgentsAgentIdSession>>, TError,{agentId: string;data: PostAgentsAgentIdSessionBody}, TContext> => {
+
+const mutationKey = ['postAgentsAgentIdSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postAgentsAgentIdSession>>, {agentId: string;data: PostAgentsAgentIdSessionBody}> = (props) => {
+          const {agentId,data} = props ?? {};
+
+          return  postAgentsAgentIdSession(agentId,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostAgentsAgentIdSessionMutationResult = NonNullable<Awaited<ReturnType<typeof postAgentsAgentIdSession>>>
+    export type PostAgentsAgentIdSessionMutationBody = PostAgentsAgentIdSessionBody
+    export type PostAgentsAgentIdSessionMutationError = PostAgentsAgentIdSession404 | PostAgentsAgentIdSession409
+
+    /**
+ * @summary Create a runtime session and first run on an existing agent
+ */
+export const usePostAgentsAgentIdSession = <TError = PostAgentsAgentIdSession404 | PostAgentsAgentIdSession409,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postAgentsAgentIdSession>>, TError,{agentId: string;data: PostAgentsAgentIdSessionBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postAgentsAgentIdSession>>,
+        TError,
+        {agentId: string;data: PostAgentsAgentIdSessionBody},
+        TContext
+      > => {
+      return useMutation(getPostAgentsAgentIdSessionMutationOptions(options), queryClient);
     }
     
 /**

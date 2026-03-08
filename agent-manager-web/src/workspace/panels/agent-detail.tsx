@@ -70,6 +70,7 @@ export interface AgentDetailPanelConfig {
   readonly sessionId: string
   readonly sessionTitle?: string
   readonly sessionModel?: string
+  readonly sessionModelReasoningEffort?: string
   readonly sessionHarness?: string
   readonly diffStyle?: 'split' | 'unified'
 }
@@ -129,6 +130,7 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
       sessionId: '',
       sessionTitle: '',
       sessionModel: undefined,
+      sessionModelReasoningEffort: undefined,
       sessionHarness: undefined
     }
   }
@@ -146,6 +148,10 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
   const sessionTitle = typeof v.sessionTitle === 'string' ? v.sessionTitle : ''
   const sessionModel =
     typeof v.sessionModel === 'string' ? v.sessionModel : undefined
+  const sessionModelReasoningEffort =
+    typeof v.sessionModelReasoningEffort === 'string'
+      ? v.sessionModelReasoningEffort
+      : undefined
   const sessionHarness =
     v.sessionHarness === 'pi' || v.sessionHarness === 'codex'
       ? v.sessionHarness
@@ -162,6 +168,7 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
     sessionId,
     sessionTitle,
     sessionModel,
+    sessionModelReasoningEffort,
     sessionHarness,
     diffStyle
   }
@@ -251,6 +258,7 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
       sessionId: resolvedSessionId,
       sessionTitle: props.config.sessionTitle,
       sessionModel: props.config.sessionModel,
+      sessionModelReasoningEffort: props.config.sessionModelReasoningEffort,
       sessionHarness: props.config.sessionHarness
     }),
     [
@@ -259,6 +267,7 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
       resolvedSessionId,
       props.config.sessionTitle,
       props.config.sessionModel,
+      props.config.sessionModelReasoningEffort,
       props.config.sessionHarness
     ]
   )
@@ -294,6 +303,7 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
           sessionId: prev.sessionId,
           sessionTitle: prev.sessionTitle,
           sessionModel: prev.sessionModel,
+          sessionModelReasoningEffort: prev.sessionModelReasoningEffort,
           sessionHarness: prev.sessionHarness
         })
         return {
@@ -303,6 +313,7 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
           sessionId: next.sessionId,
           sessionTitle: next.sessionTitle,
           sessionModel: next.sessionModel,
+          sessionModelReasoningEffort: next.sessionModelReasoningEffort,
           sessionHarness: next.sessionHarness
         }
       })
@@ -532,6 +543,7 @@ function AgentDetailSessionListView (props: {
               sessionId: 'new',
               sessionTitle: '',
               sessionModel: undefined,
+              sessionModelReasoningEffort: undefined,
               sessionHarness: undefined
             }))
           }
@@ -560,6 +572,8 @@ function AgentDetailSessionListView (props: {
                   sessionId: s.id,
                   sessionTitle: s.title?.trim() || '',
                   sessionModel: s.model?.trim() || undefined,
+                  sessionModelReasoningEffort:
+                    s.modelReasoningEffort?.trim() || undefined,
                   sessionHarness:
                     s.harness === 'pi' || s.harness === 'codex'
                       ? s.harness
@@ -683,6 +697,7 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
             sessionId: '',
             sessionTitle: '',
             sessionModel: undefined,
+            sessionModelReasoningEffort: undefined,
             sessionHarness: undefined
           }))
         }
@@ -794,6 +809,7 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
                 sessionId: next.sessionId,
                 sessionTitle: next.sessionTitle?.trim() || '',
                 sessionModel: undefined,
+                sessionModelReasoningEffort: undefined,
                 sessionHarness:
                   next.sessionHarness === 'pi' || next.sessionHarness === 'codex'
                     ? next.sessionHarness
@@ -1041,6 +1057,7 @@ export const agentDetailPanelDefinition: PanelDefinition<AgentDetailPanelConfig>
       sessionId: '',
       sessionTitle: '',
       sessionModel: undefined,
+      sessionModelReasoningEffort: undefined,
       sessionHarness: undefined
     },
     deserializeConfig: raw => deserializeAgentDetailConfig(raw),

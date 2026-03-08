@@ -10,11 +10,11 @@ ARG GO_VERSION=1.24.0
 
 # Persist versions as ENV for runtime access
 ENV OPENVSCODE_SERVER_RELEASE=${OPENVSCODE_SERVER_RELEASE} \
-    OPENVSCODE_SERVER_PORT=39393 \
-    RUNC_VERSION=${RUNC_VERSION} \
-    GO_VERSION=${GO_VERSION} \
-    UV_INSTALL_DIR=/usr/local/bin \
-    UV_NO_MODIFY_PATH=1
+  OPENVSCODE_SERVER_PORT=39393 \
+  RUNC_VERSION=${RUNC_VERSION} \
+  GO_VERSION=${GO_VERSION} \
+  UV_INSTALL_DIR=/usr/local/bin \
+  UV_NO_MODIFY_PATH=1
 
 # Layer 1: Base system packages (rarely changes)
 RUN set -eux; \
@@ -53,20 +53,20 @@ RUN set -eux; \
   export DEBIAN_FRONTEND=noninteractive; \
   arch="$(dpkg --print-architecture)"; \
   if [ "${arch}" = "amd64" ]; then \
-    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg; \
-    chmod a+r /etc/apt/keyrings/google-chrome.gpg; \
-    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends google-chrome-stable; \
-    ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium; \
-    ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium-browser; \
+  curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg; \
+  chmod a+r /etc/apt/keyrings/google-chrome.gpg; \
+  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends google-chrome-stable; \
+  ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium; \
+  ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium-browser; \
   else \
-    curl -fsSL https://ftp-master.debian.org/keys/archive-key-12.asc | gpg --dearmor -o /etc/apt/keyrings/debian-archive.gpg; \
-    chmod a+r /etc/apt/keyrings/debian-archive.gpg; \
-    echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/debian-archive.gpg] http://deb.debian.org/debian bookworm main" > /etc/apt/sources.list.d/debian-bookworm-chromium.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends chromium; \
-    rm -f /etc/apt/sources.list.d/debian-bookworm-chromium.list; \
+  curl -fsSL https://ftp-master.debian.org/keys/archive-key-12.asc | gpg --dearmor -o /etc/apt/keyrings/debian-archive.gpg; \
+  chmod a+r /etc/apt/keyrings/debian-archive.gpg; \
+  echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/debian-archive.gpg] http://deb.debian.org/debian bookworm main" > /etc/apt/sources.list.d/debian-bookworm-chromium.list; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends chromium; \
+  rm -f /etc/apt/sources.list.d/debian-bookworm-chromium.list; \
   fi; \
   rm -rf /var/lib/apt/lists/*
 
@@ -79,11 +79,11 @@ RUN set -eux; \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list; \
   apt-get update; \
   apt-get install -y --no-install-recommends \
-    docker-ce \
-    docker-ce-cli \
-    containerd.io \
-    docker-buildx-plugin \
-    docker-compose-plugin; \
+  docker-ce \
+  docker-ce-cli \
+  containerd.io \
+  docker-buildx-plugin \
+  docker-compose-plugin; \
   rm -rf /var/lib/apt/lists/*
 
 # Layer 4: runc override (version-pinned, changes when RUNC_VERSION changes)
@@ -118,9 +118,9 @@ RUN set -eux; \
 RUN set -eux; \
   arch="$(dpkg --print-architecture)"; \
   case "${arch}" in \
-    amd64) ov_arch="x64" ;; \
-    arm64) ov_arch="arm64" ;; \
-    *) echo "Unsupported architecture for openvscode-server: ${arch}" >&2; exit 1 ;; \
+  amd64) ov_arch="x64" ;; \
+  arm64) ov_arch="arm64" ;; \
+  *) echo "Unsupported architecture for openvscode-server: ${arch}" >&2; exit 1 ;; \
   esac; \
   curl -fsSL "https://github.com/gitpod-io/openvscode-server/releases/download/${OPENVSCODE_SERVER_RELEASE}/${OPENVSCODE_SERVER_RELEASE}-linux-${ov_arch}.tar.gz" | tar -xz -C /opt; \
   ln -sfn "/opt/${OPENVSCODE_SERVER_RELEASE}-linux-${ov_arch}/bin/openvscode-server" /usr/local/bin/openvscode-server
@@ -172,7 +172,7 @@ ENV AGENT_GO_AUTO_PULL=1
 ENV AGENT_GO_PULL_REF=main
 ENV AGENT_GO_CACHE_DIR=${ROOT_DIR}/go
 ENV CODEX_HOME=${AGENT_HOME}/.codex
-ENV PI_DIR=${AGENT_HOME}/.pi
+ENV PI_CODING_AGENT_DIR=${AGENT_HOME}/.pi
 ENV HOME=${AGENT_HOME}
 ENV RUNTIME_DIR=${ROOT_DIR}/runtime
 ENV DATABASE_PATH=${ROOT_DIR}/app/agent.db
@@ -218,7 +218,7 @@ RUN set -eux; \
   "${BROWSER_XDG_CACHE_HOME}" \
   "${BROWSER_XDG_DATA_HOME}" \
   "${CODEX_HOME}" \
-  "${PI_DIR}" \
+  "${PI_CODING_AGENT_DIR}" \
   "${XDG_CONFIG_HOME}" \
   "${XDG_CACHE_HOME}" \
   "${XDG_DATA_HOME}" \

@@ -17,6 +17,7 @@ export type PostSessionBodyModelReasoningEffort = typeof PostSessionBodyModelRea
 
 
 export const PostSessionBodyModelReasoningEffort = {
+  off: 'off',
   minimal: 'minimal',
   low: 'low',
   medium: 'medium',
@@ -28,7 +29,6 @@ export type PostSessionBody = {
   /** @pattern ^[0-9a-f]{32}$/i */
   id?: string;
   harness?: PostSessionBodyHarness;
-  /** @minLength 1 */
   model?: string;
   modelReasoningEffort?: PostSessionBodyModelReasoningEffort;
 };
@@ -40,6 +40,7 @@ export type PostSession201ModelReasoningEffort = typeof PostSession201ModelReaso
 
 
 export const PostSession201ModelReasoningEffort = {
+  off: 'off',
   minimal: 'minimal',
   low: 'low',
   medium: 'medium',
@@ -101,6 +102,7 @@ export type GetSession200SessionsItemModelReasoningEffort = typeof GetSession200
 
 
 export const GetSession200SessionsItemModelReasoningEffort = {
+  off: 'off',
   minimal: 'minimal',
   low: 'low',
   medium: 'medium',
@@ -155,6 +157,7 @@ export type GetSessionId200ModelReasoningEffort = typeof GetSessionId200ModelRea
 
 
 export const GetSessionId200ModelReasoningEffort = {
+  off: 'off',
   minimal: 'minimal',
   low: 'low',
   medium: 'medium',
@@ -263,6 +266,7 @@ export type PostSessionIdMessageBodyModelReasoningEffort = typeof PostSessionIdM
 
 
 export const PostSessionIdMessageBodyModelReasoningEffort = {
+  off: 'off',
   minimal: 'minimal',
   low: 'low',
   medium: 'medium',
@@ -273,7 +277,6 @@ export const PostSessionIdMessageBodyModelReasoningEffort = {
 export type PostSessionIdMessageBody = {
   /** @minItems 1 */
   input: PostSessionIdMessageBodyInputItem[];
-  /** @minLength 1 */
   model?: string;
   modelReasoningEffort?: PostSessionIdMessageBodyModelReasoningEffort;
 };

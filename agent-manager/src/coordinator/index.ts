@@ -261,7 +261,7 @@ The \`setupScript\` is executed inside a Modal sandbox during image build. It ru
 - \`RUNTIME_DIR=/home/agent/runtime/runtime\` — nested runtime directory
 - \`DATABASE_PATH=/home/agent/runtime/app/agent.db\` — SQLite database path
 - \`CODEX_HOME=/home/agent/.codex\` — Codex configuration directory
-- \`PI_DIR=/home/agent/.pi\` — PI configuration directory
+- \`PI_CODING_AGENT_DIR=/home/agent/.pi\` — PI configuration directory
 - \`BROWSER_STATE_DIR=/home/agent/runtime/browser\` — browser state directory
 - \`CHROMIUM_USER_DATA_DIR=/home/agent/runtime/browser/chromium\` — Chromium user data
 - \`XDG_CONFIG_HOME=/home/agent/runtime/xdg/config\`
@@ -775,9 +775,10 @@ export function createCoordinatorApiRequestTool (input: {
           : 30_000
       const timeoutMs = Math.max(1_000, Math.min(120_000, timeoutMsRaw))
 
-      const url = path.startsWith('http://') || path.startsWith('https://')
-        ? new URL(path)
-        : new URL(path, `${managerOrigin}/`)
+      const url =
+        path.startsWith('http://') || path.startsWith('https://')
+          ? new URL(path)
+          : new URL(path, `${managerOrigin}/`)
       if (request.query && typeof request.query === 'object') {
         for (const [key, value] of Object.entries(request.query)) {
           const k = key.trim()

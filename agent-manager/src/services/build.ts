@@ -32,11 +32,11 @@ const AGENT_SOURCE_UPDATE_COMMAND = [
 ].join('\n')
 
 const AGENT_SERVER_BUILD_COMMAND = [
-  'if [[ ! -x /opt/agentsandbox/agent-go/scripts/build-agent-server.sh ]]; then',
-  '  echo "[agent-go] build script missing: /opt/agentsandbox/agent-go/scripts/build-agent-server.sh" >&2;',
+  'if [[ ! -x /opt/agentsandbox/agent-go/scripts/dev.sh ]]; then',
+  '  echo "[agent-go] build script missing: /opt/agentsandbox/agent-go/scripts/dev.sh" >&2;',
   '  exit 1;',
   'fi',
-  '/opt/agentsandbox/agent-go/scripts/build-agent-server.sh --output /app/agent-server'
+  '/opt/agentsandbox/agent-go/scripts/dev.sh build-server --output /app/agent-server'
 ].join('\n')
 
 export type BuildChunk = {
@@ -165,7 +165,7 @@ export async function runModalImageBuild (input: {
       RUNTIME_DIR: SANDBOX_RUNTIME_DIR,
       DATABASE_PATH: `${SANDBOX_ROOT_DIR}/app/agent.db`,
       CODEX_HOME: SANDBOX_CODEX_HOME,
-      PI_DIR: SANDBOX_PI_DIR,
+      PI_CODING_AGENT_DIR: SANDBOX_PI_DIR,
       BROWSER_STATE_DIR: SANDBOX_BROWSER_STATE_DIR,
       CHROMIUM_USER_DATA_DIR: SANDBOX_CHROMIUM_USER_DATA_DIR,
       XDG_CONFIG_HOME: SANDBOX_XDG_CONFIG_HOME,
@@ -222,10 +222,16 @@ export async function runModalImageBuild (input: {
     for (const step of setupSteps) {
       logStep(`Running ${step.label}...`)
       const setupStdout = createLineBuffer(line => {
-        emit({ source: 'stderr', text: `[setup:${step.label}][stdout] ${line}\n` })
+        emit({
+          source: 'stderr',
+          text: `[setup:${step.label}][stdout] ${line}\n`
+        })
       })
       const setupStderr = createLineBuffer(line => {
-        emit({ source: 'stderr', text: `[setup:${step.label}][stderr] ${line}\n` })
+        emit({
+          source: 'stderr',
+          text: `[setup:${step.label}][stderr] ${line}\n`
+        })
       })
       const { exitCode, stderr } = await execText(
         sandbox,

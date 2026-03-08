@@ -32,7 +32,7 @@ func TestPIHarnessCreateSessionAndStream(t *testing.T) {
 	if openaiKey == "" {
 		openaiKey = "sk-test"
 	}
-	runCmd(t, []string{"docker", "run", "-d", "--name", containerName, "--shm-size=1g", "-P", "-e", "OPENAI_API_KEY=" + openaiKey, "-e", "PI_DIR=/tmp/pi", "-e", "SECRET_SEED=" + secretSeed, imageTag}, root, nil, false)
+	runCmd(t, []string{"docker", "run", "-d", "--name", containerName, "--shm-size=1g", "-P", "-e", "OPENAI_API_KEY=" + openaiKey, "-e", "PI_CODING_AGENT_DIR=/tmp/pi", "-e", "SECRET_SEED=" + secretSeed, imageTag}, root, nil, false)
 
 	apiPort := parseHostPort(t, runCmd(t, []string{"docker", "port", containerName, "3131/tcp"}, root, nil, false).Stdout)
 	apiBaseURL := fmt.Sprintf("http://127.0.0.1:%d", apiPort)

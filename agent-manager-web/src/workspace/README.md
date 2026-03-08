@@ -137,6 +137,12 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - `left` / `right` / `top` / `bottom`: replace adjacent pane if one exists in that direction; otherwise create a new split pane on that edge
   - when `config` is provided, it is normalized via the target panel definition’s `deserializeConfig` before storing
 - `agent_detail` remains a container panel with internal tabs in its own config (`session_list`, `session_detail`, `terminal`, `browser`, `diff`).
+- In `agent_detail` session detail, the bottom composer bar is owned by `panels/agent-session.tsx` and includes:
+  - harness label
+  - model combobox
+  - thinking-level dropdown persisted in panel config as `sessionModelReasoningEffort`
+  - valid thinking options are harness-specific: `codex` -> default or `minimal|low|medium|high|xhigh`; `pi` -> default or `off|minimal|low|medium|high|xhigh`
+  - composer create/send/reset calls forward both `model` and `modelReasoningEffort` to the runtime session API
 - Split resize handles are overlay controls (hover-visible; always visible while dragging) so they do not reserve permanent layout width/height between panes.
 - `split/resize-direction` adjusts the nearest eligible ancestor split for the focused leaf (tmux-style directional resize) using a small ratio step.
 - `layout/equalize` rebalances every split ratio by descendant leaf counts (without changing pane structure), so skewed split trees can still equalize pane sizes.

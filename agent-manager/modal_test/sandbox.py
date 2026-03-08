@@ -57,7 +57,7 @@ def run(cmd: str, label: str | None = None):
 
 try:
     # 1. Run entrypoint in init mode — creates /home/agent tree,
-    #    CODEX_HOME, PI_DIR, workspace tools, AGENTS.md, etc.
+    #    CODEX_HOME, PI_CODING_AGENT_DIR, workspace tools, AGENTS.md, etc.
     print("Running agent-entrypoint --init …")
     run("/usr/local/bin/agent-entrypoint --init", "init")
 

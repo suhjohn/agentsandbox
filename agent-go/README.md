@@ -32,6 +32,7 @@ Key targets:
 - `make fmt`, `make vet`
 - `make openapi` (prints OpenAPI spec path)
 - `make docker-build`, `make docker-run`, `make docker-run-server`
+- `./scripts/dev.sh ...` for direct build/restart/docker/publish flows
 
 ## Server scope
 
@@ -44,24 +45,43 @@ Key targets:
 - Manager outbox sync dispatcher
 - Codex and pi CLI wrappers used by run execution paths
 
+## Harness CLI model and thinking controls
+
+The runtime exposes model/thinking controls through the harness-specific CLI wrappers.
+
+### Codex
+
+- Wrapper types live in `agent-go/internal/harness/codex/cli.go`.
+- Model selection is a first-class field on `CodexRootOptions` as `Model`, which emits `--model <id>`.
+- Thinking level is not a dedicated struct field. It is passed through `CodexGlobalOptions.Config` as a raw config entry such as `model_reasoning_effort="high"`.
+- Supported thinking levels for Codex sessions are: `minimal`, `low`, `medium`, `high`, `xhigh`.
+
+### PI
+
+- Wrapper types live in `agent-go/internal/harness/pi/cli.go`.
+- Model selection is exposed directly on `PiOptions` as `Provider` and `Model`, which emit `--provider <provider>` and `--model <id>`.
+- Thinking level is a first-class field on `PiOptions` as `Thinking`, which emits `--thinking <level>`.
+- The PI RPC helpers also expose thinking controls through `PiRPCSetThinkingLevel(...)` and `PiRPCCycleThinkingLevel(...)`.
+- Supported thinking levels for PI sessions are: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`.
+
 ## Standalone binary
 
 Build a publishable server binary:
 
 ```bash
-./agent-go/scripts/build-agent-server.sh
+./agent-go/scripts/dev.sh build-server
 ```
 
 Build to a specific output path (example used by Docker below):
 
 ```bash
-./agent-go/scripts/build-agent-server.sh --output ./agent-go/build-artifacts/agent-server
+./agent-go/scripts/dev.sh build-server --output ./agent-go/build-artifacts/agent-server
 ```
 
 Pull, rebuild, stop the existing standalone binary process, and start the new one:
 
 ```bash
-./agent-go/scripts/restart-agent-server.sh
+./agent-go/scripts/dev.sh restart-server
 ```
 
 In the container runtime, the entrypoint now runs the main agent API under `runit`,
@@ -85,7 +105,7 @@ export GHCR_TOKEN="github_pat_..."
 export GHCR_IMAGE="ghcr.io/$GITHUB_USERNAME/agent"   # optional (default: ghcr.io/suhjohn/agent)
 export GHCR_TAG="$(git rev-parse --short HEAD)"      # optional
 
-./agent-go/scripts/ghcr-push.sh push-amd64
+./agent-go/scripts/dev.sh ghcr-push-amd64
 ```
 
 Or from `agent-go/`:
@@ -102,11 +122,25 @@ make docker-build
 make docker-run
 ```
 
+Recreate the full container from the latest repo state in one command:
+
+```bash
+cd agent-go
+make docker-refresh
+```
+
 Server-only mode (API on port `3131`, no OpenVSCode/noVNC):
 
 ```bash
 cd agent-go
 make docker-run-server
+```
+
+If you want the same pull + rebuild + recreate flow in API-only mode:
+
+```bash
+cd agent-go
+make docker-refresh-server
 ```
 
 Use a different env file (for example test config):
@@ -178,7 +212,7 @@ RUN_LIVE_AI_IT=1 OPENAI_API_KEY=... SECRET_SEED=... go test -tags dockerintegrat
 - `PORT`, `DATABASE_PATH`, `SECRET_SEED`
 - `DEFAULT_CODEX_MODEL`, `DEFAULT_WORKING_DIR`
 - `OPENAI_API_KEY` or `CODEX_API_KEY`
-- `PI_DIR`
+- `PI_CODING_AGENT_DIR`
 - `AGENT_HOME`, `ROOT_DIR`, `WORKSPACES_DIR`
 - `AGENT_MANAGER_BASE_URL`
 - `AGENT_INTERNAL_AUTH_SECRET` for manager <-> runtime auth

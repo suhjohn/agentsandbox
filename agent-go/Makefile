@@ -7,7 +7,7 @@ DOCKER_IMAGE ?= agent-go:dev
 DOCKER_CONTAINER ?= agent-go-dev
 ENV_FILE ?= .env
 
-.PHONY: help run serve proxy build test test-docker fmt vet openapi build-server restart-server build-server-docker build-server-linux-amd64 build-server-linux-arm64 docker-build docker-run docker-run-server docker-stop ghcr-push ghcr-push-amd64 check-env-file
+.PHONY: help run serve proxy build test test-docker fmt vet openapi build-server restart-server build-server-docker build-server-linux-amd64 build-server-linux-arm64 docker-build docker-run docker-run-server docker-stop docker-refresh docker-refresh-server ghcr-push ghcr-push-amd64 check-env-file
 
 help:
 	@echo "agent-go make targets"
@@ -20,16 +20,18 @@ help:
 	@echo "  make fmt                     # go fmt ./..."
 	@echo "  make vet                     # go vet ./..."
 	@echo "  make openapi                 # print OpenAPI spec path"
-	@echo "  make build-server            # scripts/build-agent-server.sh"
-	@echo "  make restart-server          # scripts/restart-agent-server.sh"
-	@echo "  make build-server-docker     # scripts/build-agent-server.sh --output ./build-artifacts/agent-server"
+	@echo "  make build-server            # scripts/dev.sh build-server"
+	@echo "  make restart-server          # scripts/dev.sh restart-server"
+	@echo "  make build-server-docker     # scripts/dev.sh build-server --output ./build-artifacts/agent-server"
 	@echo "  make build-server-linux-amd64"
 	@echo "  make build-server-linux-arm64"
-	@echo "  make docker-build            # build image"
-	@echo "  make docker-run              # run full container stack using ENV_FILE=$(ENV_FILE)"
-	@echo "  make docker-run-server       # run API server only mode using ENV_FILE=$(ENV_FILE)"
-	@echo "  make docker-stop             # stop/remove $(DOCKER_CONTAINER)"
-	@echo "  make ghcr-push               # build+push to GHCR (linux/amd64)"
+	@echo "  make docker-build            # scripts/dev.sh docker-build"
+	@echo "  make docker-run              # scripts/dev.sh docker-run using ENV_FILE=$(ENV_FILE)"
+	@echo "  make docker-run-server       # scripts/dev.sh docker-run --server-only"
+	@echo "  make docker-stop             # scripts/dev.sh docker-stop"
+	@echo "  make docker-refresh          # scripts/dev.sh docker-refresh"
+	@echo "  make docker-refresh-server   # scripts/dev.sh docker-refresh --server-only"
+	@echo "  make ghcr-push               # scripts/dev.sh ghcr-push-amd64"
 
 run:
 	$(GO) run ./cmd/agent-go
@@ -59,46 +61,42 @@ openapi:
 	@echo "OpenAPI spec: agent-go/internal/openapi/openapi.json"
 
 build-server:
-	./scripts/build-agent-server.sh
+	./scripts/dev.sh build-server
 
 restart-server:
-	./scripts/restart-agent-server.sh
+	./scripts/dev.sh restart-server
 
 build-server-docker:
-	./scripts/build-agent-server.sh --output ./build-artifacts/agent-server
+	./scripts/dev.sh build-server --output ./build-artifacts/agent-server
 
 build-server-linux-amd64:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 ./scripts/build-agent-server.sh
+	./scripts/dev.sh build-server --goos linux --goarch amd64
 
 build-server-linux-arm64:
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 ./scripts/build-agent-server.sh
+	./scripts/dev.sh build-server --goos linux --goarch arm64
 
 docker-build:
-	$(DOCKER) build -f Dockerfile -t "$(DOCKER_IMAGE)" ..
+	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(DOCKER_IMAGE)" ./scripts/dev.sh docker-build
 
 check-env-file:
 	@test -f "$(ENV_FILE)" || (echo "missing env file: $(ENV_FILE)" && exit 1)
 
 docker-run: check-env-file
-	$(DOCKER) run --rm -it --name "$(DOCKER_CONTAINER)" \
-		--env-file "$(ENV_FILE)" \
-		-p 3131:3131 \
-		-p 39393:39393 \
-		-p 6080:6080 \
-		-p 5900:5900 \
-		"$(DOCKER_IMAGE)"
+	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(DOCKER_IMAGE)" DOCKER_CONTAINER="$(DOCKER_CONTAINER)" ENV_FILE="$(ENV_FILE)" ./scripts/dev.sh docker-run --env-file "$(ENV_FILE)"
 
 docker-run-server: check-env-file
-	$(DOCKER) run --rm -it --name "$(DOCKER_CONTAINER)" \
-		--env-file "$(ENV_FILE)" \
-		-e AGENT_RUNTIME_MODE=server \
-		-p 3131:3131 \
-		"$(DOCKER_IMAGE)"
+	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(DOCKER_IMAGE)" DOCKER_CONTAINER="$(DOCKER_CONTAINER)" ENV_FILE="$(ENV_FILE)" ./scripts/dev.sh docker-run --env-file "$(ENV_FILE)" --server-only
 
 docker-stop:
-	-$(DOCKER) rm -f "$(DOCKER_CONTAINER)"
+	DOCKER="$(DOCKER)" DOCKER_CONTAINER="$(DOCKER_CONTAINER)" ./scripts/dev.sh docker-stop
+
+docker-refresh:
+	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(DOCKER_IMAGE)" DOCKER_CONTAINER="$(DOCKER_CONTAINER)" ENV_FILE="$(ENV_FILE)" ./scripts/dev.sh docker-refresh --env-file "$(ENV_FILE)"
+
+docker-refresh-server:
+	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(DOCKER_IMAGE)" DOCKER_CONTAINER="$(DOCKER_CONTAINER)" ENV_FILE="$(ENV_FILE)" ./scripts/dev.sh docker-refresh --env-file "$(ENV_FILE)" --server-only
 
 ghcr-push: ghcr-push-amd64
 
 ghcr-push-amd64:
-	./scripts/ghcr-push.sh push-amd64
+	DOCKER="$(DOCKER)" ./scripts/dev.sh ghcr-push-amd64

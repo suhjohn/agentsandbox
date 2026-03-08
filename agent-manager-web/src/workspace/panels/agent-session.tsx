@@ -21,9 +21,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
 import { ModelCombobox } from '@/components/ui/model-combobox'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
-import { Check, Copy } from 'lucide-react'
+import { Check, ChevronsUpDown, Copy } from 'lucide-react'
 import { Loader, SandboxLoader } from '@/components/loader'
 import { toast } from 'sonner'
 import {
@@ -39,7 +41,9 @@ import {
   postSessionIdStop,
   type GetSessionId200,
   type GetSessionId200MessagesItem,
-  type PostSession201
+  type PostSession201,
+  type PostSessionBodyModelReasoningEffort,
+  type PostSessionIdMessageBodyModelReasoningEffort
 } from '@/api/generated/agent'
 import { CodexMessages } from '@/components/messages/codex-message'
 import { PiMessages } from '@/components/messages/pi-message'
@@ -52,6 +56,7 @@ export interface AgentSessionPanelConfig {
   readonly sessionId: string
   readonly sessionTitle?: string
   readonly sessionModel?: string
+  readonly sessionModelReasoningEffort?: string
   readonly sessionHarness?: string
 }
 
@@ -77,6 +82,26 @@ const OPTIMISTIC_ECHO_CLOCK_SKEW_MS = 30_000
 const STICKY_SCROLL_BOTTOM_THRESHOLD_PX = 120
 const SESSION_STATUS_PROCESSING = 'processing'
 const SESSION_STATUS_INITIAL = 'initial'
+type ThinkingLevel =
+  PostSessionBodyModelReasoningEffort &
+  PostSessionIdMessageBodyModelReasoningEffort
+type SelectedThinkingLevel = '' | ThinkingLevel
+
+const CODEX_THINKING_LEVELS: readonly ThinkingLevel[] = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh'
+]
+const PI_THINKING_LEVELS = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh'
+] as const satisfies readonly ThinkingLevel[]
 
 type CatalogModel = {
   readonly id: string
@@ -175,6 +200,123 @@ function resolveSelectableModels (args: {
     },
     ...available
   ]
+}
+
+function getThinkingLevelsForHarness (
+  harness: 'codex' | 'pi'
+): readonly ThinkingLevel[] {
+  return harness === 'pi' ? PI_THINKING_LEVELS : CODEX_THINKING_LEVELS
+}
+
+function normalizeThinkingLevel (
+  harness: 'codex' | 'pi',
+  value: string | null | undefined
+): SelectedThinkingLevel {
+  const trimmed = value?.trim().toLowerCase() ?? ''
+  if (trimmed.length === 0) return ''
+  return getThinkingLevelsForHarness(harness).includes(trimmed as ThinkingLevel)
+    ? (trimmed as ThinkingLevel)
+    : ''
+}
+
+function formatThinkingLevelLabel (value: ThinkingLevel): string {
+  if (value === 'xhigh') return 'X-High'
+  if (value === 'off') return 'Off'
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function hasThinkingLevel (value: SelectedThinkingLevel): value is ThinkingLevel {
+  return value !== ''
+}
+
+function ThinkingLevelCombobox (props: {
+  readonly value: SelectedThinkingLevel
+  readonly onChange: (value: SelectedThinkingLevel) => void
+  readonly levels: readonly ThinkingLevel[]
+  readonly disabled?: boolean
+  readonly className?: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  const displayLabel =
+    hasThinkingLevel(props.value)
+      ? formatThinkingLevelLabel(props.value)
+      : 'Default thinking'
+
+  const commitSelection = (value: SelectedThinkingLevel) => {
+    props.onChange(value)
+    setOpen(false)
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant='ghost'
+          role='combobox'
+          aria-expanded={open}
+          aria-label='Thinking level'
+          disabled={props.disabled}
+          className={cn(
+            'h-7 justify-between gap-1 px-2 text-xs font-normal text-text-secondary hover:text-text-primary',
+            props.className
+          )}
+        >
+          <span className='truncate'>{displayLabel}</span>
+          <ChevronsUpDown className='h-3.5 w-3.5 shrink-0 opacity-50' />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className='w-[180px] p-1' align='start'>
+        <div className='space-y-0.5'>
+          <button
+            type='button'
+            className={cn(
+              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
+              props.value === ''
+                ? 'bg-accent text-accent-foreground'
+                : 'text-text-secondary hover:bg-accent/60 hover:text-text-primary'
+            )}
+            onClick={() => {
+              commitSelection('')
+            }}
+          >
+            <span className='flex-1 truncate'>Default thinking</span>
+            <Check
+              className={cn(
+                'h-4 w-4',
+                props.value === '' ? 'opacity-100' : 'opacity-0'
+              )}
+            />
+          </button>
+          {props.levels.map(level => (
+            <button
+              key={level}
+              type='button'
+              className={cn(
+                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
+                props.value === level
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-text-secondary hover:bg-accent/60 hover:text-text-primary'
+              )}
+              onClick={() => {
+                commitSelection(level)
+              }}
+            >
+              <span className='flex-1 truncate'>
+                {formatThinkingLevelLabel(level)}
+              </span>
+              <Check
+                className={cn(
+                  'h-4 w-4',
+                  props.value === level ? 'opacity-100' : 'opacity-0'
+                )}
+              />
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function parseSseChunk (
@@ -868,6 +1010,7 @@ type SessionWorkspacePatch = {
   readonly title?: string | null
   readonly lastMessageBody?: string | null
   readonly model?: string | null
+  readonly modelReasoningEffort?: string | null
   readonly updatedAt?: string
 }
 
@@ -895,6 +1038,16 @@ function patchSessionRecord (
   }
   if ('model' in patch && next.model !== patch.model) {
     next = { ...next, model: patch.model }
+    changed = true
+  }
+  if (
+    'modelReasoningEffort' in patch &&
+    next.modelReasoningEffort !== patch.modelReasoningEffort
+  ) {
+    next = {
+      ...next,
+      modelReasoningEffort: patch.modelReasoningEffort
+    }
     changed = true
   }
   if (
@@ -1147,10 +1300,15 @@ function SessionComposer (props: {
   readonly access: GetAgentsAgentIdAccess200
   readonly harness: 'codex' | 'pi'
   readonly selectedModel: string
+  readonly selectedModelReasoningEffort: SelectedThinkingLevel
   readonly availableModels: readonly CatalogModel[]
+  readonly availableThinkingLevels: readonly ThinkingLevel[]
   readonly setConfig: PanelProps<AgentSessionPanelConfig>['setConfig']
   readonly isSendingOptimistic: boolean
   readonly onSelectedModelChange: (model: string) => void
+  readonly onSelectedModelReasoningEffortChange: (
+    effort: SelectedThinkingLevel
+  ) => void
   readonly onOptimisticMessageChange: (
     message: GetSessionId200MessagesItem | null
   ) => void
@@ -1186,14 +1344,20 @@ function SessionComposer (props: {
   )
 
   const createSessionMutation = useMutation({
-    mutationFn: async (args: { readonly model: string }) => {
+    mutationFn: async (args: {
+      readonly model: string
+      readonly modelReasoningEffort: SelectedThinkingLevel
+    }) => {
       if (!props.access?.agentApiUrl || !props.access.agentAuthToken) {
         throw new Error('Missing agent runtime access')
       }
       return await postSession(
         {
           harness: props.harness,
-          ...(args.model.length > 0 ? { model: args.model } : {})
+          ...(args.model.length > 0 ? { model: args.model } : {}),
+          ...(hasThinkingLevel(args.modelReasoningEffort)
+            ? { modelReasoningEffort: args.modelReasoningEffort }
+            : {})
         },
         {
           baseUrl: props.access.agentApiUrl,
@@ -1222,6 +1386,11 @@ function SessionComposer (props: {
           input: [{ type: 'text', text: args.text }],
           ...(props.selectedModel.length > 0
             ? { model: props.selectedModel }
+            : {}),
+          ...(hasThinkingLevel(props.selectedModelReasoningEffort)
+            ? {
+                modelReasoningEffort: props.selectedModelReasoningEffort
+              }
             : {})
         },
         {
@@ -1236,7 +1405,8 @@ function SessionComposer (props: {
     if (props.sessionId.length > 0) return props.sessionId
     const created = unwrapCreatedSession(
       await createSessionMutation.mutateAsync({
-        model: props.selectedModel
+        model: props.selectedModel,
+        modelReasoningEffort: props.selectedModelReasoningEffort
       })
     )
     if (!created) throw new Error('Unexpected response shape (createSession).')
@@ -1266,7 +1436,11 @@ function SessionComposer (props: {
         status: SESSION_STATUS_PROCESSING,
         updatedAt: optimisticMessage.createdAt,
         lastMessageBody: toStoredMessageBody(optimisticMessage.body),
-        model: props.selectedModel.length > 0 ? props.selectedModel : null
+        model: props.selectedModel.length > 0 ? props.selectedModel : null,
+        modelReasoningEffort:
+          props.selectedModelReasoningEffort.length > 0
+            ? props.selectedModelReasoningEffort
+            : null
       })
       props.onOptimisticMessageChange(optimisticMessage)
       await sendMutation.mutateAsync({ sessionId: nextSessionId, text })
@@ -1324,6 +1498,13 @@ function SessionComposer (props: {
           onChange={props.onSelectedModelChange}
           models={props.availableModels}
           disabled={composerDisabled}
+        />
+        <ThinkingLevelCombobox
+          value={props.selectedModelReasoningEffort}
+          onChange={props.onSelectedModelReasoningEffortChange}
+          levels={props.availableThinkingLevels}
+          disabled={composerDisabled}
+          className='max-w-[140px]'
         />
         <div className='flex-1' />
         {props.sessionId.length > 0 && (
@@ -1470,6 +1651,20 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
     }
     return sessionQuery.data?.model?.trim() ?? ''
   }, [props.config.sessionModel, sessionQuery.data?.model])
+  const selectedSessionModelReasoningEffort = useMemo(
+    () =>
+      normalizeThinkingLevel(
+        sessionHarness,
+        typeof props.config.sessionModelReasoningEffort === 'string'
+          ? props.config.sessionModelReasoningEffort
+          : sessionQuery.data?.modelReasoningEffort
+      ),
+    [
+      props.config.sessionModelReasoningEffort,
+      sessionHarness,
+      sessionQuery.data?.modelReasoningEffort
+    ]
+  )
   const availableModels = useMemo(
     () =>
       resolveSelectableModels({
@@ -1477,6 +1672,10 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
         selectedModel: selectedSessionModel
       }),
     [selectedSessionModel, sessionHarness]
+  )
+  const availableThinkingLevels = useMemo(
+    () => getThinkingLevelsForHarness(sessionHarness),
+    [sessionHarness]
   )
   const displayedMessages = useMemo(
     () =>
@@ -1518,12 +1717,14 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
       readonly agentId: string
       readonly harness: string
       readonly model: string | null
+      readonly modelReasoningEffort: string | null
     }) => {
       await putSessionId(args.sessionId, {
         agentId: args.agentId,
         status: 'initial',
         harness: args.harness,
-        model: args.model
+        model: args.model,
+        modelReasoningEffort: args.modelReasoningEffort
       })
     },
     onError: async () => {
@@ -1562,6 +1763,10 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
       status: SESSION_STATUS_INITIAL,
       updatedAt: latestUpdatedAt,
       model: selectedSessionModel.length > 0 ? selectedSessionModel : null,
+      modelReasoningEffort:
+        selectedSessionModelReasoningEffort.length > 0
+          ? selectedSessionModelReasoningEffort
+          : null,
       ...(typeof lastMessageBody !== 'undefined' ? { lastMessageBody } : {}),
       ...(sessionTitleValue.length > 0 ? { title: sessionTitleValue } : {})
     }
@@ -1574,11 +1779,16 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
       sessionId,
       agentId,
       harness,
-      model: selectedSessionModel.length > 0 ? selectedSessionModel : null
+      model: selectedSessionModel.length > 0 ? selectedSessionModel : null,
+      modelReasoningEffort:
+        selectedSessionModelReasoningEffort.length > 0
+          ? selectedSessionModelReasoningEffort
+          : null
     })
   }, [
     agentId,
     selectedSessionModel,
+    selectedSessionModelReasoningEffort,
     queryClient,
     resetSessionStatusMutation,
     sessionId,
@@ -1769,13 +1979,21 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
               access={access}
               harness={sessionHarness}
               selectedModel={selectedSessionModel}
+              selectedModelReasoningEffort={selectedSessionModelReasoningEffort}
               availableModels={availableModels}
+              availableThinkingLevels={availableThinkingLevels}
               setConfig={props.setConfig}
               isSendingOptimistic={isOptimisticSending}
               onSelectedModelChange={model => {
                 props.setConfig(prev => ({
                   ...prev,
                   sessionModel: model
+                }))
+              }}
+              onSelectedModelReasoningEffortChange={modelReasoningEffort => {
+                props.setConfig(prev => ({
+                  ...prev,
+                  sessionModelReasoningEffort: modelReasoningEffort
                 }))
               }}
               onOptimisticMessageChange={setOptimisticMessage}

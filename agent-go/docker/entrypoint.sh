@@ -51,7 +51,7 @@ OPENVSCODE_UPSTREAM_HOST="${OPENVSCODE_UPSTREAM_HOST:-127.0.0.1}"
 OPENVSCODE_UPSTREAM_PORT="${OPENVSCODE_UPSTREAM_PORT:-39395}"
 AGENT_RUNTIME_MODE="${AGENT_RUNTIME_MODE:-all}"
 CODEX_HOME="${CODEX_HOME:-${AGENT_HOME}/.codex}"
-PI_DIR="${PI_DIR:-${AGENT_HOME}/.pi}"
+PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-${AGENT_HOME}/.pi}"
 WORKSPACE_TOOLS_DIR="${WORKSPACES_DIR}/tools"
 DOCKERD_ENABLED="${DOCKERD_ENABLED:-0}"
 DOCKERD_LOG_FILE="${ROOT_DIR}/logs/dockerd.log"
@@ -169,7 +169,7 @@ fi
 
 export DISPLAY
 export CODEX_HOME
-export PI_DIR
+export PI_CODING_AGENT_DIR
 export ROOT_DIR
 export DATABASE_PATH
 export AGENT_ID
@@ -219,7 +219,7 @@ ensure_codex_agents() {
 - Agent identity: AGENT_ID=${AGENT_ID}
 - Agent runtime dir: ${ROOT_DIR}
 - Codex state dir: ${CODEX_HOME}
-- PI state dir: ${PI_DIR}
+- PI state dir: ${PI_CODING_AGENT_DIR}
 - Chromium is already running under Xvfb on display ${DISPLAY} at ${SCREEN_WIDTH}x${SCREEN_HEIGHT}x${SCREEN_DEPTH}.
 - Remote debugging is enabled at ${CHROMIUM_REMOTE_DEBUG_ADDRESS}:${CHROMIUM_REMOTE_DEBUG_PORT} unless CHROMIUM_FLAGS overrides it.
 - VNC server: 127.0.0.1:${VNC_PORT}; noVNC: 0.0.0.0:${NOVNC_PORT}.
@@ -364,7 +364,7 @@ prepare_runtime_state() {
     "${BROWSER_XDG_CACHE_HOME}" \
     "${BROWSER_XDG_DATA_HOME}" \
     "${CODEX_HOME}" \
-    "${PI_DIR}" \
+    "${PI_CODING_AGENT_DIR}" \
     "${XDG_CONFIG_HOME}" \
     "${XDG_CACHE_HOME}" \
     "${XDG_DATA_HOME}" \
