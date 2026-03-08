@@ -9,6 +9,7 @@ import {
   hasUniformSplitDirection,
   listLeafIds,
   listPanelInstanceIds,
+  moveLeaf,
   rebuildLayoutInDirection,
   resizeLeafByDirection,
   rotateLeafPanels,
@@ -359,6 +360,30 @@ describe("workspace/layout", () => {
     const next = swapLeafNodes(root, "l1", "l3");
     expect(listLeafIds(next)).toEqual(["l3", "l2", "l1"]);
     expect(listPanelInstanceIds(next)).toEqual(["p3", "p2", "p1"]);
+  });
+
+  it("moves a pane with center placement by swapping leaves", () => {
+    const root: LayoutNode = {
+      kind: "split",
+      id: "sRoot",
+      dir: "row",
+      ratio: 0.5,
+      a: {
+        kind: "leaf",
+        id: "l1",
+        panelInstanceId: "p1",
+      },
+      b: {
+        kind: "leaf",
+        id: "l2",
+        panelInstanceId: "p2",
+      },
+    };
+
+    const next = moveLeaf(root, "l1", "l2", "center", () => "unused-split-id");
+    expect(listLeafIds(next.root)).toEqual(["l2", "l1"]);
+    expect(listPanelInstanceIds(next.root)).toEqual(["p2", "p1"]);
+    expect(next.focusedLeafId).toBe("l1");
   });
 
   it("rotates panel instances across leaves", () => {

@@ -92,7 +92,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
 - Focus adjacent pane by placement (`left`/`right`/`up`/`down`): `pane/focus-direction`
 - Split pane: `leaf/split`
 - Close pane: `leaf/close`
-- Move pane (re-dock): `pane/move`
+- Move pane (re-dock / center-swap): `pane/move`
 - Resize split: `split/ratio`
 - Resize focused pane toward a direction: `split/resize-direction`
 - Swap/rotate panes in traversal order: `pane/swap-next`, `pane/swap-prev`, `pane/rotate`
@@ -143,6 +143,8 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - thinking-level dropdown persisted in panel config as `sessionModelReasoningEffort`
   - valid thinking options are harness-specific: `codex` -> default or `minimal|low|medium|high|xhigh`; `pi` -> default or `off|minimal|low|medium|high|xhigh`
   - composer create/send/reset calls forward both `model` and `modelReasoningEffort` to the runtime session API
+  - empty `Default model` / `Default thinking` selections are forwarded as explicit empty values so the runtime can materialize configured defaults onto the session record instead of silently keeping a previous override
+  - session detail scroll snaps to the latest message once when a session first loads in a pane, and a local send also forces one jump to bottom; otherwise it only sticky-scrolls while the user remains near the bottom
 - Split resize handles are overlay controls (hover-visible; always visible while dragging) so they do not reserve permanent layout width/height between panes.
 - `split/resize-direction` adjusts the nearest eligible ancestor split for the focused leaf (tmux-style directional resize) using a small ratio step.
 - `layout/equalize` rebalances every split ratio by descendant leaf counts (without changing pane structure), so skewed split trees can still equalize pane sizes.
@@ -162,7 +164,9 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - `pane` payload: `windowId`, `fromLeafId`
 - Drop targets accept same-window drags only.
 - Pane drag source is the left-side grab handle in the pane header.
-- Pane drop computes directional placement (`left` / `right` / `top` / `bottom`) and dispatches `pane/move`.
+- Pane drop computes edge placement (`left` / `right` / `top` / `bottom`) or a center placement (`center`).
+- Dropping near the center of a target pane highlights the full pane and dispatches `pane/move` with `placement: "center"`, which swaps the dragged pane with the target pane.
+- Non-center drops continue to re-dock the dragged pane on the chosen edge via `pane/move`.
 - During active workspace drags, pane body mounts a transparent drag-capture layer so drops still work over embedded interactive content.
 - Drag state is force-reset on drop/dragend paths.
 

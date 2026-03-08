@@ -79,7 +79,7 @@ const INITIAL_STREAM_STATE: StreamState = {
 const SESSION_STREAM_IDLE_CLOSE_MS = 60_000
 const WORKSPACE_DIFF_REFRESH_DEBOUNCE_MS = 350
 const OPTIMISTIC_ECHO_CLOCK_SKEW_MS = 30_000
-const STICKY_SCROLL_BOTTOM_THRESHOLD_PX = 120
+const STICKY_SCROLL_BOTTOM_THRESHOLD_PX = 300
 const SESSION_STATUS_PROCESSING = 'processing'
 const SESSION_STATUS_INITIAL = 'initial'
 type ThinkingLevel =
@@ -1249,6 +1249,7 @@ function useScrollParent (ref: React.RefObject<HTMLElement | null>) {
 
     let parent: HTMLElement | null = el.parentElement
     while (parent) {
+      if (parent.hasAttribute('data-workspace-panel-scroller')) break
       if (parent.hasAttribute('data-radix-scroll-area-viewport')) break
       if (isScrollableY(parent)) break
       parent = parent.parentElement
@@ -1261,10 +1262,26 @@ function useScrollParent (ref: React.RefObject<HTMLElement | null>) {
 
 function useStickyScroll (
   scrollParent: HTMLElement | null,
-  messagesEndRef: React.RefObject<HTMLDivElement | null>,
-  depKey: string
+  depKey: string,
+  sessionKey: string,
+  forceScrollToken: number
 ) {
   const isAtBottomRef = useRef(false)
+  const lastHandledForceScrollTokenRef = useRef(forceScrollToken)
+  const initialScrollStateRef = useRef<{
+    readonly sessionKey: string
+    done: boolean
+  }>({
+    sessionKey,
+    done: false
+  })
+
+  if (initialScrollStateRef.current.sessionKey !== sessionKey) {
+    initialScrollStateRef.current = {
+      sessionKey,
+      done: false
+    }
+  }
 
   useEffect(() => {
     if (!scrollParent) return
@@ -1283,15 +1300,34 @@ function useStickyScroll (
 
   useLayoutEffect(() => {
     if (!scrollParent) return
-    // Avoid defaulting to "at bottom" on mount (e.g. when split/stack reshapes layout).
+
+    const scrollToBottom = () => {
+      scrollParent.scrollTop = scrollParent.scrollHeight
+    }
+
+    if (forceScrollToken !== lastHandledForceScrollTokenRef.current) {
+      lastHandledForceScrollTokenRef.current = forceScrollToken
+      isAtBottomRef.current = true
+      scrollToBottom()
+      return
+    }
+
+    if (!initialScrollStateRef.current.done && depKey !== '0') {
+      initialScrollStateRef.current.done = true
+      isAtBottomRef.current = true
+      scrollToBottom()
+      return
+    }
+
     const { scrollTop, scrollHeight, clientHeight } = scrollParent
-    isAtBottomRef.current =
+    const atBottom =
       scrollHeight - scrollTop - clientHeight <
       STICKY_SCROLL_BOTTOM_THRESHOLD_PX
-    if (isAtBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ block: 'end' })
+    isAtBottomRef.current = atBottom
+    if (atBottom) {
+      scrollToBottom()
     }
-  }, [depKey, messagesEndRef, scrollParent])
+  }, [depKey, forceScrollToken, scrollParent, sessionKey])
 }
 
 function SessionComposer (props: {
@@ -1313,6 +1349,7 @@ function SessionComposer (props: {
     message: GetSessionId200MessagesItem | null
   ) => void
   readonly onOptimisticSendingChange: (isSending: boolean) => void
+  readonly onSendScrollRequest: () => void
   readonly inputRef: { current: HTMLTextAreaElement | null }
 }) {
   const queryClient = useQueryClient()
@@ -1351,14 +1388,13 @@ function SessionComposer (props: {
       if (!props.access?.agentApiUrl || !props.access.agentAuthToken) {
         throw new Error('Missing agent runtime access')
       }
+      const body: Record<string, unknown> = {
+        harness: props.harness,
+        model: args.model,
+        modelReasoningEffort: args.modelReasoningEffort
+      }
       return await postSession(
-        {
-          harness: props.harness,
-          ...(args.model.length > 0 ? { model: args.model } : {}),
-          ...(hasThinkingLevel(args.modelReasoningEffort)
-            ? { modelReasoningEffort: args.modelReasoningEffort }
-            : {})
-        },
+        body as unknown as Parameters<typeof postSession>[0],
         {
           baseUrl: props.access.agentApiUrl,
           agentAuthToken: props.access.agentAuthToken
@@ -1380,19 +1416,14 @@ function SessionComposer (props: {
       if (!props.access?.agentApiUrl || !props.access.agentAuthToken) {
         throw new Error('Missing agent runtime access')
       }
+      const body: Record<string, unknown> = {
+        input: [{ type: 'text', text: args.text }],
+        model: props.selectedModel,
+        modelReasoningEffort: props.selectedModelReasoningEffort
+      }
       return await postSessionIdMessage(
         args.sessionId,
-        {
-          input: [{ type: 'text', text: args.text }],
-          ...(props.selectedModel.length > 0
-            ? { model: props.selectedModel }
-            : {}),
-          ...(hasThinkingLevel(props.selectedModelReasoningEffort)
-            ? {
-                modelReasoningEffort: props.selectedModelReasoningEffort
-              }
-            : {})
-        },
+        body as unknown as Parameters<typeof postSessionIdMessage>[1],
         {
           baseUrl: props.access.agentApiUrl,
           agentAuthToken: props.access.agentAuthToken
@@ -1442,6 +1473,7 @@ function SessionComposer (props: {
             ? props.selectedModelReasoningEffort
             : null
       })
+      props.onSendScrollRequest()
       props.onOptimisticMessageChange(optimisticMessage)
       await sendMutation.mutateAsync({ sessionId: nextSessionId, text })
     } catch (err) {
@@ -1468,12 +1500,13 @@ function SessionComposer (props: {
     createSessionMutation.isPending
 
   return (
-    <div className='space-y-2'>
+    <div className='flex flex-col'>
       <div className='bg-background'>
         <Textarea
           data-agent-session-composer-input='true'
           ref={props.inputRef}
           rows={2}
+          maxRows={15}
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => {
@@ -1487,7 +1520,7 @@ function SessionComposer (props: {
           className='resize-none bg-transparent border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 px-4 py-3 text-sm'
         />
       </div>
-      <div className='px-4 flex items-center gap-3'>
+      <div className='bg-background px-3 flex items-center gap-3 pt-0.5 pb-2'>
         <div className='flex items-center gap-3'>
           <p className='text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary'>
             {props.harness}
@@ -1537,9 +1570,9 @@ function SessionComposer (props: {
                 }}
               >
                 {copied ? (
-                  <Check className='h-3.5 w-3.5' />
+                  <Check className='!h-3.5 !w-3.5' />
                 ) : (
-                  <Copy className='h-3.5 w-3.5' />
+                  <Copy className='!h-3.5 !w-3.5' />
                 )}
               </Button>
             </DropdownMenuTrigger>
@@ -1618,7 +1651,6 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
   })
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null)
   const scrollParent = useScrollParent(containerRef)
 
@@ -1626,6 +1658,7 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
   const [optimisticMessage, setOptimisticMessage] =
     useState<GetSessionId200MessagesItem | null>(null)
   const [isOptimisticSending, setIsOptimisticSending] = useState(false)
+  const [forceScrollToken, setForceScrollToken] = useState(0)
   const streamConnectionRef = useRef<SessionStreamConnection | null>(null)
   const prevIsRunningRef = useRef<boolean | null>(null)
   const initialMessages = sessionQuery.data?.messages ?? []
@@ -1706,10 +1739,21 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
   const stickyScrollDepKey = useMemo(() => {
     if (messages.length === 0) return '0'
     const last = messages[messages.length - 1]
-    return `${messages.length}:${last?.id ?? ''}:${last?.createdAt ?? ''}`
+    const bodyLen =
+      last?.body != null ? JSON.stringify(last.body).length : 0
+    return `${messages.length}:${last?.id ?? ''}:${last?.createdAt ?? ''}:${bodyLen}`
   }, [messages])
+  const stickyScrollSessionKey = useMemo(
+    () => `${agentId}:${sessionId}`,
+    [agentId, sessionId]
+  )
 
-  useStickyScroll(scrollParent, messagesEndRef, stickyScrollDepKey)
+  useStickyScroll(
+    scrollParent,
+    stickyScrollDepKey,
+    stickyScrollSessionKey,
+    forceScrollToken
+  )
 
   const resetSessionStatusMutation = useMutation({
     mutationFn: async (args: {
@@ -1886,8 +1930,8 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
       tabIndex={-1}
       className={
         accessQuery.isLoading
-          ? 'h-full min-h-0 outline-none focus:outline-none focus-visible:outline-none'
-          : 'space-y-3 outline-none focus:outline-none focus-visible:outline-none'
+          ? 'h-full flex flex-col outline-none focus:outline-none focus-visible:outline-none'
+          : 'space-y-3 h-full flex flex-col outline-none focus:outline-none focus-visible:outline-none'
       }
       onPointerDownCapture={e => {
         const target = e.target as HTMLElement | null
@@ -1928,8 +1972,8 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
           Missing runtime access.
         </div>
       ) : (
-        <div className='space-y-3'>
-          <div className='space-y-2'>
+        <div className='h-full flex flex-col gap-8'>
+          <div className='p-3 flex-1 space-y-2'>
             {sessionId.length === 0 &&
             messages.length === 0 &&
             !isOptimisticSending ? (
@@ -1971,7 +2015,7 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
             )}
           </div>
 
-          <div className='-mx-3 -mb-3 border-t border-border/60'>
+          <div className='border-t border-border/60 sticky bottom-0'>
             <SessionComposer
               key={`${agentId}:${sessionId}`}
               agentId={agentId}
@@ -1998,11 +2042,12 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
               }}
               onOptimisticMessageChange={setOptimisticMessage}
               onOptimisticSendingChange={setIsOptimisticSending}
+              onSendScrollRequest={() => {
+                setForceScrollToken(prev => prev + 1)
+              }}
               inputRef={composerInputRef}
             />
           </div>
-
-          <div ref={messagesEndRef} />
         </div>
       )}
     </div>

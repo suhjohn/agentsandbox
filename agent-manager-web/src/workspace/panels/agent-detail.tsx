@@ -372,8 +372,8 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
   )
 
   return (
-    <div className='h-full min-h-0 flex flex-col'>
-      <div className='flex-1 min-h-0 overflow-hidden'>
+    <div className='flex-1 flex flex-col h-full'>
+      <div className='flex-1 flex flex-col h-full overflow-hidden'>
         {props.config.activeTab === 'session_list' ? (
           <div
             className='h-full min-h-0 overflow-y-auto p-3'
@@ -386,7 +386,7 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
           </div>
         ) : props.config.activeTab === 'session_detail' ? (
           <div
-            className='h-full min-h-0 overflow-y-auto p-3'
+            className='flex flex-col h-full flex-1 overflow-y-auto'
             data-workspace-panel-scroller='true'
           >
             <AgentSessionPanel
@@ -811,7 +811,8 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
                 sessionModel: undefined,
                 sessionModelReasoningEffort: undefined,
                 sessionHarness:
-                  next.sessionHarness === 'pi' || next.sessionHarness === 'codex'
+                  next.sessionHarness === 'pi' ||
+                  next.sessionHarness === 'codex'
                     ? next.sessionHarness
                     : undefined
               }))
@@ -1064,7 +1065,8 @@ export const agentDetailPanelDefinition: PanelDefinition<AgentDetailPanelConfig>
     getTitle: config => {
       const agentName = config.agentName?.trim() || ''
       const agentId = config.agentId?.trim() || ''
-      const agentLabel = agentName || (agentId.length > 0 ? agentId.slice(0, 8) : '')
+      const agentLabel =
+        agentName || (agentId.length > 0 ? agentId.slice(0, 8) : '')
       const sessionTitle = config.sessionTitle?.trim() || ''
       if (agentLabel.length > 0 && sessionTitle.length > 0) {
         return `${agentLabel} - ${sessionTitle}`

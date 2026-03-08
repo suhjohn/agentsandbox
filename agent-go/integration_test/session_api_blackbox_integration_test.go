@@ -106,11 +106,36 @@ func TestSessionAPIBlackbox_CreateSessionAllowsEmptyModelDefault(t *testing.T) {
 	}
 
 	rec := loadSessionRow(t, srv.dbPath, sessionID)
-	if rec.Model != nil {
-		t.Fatalf("expected empty model override to persist as nil, got %+v", rec.Model)
+	if rec.Model == nil || *rec.Model != "gpt-5.2" {
+		t.Fatalf("expected empty model override to persist as default gpt-5.2, got %+v", rec.Model)
 	}
 	if rec.ModelReasoningEffort == nil || *rec.ModelReasoningEffort != "medium" {
 		t.Fatalf("expected effort medium, got %+v", rec.ModelReasoningEffort)
+	}
+}
+
+func TestSessionAPIBlackbox_CreateSessionMaterializesConfiguredDefaults(t *testing.T) {
+	srv := startAgentGoServer(t)
+	defer stopAgentGoServer(t, srv)
+
+	sessionID := newSessionID()
+	auth := sandboxAuthHeader(t, sessionID, "integration-user", srv.secretSeed, srv.agentID)
+
+	res := httpJSON(t, http.MethodPost, srv.baseURL+"/session", auth, map[string]any{
+		"id":      sessionID,
+		"harness": "codex",
+	})
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+
+	rec := loadSessionRow(t, srv.dbPath, sessionID)
+	if rec.Model == nil || *rec.Model != "gpt-5.2" {
+		t.Fatalf("expected default model gpt-5.2, got %+v", rec.Model)
+	}
+	if rec.ModelReasoningEffort == nil || *rec.ModelReasoningEffort != "high" {
+		t.Fatalf("expected default effort high, got %+v", rec.ModelReasoningEffort)
 	}
 }
 
@@ -423,8 +448,8 @@ func TestSessionAPIBlackbox_MessageRunAllowsClearingModelOverride(t *testing.T) 
 	}
 
 	rec := loadSessionRow(t, srv.dbPath, sessionID)
-	if rec.Model != nil {
-		t.Fatalf("expected cleared model override, got %+v", rec.Model)
+	if rec.Model == nil || *rec.Model != "gpt-5.2" {
+		t.Fatalf("expected cleared model override to materialize default gpt-5.2, got %+v", rec.Model)
 	}
 	if rec.ModelReasoningEffort == nil || *rec.ModelReasoningEffort != "high" {
 		t.Fatalf("expected effort high to remain, got %+v", rec.ModelReasoningEffort)
@@ -455,7 +480,10 @@ func TestSessionAPIBlackbox_MessageRunRejectsConflictingThinkingLevels(t *testin
 	}
 
 	rec := loadSessionRow(t, srv.dbPath, sessionID)
-	if rec.Model != nil || rec.ModelReasoningEffort != nil {
+	if rec.Model == nil || *rec.Model != "openai/gpt-5.2" {
+		t.Fatalf("expected conflicting request to preserve default pi model, got %+v", rec.Model)
+	}
+	if rec.ModelReasoningEffort == nil || *rec.ModelReasoningEffort != "high" {
 		t.Fatalf("expected conflicting request to leave defaults unchanged, got %+v", rec)
 	}
 }

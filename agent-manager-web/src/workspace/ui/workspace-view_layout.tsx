@@ -40,7 +40,7 @@ import { useWorkspaceSelector, useWorkspaceStore } from '../store'
 const WORKSPACE_DND_MIME = 'application/x-agent-manager-web-workspace-drag'
 const WORKSPACE_DRAG_STATE_EVENT = 'agent-manager-web:workspace-drag-state'
 
-type DropPlacement = 'left' | 'right' | 'top' | 'bottom'
+type DropPlacement = 'left' | 'right' | 'top' | 'bottom' | 'center'
 
 type PaneDragPayload = {
   readonly kind: 'pane'
@@ -188,6 +188,26 @@ function resolveEdgePlacement (
   return candidates[0]!.placement
 }
 
+function resolveCenterPlacement (
+  rect: DOMRect,
+  clientX: number,
+  clientY: number,
+  threshold = 0.18
+): DropPlacement | null {
+  if (rect.width <= 0 || rect.height <= 0) return null
+  const xRatio = (clientX - rect.left) / rect.width
+  const yRatio = (clientY - rect.top) / rect.height
+  const clampedX = Math.max(0, Math.min(1, xRatio))
+  const clampedY = Math.max(0, Math.min(1, yRatio))
+  const centerDistanceX = Math.abs(clampedX - 0.5)
+  const centerDistanceY = Math.abs(clampedY - 0.5)
+
+  if (centerDistanceX <= threshold && centerDistanceY <= threshold) {
+    return 'center'
+  }
+  return null
+}
+
 function resolveDropPlacement (
   leafRect: DOMRect,
   clientX: number,
@@ -195,6 +215,8 @@ function resolveDropPlacement (
 ): DropPlacement {
   const edgePlacement = resolveEdgePlacement(leafRect, clientX, clientY)
   if (edgePlacement) return edgePlacement
+  const centerPlacement = resolveCenterPlacement(leafRect, clientX, clientY)
+  if (centerPlacement) return centerPlacement
   return resolveDirectionalPlacement(leafRect, clientX, clientY)
 }
 
@@ -521,7 +543,11 @@ function LeafViewImpl (props: { readonly leaf: LeafNode }) {
     lastPointerFocusAtRef.current = performance.now()
   }, [])
 
-  const showControls = isHeaderHovered || panelPickerOpen || headerPopoverOpen || actionsPopoverOpen
+  const showControls =
+    isHeaderHovered ||
+    panelPickerOpen ||
+    headerPopoverOpen ||
+    actionsPopoverOpen
 
   useEffect(() => {
     if (!isFocused) return
@@ -642,9 +668,7 @@ function LeafViewImpl (props: { readonly leaf: LeafNode }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const onTogglePaneZoom = (
-      event: Event
-    ) => {
+    const onTogglePaneZoom = (event: Event) => {
       const detail = (
         event as CustomEvent<WorkspacePaneZoomToggleEventDetail | undefined>
       ).detail
@@ -671,9 +695,8 @@ function LeafViewImpl (props: { readonly leaf: LeafNode }) {
       ref={leafRef}
       data-workspace-leaf-focused={isFocused ? 'true' : 'false'}
       className={cn(
-        'relative h-full w-full min-h-0 min-w-0 flex flex-col border bg-surface-1',
-        dragOver && 'ring-2 ring-ring/60',
-        isFocused && !dragOver && 'border-border-strong'
+        'relative h-full w-full min-h-0 min-w-0 flex flex-col bg-surface-1',
+        dragOver && 'ring-2 ring-ring/60'
       )}
       onPointerDown={() => {
         markPointerDrivenFocus()
@@ -737,6 +760,9 @@ function LeafViewImpl (props: { readonly leaf: LeafNode }) {
       {dragOver && dropPlacement ? (
         <div className='pointer-events-none absolute inset-0 z-30'>
           <div className='absolute inset-0 rounded-sm border border-blue-500/40 bg-blue-500/5' />
+          {dropPlacement === 'center' ? (
+            <div className='absolute inset-1 rounded-sm border-2 border-blue-500/70 bg-blue-500/15' />
+          ) : null}
           {dropPlacement === 'left' ? (
             <div className='absolute inset-y-1 left-1 right-1/2 rounded-sm border-2 border-blue-500/70 bg-blue-500/15' />
           ) : null}
@@ -1051,20 +1077,24 @@ function PanelPortalMountImpl (props: {
     return host
   }, [])
 
-  const scrollSnapshotRef = useRef<{ readonly top: number; readonly left: number } | null>(
-    null
-  )
+  const scrollSnapshotRef = useRef<{
+    readonly top: number
+    readonly left: number
+  } | null>(null)
 
   function pickScroller (): HTMLElement | null {
     if (!stableHost) return null
     const candidates = Array.from(
-      stableHost.querySelectorAll<HTMLElement>('[data-workspace-panel-scroller="true"]')
+      stableHost.querySelectorAll<HTMLElement>(
+        '[data-workspace-panel-scroller="true"]'
+      )
     )
     // Prefer the "deepest" marked scroller that actually scrolls (agent-detail has an
     // inner scroller; PanelHost is the outer fallback).
     for (let i = candidates.length - 1; i >= 0; i--) {
       const el = candidates[i]
-      if (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth) return el
+      if (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)
+        return el
       if (el.scrollTop !== 0 || el.scrollLeft !== 0) return el
     }
     return candidates[candidates.length - 1] ?? null
@@ -1084,7 +1114,10 @@ function PanelPortalMountImpl (props: {
     // during split/stack and scroll needs to be restored).
     const before = pickScroller()
     if (before) {
-      scrollSnapshotRef.current = { top: before.scrollTop, left: before.scrollLeft }
+      scrollSnapshotRef.current = {
+        top: before.scrollTop,
+        left: before.scrollLeft
+      }
     }
 
     if (props.target) {
@@ -1118,7 +1151,10 @@ function PanelPortalMountImpl (props: {
     if (!after) return
 
     const onScroll = () => {
-      scrollSnapshotRef.current = { top: after.scrollTop, left: after.scrollLeft }
+      scrollSnapshotRef.current = {
+        top: after.scrollTop,
+        left: after.scrollLeft
+      }
     }
     after.addEventListener('scroll', onScroll, { passive: true })
 

@@ -307,6 +307,55 @@ export function resizeLeafByDirection(
   return updateSplitRatio(root, targetStep.node.id, clampedNextRatio);
 }
 
+export function moveLeaf(
+  root: LayoutNode,
+  fromLeafId: string,
+  toLeafId: string,
+  placement: "left" | "right" | "top" | "bottom" | "center",
+  createSplitId: () => string,
+): { readonly root: LayoutNode; readonly focusedLeafId: string | null } {
+  if (fromLeafId === toLeafId) {
+    return { root, focusedLeafId: null };
+  }
+
+  if (placement === "center") {
+    const nextRoot = swapLeafNodes(root, fromLeafId, toLeafId);
+    return {
+      root: nextRoot,
+      focusedLeafId: nextRoot === root ? null : fromLeafId,
+    };
+  }
+
+  const closeResult = closeLeaf(root, fromLeafId);
+  if (!closeResult.removedLeaf) {
+    return { root, focusedLeafId: null };
+  }
+  const movedLeaf = closeResult.removedLeaf;
+
+  const targetLeaf = findLeafNode(closeResult.root, toLeafId);
+  if (!targetLeaf) {
+    return { root, focusedLeafId: null };
+  }
+
+  const dir: SplitDirection =
+    placement === "left" || placement === "right" ? "row" : "col";
+  const insertBefore = placement === "left" || placement === "top";
+  const split: SplitNode = {
+    kind: "split",
+    id: createSplitId(),
+    dir,
+    ratio: 0.5,
+    a: insertBefore ? movedLeaf : targetLeaf,
+    b: insertBefore ? targetLeaf : movedLeaf,
+  };
+
+  const nextRoot = replaceLeaf(closeResult.root, toLeafId, split);
+  return {
+    root: nextRoot,
+    focusedLeafId: nextRoot === root ? null : movedLeaf.id,
+  };
+}
+
 export function replaceLeaf(
   root: LayoutNode,
   leafId: string,

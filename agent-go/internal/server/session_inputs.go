@@ -183,7 +183,14 @@ func (s *server) generateSessionTitleFromText(sourceText string) (string, error)
 		return "", nil
 	}
 
-	model := strings.TrimSpace(s.cfg.DefaultCodexModel)
+	resolvedModel, _, err := s.materializeSessionDefaults("codex", nil, nil)
+	if err != nil {
+		return "", err
+	}
+	model := ""
+	if resolvedModel != nil {
+		model = strings.TrimSpace(*resolvedModel)
+	}
 	if model == "" {
 		return "", errors.New("missing default model")
 	}

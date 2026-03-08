@@ -148,6 +148,7 @@ Match Bun schema:
 - `POST /session` creates or returns existing session
 - Existing session harness change (`codex` <-> `pi`) with same id => `409`
 - Default `agentId=default`, `status=initial`, `harness=codex`
+- Empty/default model or reasoning selections are materialized into `sessions.model` and `sessions.model_reasoning_effort` using configured runtime defaults instead of being stored as `NULL`
 
 ## 5.3 Message semantics
 
@@ -171,7 +172,7 @@ On create message:
 
 - validates input schema (`text`, `local_image`, `image(data URL)`)
 - normalizes `image` into local file path
-- updates session model defaults if requested
+- updates session model defaults using requested values when present, otherwise configured runtime defaults
 - rejects concurrent run with `409`
 - returns `{ success, sessionId, runId, threadId? | sessionFile? }`
 
@@ -353,7 +354,7 @@ auth preference:
 
 Must preserve effective behavior for these:
 
-- core: `PORT`, `DATABASE_PATH`, `SECRET_SEED`, `DEFAULT_CODEX_MODEL`, `DEFAULT_WORKING_DIR`
+- core: `PORT`, `DATABASE_PATH`, `SECRET_SEED`, `DEFAULT_MODEL`, `DEFAULT_REASONING_EFFORT`, `DEFAULT_WORKING_DIR`
 - codex: `OPENAI_API_KEY`, `CODEX_API_KEY`, `CODEX_EXECUTABLE_PATH`, `CODEX_PATH`
 - pi: `PI_CODING_AGENT_DIR`
 - paths/runtime: `AGENT_HOME`, `ROOT_DIR`, `WORKSPACES_DIR`

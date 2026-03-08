@@ -36,17 +36,18 @@ var (
 )
 
 const (
-	defaultPort           = 3131
-	defaultDatabasePath   = "./agent.db"
-	defaultCodexModel     = "gpt-5.2"
-	maxJSONBodyBytes      = 20 * 1024 * 1024
-	sseKeepaliveMS        = 5 * time.Second
-	sseKeepalivePadding   = "................"
-	workspacePingPadding  = "................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................"
-	maxWorkspacePatchChar = 2_000_000
-	defaultReadTimeout    = 30 * time.Second
-	defaultWriteTimeout   = 120 * time.Second
-	defaultIdleTimeout    = 120 * time.Second
+	defaultPort            = 3131
+	defaultDatabasePath    = "./agent.db"
+	defaultModel           = "gpt-5.2"
+	defaultReasoningEffort = "high"
+	maxJSONBodyBytes       = 20 * 1024 * 1024
+	sseKeepaliveMS         = 5 * time.Second
+	sseKeepalivePadding    = "................"
+	workspacePingPadding   = "................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................"
+	maxWorkspacePatchChar  = 2_000_000
+	defaultReadTimeout     = 30 * time.Second
+	defaultWriteTimeout    = 120 * time.Second
+	defaultIdleTimeout     = 120 * time.Second
 )
 
 type serveConfig struct {
@@ -55,7 +56,8 @@ type serveConfig struct {
 	DatabasePath            string
 	SecretSeed              string
 	AgentInternalAuthSecret string
-	DefaultCodexModel       string
+	DefaultModel            string
+	DefaultReasoningEffort  string
 	OpenAIAPIKey            string
 	PIDir                   string
 	WorkspacesDir           string
@@ -178,7 +180,8 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	portDefault := envInt("PORT", defaultPort)
 	dbPathDefault := envString("DATABASE_PATH", defaultDatabasePath)
 	secretDefault := strings.TrimSpace(os.Getenv("SECRET_SEED"))
-	modelDefault := envString("DEFAULT_CODEX_MODEL", defaultCodexModel)
+	modelDefault := envString("DEFAULT_MODEL", defaultModel)
+	reasoningEffortDefault := envString("DEFAULT_REASONING_EFFORT", defaultReasoningEffort)
 	agentID := strings.TrimSpace(os.Getenv("AGENT_ID"))
 	openaiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
 	if openaiKey == "" {
@@ -212,7 +215,8 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	fs.StringVar(&cfg.AgentID, "agent-id", agentID, "Agent ID expected in sandbox auth token claims")
 	fs.StringVar(&cfg.DatabasePath, "db-path", dbPathDefault, "SQLite DB path")
 	fs.StringVar(&cfg.SecretSeed, "secret-seed", secretDefault, "SECRET_SEED used for X-Agent-Auth verification")
-	fs.StringVar(&cfg.DefaultCodexModel, "default-model", modelDefault, "Default model for /session/:id/message")
+	fs.StringVar(&cfg.DefaultModel, "default-model", modelDefault, "Default model for runtime sessions")
+	fs.StringVar(&cfg.DefaultReasoningEffort, "default-reasoning-effort", reasoningEffortDefault, "Default reasoning effort for runtime sessions")
 	fs.StringVar(&cfg.WorkspacesDir, "workspaces-dir", workspacesDefault, "Workspaces directory")
 	fs.StringVar(&cfg.RuntimeDir, "runtime-dir", runtimeDefault, "Runtime directory (used for image normalization)")
 	fs.StringVar(&cfg.DefaultWorkingDir, "working-dir", workingDirDefault, "Default working directory for agent and terminal")
@@ -500,7 +504,10 @@ func (s *server) handleCreateSession(w http.ResponseWriter, r *http.Request) err
 	if err != nil {
 		return err
 	}
-	input.Model = selection.Model
+	input.Model, selection.Effort, err = s.materializeSessionDefaults(input.Harness, selection.Model, selection.Effort)
+	if err != nil {
+		return err
+	}
 	input.ModelReasoningEffort = ""
 	if selection.Effort != nil {
 		input.ModelReasoningEffort = *selection.Effort
@@ -647,15 +654,11 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	if selection.HasModel || selection.HasEffort {
-		nextModel := session.Model
-		if selection.HasModel {
-			nextModel = selection.Model
-		}
-		nextEffort := session.ModelReasoningEffort
-		if selection.HasEffort {
-			nextEffort = selection.Effort
-		}
+	nextModel, nextEffort, err := s.materializeSessionDefaults(session.Harness, selection.Model, selection.Effort)
+	if err != nil {
+		return err
+	}
+	if !stringPtrsEqual(session.Model, nextModel) || !stringPtrsEqual(session.ModelReasoningEffort, nextEffort) {
 		if err := s.store.updateSessionDefaults(sessionID, nextModel, nextEffort); err != nil {
 			return err
 		}
@@ -816,11 +819,11 @@ func (s *server) executeModelRun(ctx context.Context, session *sessionRecord, in
 
 func (s *server) executeCodexCLIRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
 	prompt := promptFromInputs(input)
-	resolvedModel, resolvedEffort, err := resolveSessionDefaultsForExecution("codex", session.Model, session.ModelReasoningEffort)
+	resolvedModel, resolvedEffort, err := s.materializeSessionDefaults("codex", session.Model, session.ModelReasoningEffort)
 	if err != nil {
 		return modelRunResult{}, err
 	}
-	model := strings.TrimSpace(s.cfg.DefaultCodexModel)
+	model := ""
 	if resolvedModel != nil && strings.TrimSpace(*resolvedModel) != "" {
 		model = strings.TrimSpace(*resolvedModel)
 	}
@@ -929,7 +932,7 @@ func (s *server) executeCodexCLIRun(ctx context.Context, session *sessionRecord,
 
 func (s *server) executePiCLIRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
 	prompt := promptFromInputs(input)
-	resolvedModel, resolvedEffort, err := resolveSessionDefaultsForExecution("pi", session.Model, session.ModelReasoningEffort)
+	resolvedModel, resolvedEffort, err := s.materializeSessionDefaults("pi", session.Model, session.ModelReasoningEffort)
 	if err != nil {
 		return modelRunResult{}, err
 	}
@@ -1000,6 +1003,46 @@ func (s *server) executePiCLIRun(ctx context.Context, session *sessionRecord, in
 		ExternalSessionID: sessionFile,
 		Text:              strings.TrimSpace(textBuilder.String()),
 	}, nil
+}
+
+func stringPtrsEqual(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return strings.TrimSpace(*a) == strings.TrimSpace(*b)
+}
+
+func (s *server) configuredSessionDefaults(harness string) (*string, *string, error) {
+	var rawModel *string
+	if trimmed := strings.TrimSpace(s.cfg.DefaultModel); trimmed != "" {
+		if strings.EqualFold(strings.TrimSpace(harness), "pi") && !strings.Contains(trimmed, "/") {
+			trimmed = "openai/" + trimmed
+		}
+		rawModel = stringPtr(trimmed)
+	}
+	var rawEffort *string
+	if trimmed := strings.TrimSpace(s.cfg.DefaultReasoningEffort); trimmed != "" {
+		rawEffort = stringPtr(trimmed)
+	}
+	return resolveSessionDefaultsForExecution(harness, rawModel, rawEffort)
+}
+
+func (s *server) materializeSessionDefaults(harness string, model, effort *string) (*string, *string, error) {
+	resolvedModel, resolvedEffort, err := resolveSessionDefaultsForExecution(harness, model, effort)
+	if err != nil {
+		return nil, nil, err
+	}
+	defaultModel, defaultEffort, err := s.configuredSessionDefaults(harness)
+	if err != nil {
+		return nil, nil, err
+	}
+	if resolvedModel == nil {
+		resolvedModel = defaultModel
+	}
+	if resolvedEffort == nil {
+		resolvedEffort = defaultEffort
+	}
+	return resolvedModel, resolvedEffort, nil
 }
 
 func compactPIEventForStream(value map[string]any) (map[string]any, bool) {

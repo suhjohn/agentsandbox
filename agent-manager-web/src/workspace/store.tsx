@@ -11,6 +11,7 @@ import {
   hasUniformSplitDirection,
   listLeafIds,
   listPanelInstanceIds,
+  moveLeaf,
   rebuildLayoutInDirection,
   replaceLeaf,
   resizeLeafByDirection,
@@ -67,7 +68,7 @@ export type WorkspaceAction =
       readonly type: "pane/move";
       readonly fromLeafId: string;
       readonly toLeafId: string;
-      readonly placement: "left" | "right" | "top" | "bottom";
+      readonly placement: "left" | "right" | "top" | "bottom" | "center";
     }
   | { readonly type: "split/ratio"; readonly splitId: string; readonly ratio: number }
   | {
@@ -752,38 +753,24 @@ function reduce(state: WorkspaceState, action: WorkspaceAction): WorkspaceState 
     }
     case "pane/move": {
       return updateActiveWindow(state, (window) => {
-        if (action.fromLeafId === action.toLeafId) return window;
+        const result = moveLeaf(
+          window.root,
+          action.fromLeafId,
+          action.toLeafId,
+          action.placement,
+          () => newId("split"),
+        );
+        if (result.root === window.root) return window;
 
-        const closeResult = closeLeafInLayout(window.root, action.fromLeafId);
-        if (!closeResult.removedLeaf) return window;
-        const movedLeaf = closeResult.removedLeaf;
-
-        const targetLeaf = findLeafNode(closeResult.root, action.toLeafId);
-        if (!targetLeaf) return window;
-
-        const dir: SplitDirection =
-          action.placement === "left" || action.placement === "right" ? "row" : "col";
-        const insertBefore = action.placement === "left" || action.placement === "top";
-        const split: SplitNode = {
-          kind: "split",
-          id: newId("split"),
-          dir,
-          ratio: 0.5,
-          a: insertBefore ? movedLeaf : targetLeaf,
-          b: insertBefore ? targetLeaf : movedLeaf,
-        };
-
-        const nextRoot = replaceLeaf(closeResult.root, action.toLeafId, split);
-        if (nextRoot === window.root) return window;
-
-        const nextLeafIds = listLeafIds(nextRoot);
-        const focusedLeafId = nextLeafIds.includes(movedLeaf.id)
-          ? movedLeaf.id
-          : nextLeafIds[0] ?? null;
+        const nextLeafIds = listLeafIds(result.root);
+        const focusedLeafId =
+          result.focusedLeafId && nextLeafIds.includes(result.focusedLeafId)
+            ? result.focusedLeafId
+            : nextLeafIds[0] ?? null;
 
         return {
           ...window,
-          root: nextRoot,
+          root: result.root,
           focusedLeafId,
         };
       });
