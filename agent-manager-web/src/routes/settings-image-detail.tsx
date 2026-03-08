@@ -1441,7 +1441,10 @@ export function SettingsImageDetailPage () {
     archiveMutation.isPending ||
     unarchiveMutation.isPending ||
     deleteMutation.isPending
-  const hasDirtyDraft = initial && draft ? Object.keys(buildPatch(initial, draft)).length > 0 : false
+  const hasDirtyDraft =
+    initial && draft
+      ? Object.keys(buildPatch(initial, draft)).length > 0
+      : false
   const canSaveActiveSecretTab = (() => {
     if (!activeSecretTab || !canEdit || isBusy) return false
     const path = activeSecretTab.path.trim()
@@ -1532,7 +1535,8 @@ export function SettingsImageDetailPage () {
       },
       startBuild: async () => {
         if (!selectedVariantId) throw new Error('Select a variant first')
-        if (buildStreamMutation.isPending) throw new Error('Build already running')
+        if (buildStreamMutation.isPending)
+          throw new Error('Build already running')
         if (saveSetupScriptMutation.isPending) {
           throw new Error('Setup script save already in progress')
         }
@@ -2135,9 +2139,9 @@ export function SettingsImageDetailPage () {
           title='Secret files'
           description={
             <>
-              Bind Modal secrets to file paths. Each entry writes a{' '}
-              <code>.env</code> file at the specified path. Values are stored in
-              Modal and are never displayed here after saving.
+              Bind Modal secrets to file paths. Each entry writes a secret file
+              at the specified path. Values are stored in Modal and are never
+              displayed here after saving.
             </>
           }
         >
@@ -2171,7 +2175,7 @@ export function SettingsImageDetailPage () {
                         <div
                           key={key}
                           className={cn(
-                            'group flex items-center transition-colors max-w-[240px] truncate',
+                            'group flex items-start transition-colors max-w-[240px]',
                             isActive
                               ? 'border-border bg-surface-2 text-text-primary'
                               : 'border-transparent text-text-tertiary hover:text-text-secondary hover:bg-surface-2/50'
@@ -2180,11 +2184,13 @@ export function SettingsImageDetailPage () {
                         >
                           <button
                             type='button'
-                            className='min-w-0 flex-1 flex items-center gap-1 px-3 py-1.5 text-sm truncate text-left'
+                            className='min-w-0 flex-1 flex items-start gap-1 px-3 py-1.5 text-sm text-left'
                             onClick={() => setActiveSecretTabKey(key)}
                             disabled={isBusy}
                           >
-                            <span className='truncate'>{label}</span>
+                            <span className='line-clamp-2 min-w-0 break-all leading-4'>
+                              {label}
+                            </span>
                             {isMetaDirty ? (
                               <span className='ml-1 text-text-tertiary'>*</span>
                             ) : null}
@@ -2322,7 +2328,7 @@ export function SettingsImageDetailPage () {
                     left={
                       <SettingsRowLeft
                         title='File path'
-                        description='Full file path including filename. Must start with ~/ under the sandbox home.'
+                        description='Full file path including filename, such as ~/.env.production or ~/workspaces/app/.env.test. Must start with ~/ under the sandbox home.'
                       />
                     }
                     right={
@@ -2336,7 +2342,7 @@ export function SettingsImageDetailPage () {
                             }))
                           }
                           disabled={!canEdit || isBusy}
-                          placeholder='e.g. ~/workspaces/monorepo/backend/secrets.local'
+                          placeholder='e.g. ~/workspaces/monorepo/backend/.env.production'
                         />
                       </div>
                     }
@@ -2348,7 +2354,7 @@ export function SettingsImageDetailPage () {
                     left={
                       <SettingsRowLeft
                         title='Contents'
-                        description='Key-value pairs written to the secret file. Clears after saving.'
+                        description='Key-value pairs written to the secret file. Clears after save for security reasons. You can see the keys on Modal - Secrets.'
                       />
                     }
                     right={
@@ -2706,14 +2712,15 @@ export function SettingsImageDetailPage () {
                   </div>
                 }
               />
-              <SettingsRow
-                className='items-start flex-col sm:flex-row'
-                left={
-                  <SettingsRowLeft
-                    title='Base Image'
-                    description='Image used as the starting point for building.'
-                  />
-                }
+              <div>
+                <SettingsRow
+                  className='items-start flex-col sm:flex-row'
+                  left={
+                    <SettingsRowLeft
+                      title='Base Image'
+                      description='Image used as the starting point for building.'
+                    />
+                  }
                 right={
                   <div className='flex flex-col gap-1 w-full sm:w-[420px]'>
                     {(() => {
@@ -2813,64 +2820,64 @@ export function SettingsImageDetailPage () {
                   </div>
                 }
               />
-              <SettingsRow
-                className='items-start sm:items-center flex-col sm:flex-row'
-                left={
-                  <SettingsRowLeft
-                    title='Extend Image'
-                    description='Open a live shell to make manual changes (e.g. Codex auth). Snapshot updates the base image.'
-                  />
-                }
-                right={
-                  <div className='flex items-center gap-2'>
-                    {!setupSandboxId ? (
-                      <Button
-                        variant='secondary'
-                        size='sm'
-                        disabled={!canEdit || isBusy || !selectedVariantId}
-                        onClick={() => createSetupSandboxMutation.mutate()}
-                      >
-                        {createSetupSandboxMutation.isPending ? (
-                          <Loader2 className='h-4 w-4 animate-spin' />
-                        ) : null}
-                        Activate Shell
-                      </Button>
-                    ) : (
-                      <>
+                <SettingsRow
+                  className='items-start sm:items-center flex-col sm:flex-row'
+                  left={
+                    <SettingsRowLeft
+                      title='Extend Image'
+                      description='Open a live shell to make manual changes (e.g. Codex auth). Snapshot updates the base image.'
+                    />
+                  }
+                  right={
+                    <div className='flex items-center gap-2'>
+                      {!setupSandboxId ? (
                         <Button
                           variant='secondary'
                           size='sm'
-                          disabled={!canEdit || isBusy}
-                          onClick={() => snapshotSetupSandboxMutation.mutate()}
+                          disabled={!canEdit || isBusy || !selectedVariantId}
+                          onClick={() => createSetupSandboxMutation.mutate()}
                         >
-                          {snapshotSetupSandboxMutation.isPending ? (
+                          {createSetupSandboxMutation.isPending ? (
                             <Loader2 className='h-4 w-4 animate-spin' />
                           ) : null}
-                          Snapshot
+                          Activate Shell
                         </Button>
-                        <Button
-                          variant='ghost'
-                          size='sm'
-                          disabled={!canEdit || isBusy}
-                          onClick={() => terminateSetupSandboxMutation.mutate()}
-                        >
-                          Close
-                        </Button>
-                      </>
-                    )}
+                      ) : (
+                        <>
+                          <Button
+                            variant='secondary'
+                            size='sm'
+                            disabled={!canEdit || isBusy}
+                            onClick={() => snapshotSetupSandboxMutation.mutate()}
+                          >
+                            {snapshotSetupSandboxMutation.isPending ? (
+                              <Loader2 className='h-4 w-4 animate-spin' />
+                            ) : null}
+                            Snapshot
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            disabled={!canEdit || isBusy}
+                            onClick={() => terminateSetupSandboxMutation.mutate()}
+                          >
+                            Close
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  }
+                />
+                {setupSandboxId && setupTerminalConnection ? (
+                  <div className='p-2 h-[320px] w-full'>
+                    <TerminalPanel
+                      wsUrl={setupTerminalConnection.wsUrl}
+                      wsAuthToken={setupTerminalConnection.authToken}
+                      onConnectionLost={reconnectSetupSandboxTerminal}
+                    />
                   </div>
-                }
-              />
-              {setupSandboxId && setupTerminalConnection ? (
-                <div className='p-2 h-[320px] w-full'>
-                  <TerminalPanel
-                    wsUrl={setupTerminalConnection.wsUrl}
-                    wsAuthToken={setupTerminalConnection.authToken}
-                    onConnectionLost={reconnectSetupSandboxTerminal}
-                  />
-                </div>
-              ) : null}
-              <div className='border-b border-border' />
+                ) : null}
+              </div>
               <SettingsRow
                 className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
                 left={

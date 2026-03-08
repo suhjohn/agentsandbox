@@ -236,9 +236,9 @@ Trigger conditions:
 - User asks to mount/bind a secret at a specific image path.
 - User asks to verify image secret bindings after updates.
 1. Confirm image exists: \`GET /images/{imageId}\`.
-2. Upsert Modal secret values: \`POST /images/{imageId}/secrets\` with \`{ name?, env }\`.
-3. Upsert image secret binding: \`PUT /images/{imageId}/secrets\` with \`{ path, modalSecretName }\`.
-4. Verify bindings: \`GET /images/{imageId}/secrets\`.
+2. Upsert Modal secret values: \`POST /images/{imageId}/modal-secrets\` with \`{ name?, env }\`.
+3. Upsert image secret binding: \`PUT /images/{imageId}/file-secrets\` with \`{ path, modalSecretName }\`.
+4. Verify bindings: \`GET /images/{imageId}/file-secrets\`.
 
 ### Build and Validate an Image
 Trigger conditions:
@@ -296,7 +296,7 @@ npm run build
 **Common Patterns:**
 - **Clone and setup**: \`git clone <url> && cd <repo> && <install commands>\`
 - **Multiple repos**: Clone each into \`$WORKSPACES_DIR/<name>\`
-- **Environment files**: Secrets are materialized as \`.env\` files after setup (via image secret bindings), so don't hardcode secrets in \`setupScript\`.
+- **Environment files**: Secrets are materialized at their configured file paths after setup (via image secret bindings), so don't hardcode secrets in \`setupScript\`.
 - **Path references**: Use \`$WORKSPACES_DIR\` or \`$AGENT_HOME\` instead of hardcoded paths.
 
 **What NOT to do:**

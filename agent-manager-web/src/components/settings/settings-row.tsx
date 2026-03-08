@@ -34,7 +34,7 @@ export function SettingsRowLeft (props: {
           {props.title}
         </div>
         {props.description ? (
-          <div className='text-xs text-text-tertiary truncate'>
+          <div className='text-xs text-text-tertiary line-clamp-2'>
             {props.description}
           </div>
         ) : null}

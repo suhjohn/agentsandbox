@@ -168,7 +168,7 @@ export const imageVariantBuilds = pgTable(
   ],
 );
 
-// ── File Secrets (per-path secret bindings, loaded as .env files) ──────────
+// ── File Secrets (per-path secret bindings, loaded as exact files) ──────────
 
 export const fileSecrets = pgTable(
   "file_secrets",

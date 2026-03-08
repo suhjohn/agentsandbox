@@ -8,7 +8,7 @@ export function SettingsList (props: {
   return (
     <div
       className={cn(
-        'border border-border bg-surface-2 overflow-hidden divide-border',
+        'border border-border bg-surface-2 overflow-hidden divide-y divide-border',
         props.className
       )}
     >

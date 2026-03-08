@@ -267,7 +267,7 @@ export async function runModalImageBuild (input: {
           const items = await inspectModalSecretItemsInSandbox(sandbox, secret)
           cache.set(secret, items)
         }
-        const targetEnvPath = resolveSandboxEnvFilePath(binding.path)
+        const targetEnvPath = resolveSandboxSecretFilePath(binding.path)
         const dotenvContents = renderDotenv(cache.get(secret) ?? {})
         await writeDotenvFile(sandbox, targetEnvPath, dotenvContents)
         logStep(
@@ -562,7 +562,7 @@ function renderDotenv (items: Record<string, string>): string {
   return `${lines.join('\n')}\n`
 }
 
-function resolveSandboxEnvFilePath (bindingPath: string): string {
+function resolveSandboxSecretFilePath (bindingPath: string): string {
   const raw = bindingPath.trim()
   let base: string
   if (raw === '.' || raw === './') {
@@ -592,9 +592,7 @@ function resolveSandboxEnvFilePath (bindingPath: string): string {
       )
     }
   }
-
-  if (base.endsWith('/.env') || basenamePosix(base) === '.env') return base
-  return `${trimTrailingSlash(base)}/.env`
+  return trimTrailingSlash(base)
 }
 
 async function writeDotenvFile (
@@ -740,13 +738,6 @@ function dirnamePosix (value: string): string {
   if (idx < 0) return '.'
   if (idx === 0) return '/'
   return trimmed.slice(0, idx)
-}
-
-function basenamePosix (value: string): string {
-  if (value === '/') return '/'
-  const trimmed = trimTrailingSlash(value)
-  const idx = trimmed.lastIndexOf('/')
-  return idx < 0 ? trimmed : trimmed.slice(idx + 1)
 }
 
 function trimTrailingSlash (value: string): string {
