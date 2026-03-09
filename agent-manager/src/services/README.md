@@ -29,6 +29,7 @@ Behavior:
   - then `input.setupScript` if non-empty,
   - then verifies the tracked repo binary at `/opt/agentsandbox/agent-go/build-artifacts/agent-server` exists and is executable before snapshotting.
 - Materializes `fileSecrets` into secret files at their exact configured paths in the sandbox before snapshotting.
+  - Builds fail with a descriptive error when a binding path resolves to an existing directory (for example `~/.venv`), because the secret must be written to a file path.
 
 ## image.service.ts
 
@@ -39,6 +40,22 @@ Behavior:
   - `setupScript`: runs during image build.
   - `runScript`: runs each time an agent sandbox starts from that image.
 - `cloneImage` copies both script fields onto the cloned image.
+
+### `createImageVariant(input)`
+
+```ts
+createImageVariant(input: {
+  readonly imageId: string
+  readonly name?: string
+  readonly scope: "shared" | "private"
+  readonly ownerUserId?: string | null
+  readonly baseImageId?: string | null
+})
+```
+
+Behavior:
+- For `scope: "private"`, the variant row is owned by `ownerUserId` (and `ownerUserId` is cleared for `scope: "shared"`).
+- When `name` is omitted/blank for a private variant, the service auto-numbers `Variant`, `Variant 2`, `Variant 3`, ... per `(imageId, ownerUserId)` to avoid unique-index collisions.
 
 ### `runBuild(input)`
 

@@ -1501,7 +1501,7 @@ function SessionComposer (props: {
 
   return (
     <div className='flex flex-col'>
-      <div className='bg-background'>
+      <div className='bg-background border-y border-border'>
         <Textarea
           data-agent-session-composer-input='true'
           ref={props.inputRef}
@@ -2015,7 +2015,7 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
             )}
           </div>
 
-          <div className='border-t border-border/60 sticky bottom-0'>
+          <div className='sticky bottom-0'>
             <SessionComposer
               key={`${agentId}:${sessionId}`}
               agentId={agentId}

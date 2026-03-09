@@ -2721,110 +2721,112 @@ export function SettingsImageDetailPage () {
                       description='Image used as the starting point for building.'
                     />
                   }
-                right={
-                  <div className='flex flex-col gap-1 w-full sm:w-[420px]'>
-                    {(() => {
-                      const options: Array<{
-                        readonly value: string | null
-                        readonly label: string
-                        readonly detail: string
-                      }> = [
-                        {
-                          value: null,
-                          label: '$AGENT_BASE_IMAGE_REF',
-                          detail: 'Default'
-                        },
-                        {
-                          value: 'ghcr.io/suhjohn/agent:latest',
-                          label: 'ghcr.io/suhjohn/agent:latest',
-                          detail: 'Registry'
+                  right={
+                    <div className='flex flex-col gap-1 w-full sm:w-[420px]'>
+                      {(() => {
+                        const options: Array<{
+                          readonly value: string | null
+                          readonly label: string
+                          readonly detail: string
+                        }> = [
+                          {
+                            value: null,
+                            label: '$AGENT_BASE_IMAGE_REF',
+                            detail: 'Default'
+                          },
+                          {
+                            value: 'ghcr.io/suhjohn/agent:latest',
+                            label: 'ghcr.io/suhjohn/agent:latest',
+                            detail: 'Registry'
+                          }
+                        ]
+
+                        if (
+                          selectedBaseImageId &&
+                          !options.some(
+                            opt => opt.value === selectedBaseImageId
+                          )
+                        ) {
+                          options.push({
+                            value: selectedBaseImageId,
+                            label: selectedBaseImageId,
+                            detail: 'Base image'
+                          })
                         }
-                      ]
 
-                      if (
-                        selectedBaseImageId &&
-                        !options.some(opt => opt.value === selectedBaseImageId)
-                      ) {
-                        options.push({
-                          value: selectedBaseImageId,
-                          label: selectedBaseImageId,
-                          detail: 'Base image'
-                        })
-                      }
+                        if (
+                          selectedSnapshottedImageId &&
+                          !options.some(
+                            opt => opt.value === selectedSnapshottedImageId
+                          )
+                        ) {
+                          options.push({
+                            value: selectedSnapshottedImageId,
+                            label: selectedSnapshottedImageId,
+                            detail: 'Extended image'
+                          })
+                        }
 
-                      if (
-                        selectedSnapshottedImageId &&
-                        !options.some(
-                          opt => opt.value === selectedSnapshottedImageId
-                        )
-                      ) {
-                        options.push({
-                          value: selectedSnapshottedImageId,
-                          label: selectedSnapshottedImageId,
-                          detail: 'Extended image'
-                        })
-                      }
-
-                      return options
-                    })().map(opt => {
-                      const isSelected = selectedBaseImageId === opt.value
-                      return (
-                        <button
-                          key={opt.value ?? '__default__'}
-                          type='button'
-                          className={cn(
-                            'flex items-center gap-2 px-3 py-2 text-left text-xs border transition-colors',
-                            isSelected
-                              ? 'border-ring bg-surface-2 text-text-primary'
-                              : 'border-border text-text-secondary hover:bg-surface-2/50',
-                            (!canMutateSelectedVariant || isBusy) &&
-                              'opacity-50 cursor-not-allowed'
-                          )}
-                          disabled={!canMutateSelectedVariant || isBusy}
-                          onClick={() => {
-                            if (isSelected) return
-                            setBaseImageMutation.mutate(opt.value)
-                          }}
-                        >
-                          <div
+                        return options
+                      })().map(opt => {
+                        const isSelected = selectedBaseImageId === opt.value
+                        return (
+                          <button
+                            key={opt.value ?? '__default__'}
+                            type='button'
                             className={cn(
-                              'h-3.5 w-3.5 rounded-full border-2 shrink-0',
+                              'flex items-center gap-2 px-3 py-2 text-left text-xs border transition-colors',
                               isSelected
-                                ? 'border-ring bg-ring'
-                                : 'border-text-tertiary'
+                                ? 'border-ring bg-surface-2 text-text-primary'
+                                : 'border-border text-text-secondary hover:bg-surface-2/50',
+                              (!canMutateSelectedVariant || isBusy) &&
+                                'opacity-50 cursor-not-allowed'
                             )}
-                          />
-                          <span className='font-mono truncate'>
-                            {opt.label}
-                          </span>
-                          <span className='text-text-tertiary ml-auto shrink-0'>
-                            {opt.detail}
-                          </span>
-                          {isSelected && opt.value ? (
-                            <Button
-                              variant='ghost'
-                              size='icon'
-                              className='h-6 w-6 shrink-0 -mr-1'
-                              onClick={e => {
-                                e.stopPropagation()
-                                void onCopy(opt.value!, 'base image')
-                              }}
-                              title='Copy'
-                            >
-                              <Copy className='h-3.5 w-3.5' />
-                            </Button>
-                          ) : null}
-                        </button>
-                      )
-                    })}
-                  </div>
-                }
-              />
+                            disabled={!canMutateSelectedVariant || isBusy}
+                            onClick={() => {
+                              if (isSelected) return
+                              setBaseImageMutation.mutate(opt.value)
+                            }}
+                          >
+                            <div
+                              className={cn(
+                                'h-3.5 w-3.5 rounded-full border-2 shrink-0',
+                                isSelected
+                                  ? 'border-ring bg-ring'
+                                  : 'border-text-tertiary'
+                              )}
+                            />
+                            <span className='font-mono truncate'>
+                              {opt.label}
+                            </span>
+                            <span className='text-text-tertiary ml-auto shrink-0'>
+                              {opt.detail}
+                            </span>
+                            {isSelected && opt.value ? (
+                              <Button
+                                variant='ghost'
+                                size='icon'
+                                className='h-6 w-6 shrink-0 -mr-1'
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  void onCopy(opt.value!, 'base image')
+                                }}
+                                title='Copy'
+                              >
+                                <Copy className='h-3.5 w-3.5' />
+                              </Button>
+                            ) : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  }
+                />
                 <SettingsRow
                   className='items-start sm:items-center flex-col sm:flex-row'
                   left={
                     <SettingsRowLeft
-                      title='Extend Image'
+                      title='Extend'
                       description='Open a live shell to make manual changes (e.g. Codex auth). Snapshot updates the base image.'
                     />
                   }
@@ -2848,7 +2850,9 @@ export function SettingsImageDetailPage () {
                             variant='secondary'
                             size='sm'
                             disabled={!canEdit || isBusy}
-                            onClick={() => snapshotSetupSandboxMutation.mutate()}
+                            onClick={() =>
+                              snapshotSetupSandboxMutation.mutate()
+                            }
                           >
                             {snapshotSetupSandboxMutation.isPending ? (
                               <Loader2 className='h-4 w-4 animate-spin' />
@@ -2859,7 +2863,9 @@ export function SettingsImageDetailPage () {
                             variant='ghost'
                             size='sm'
                             disabled={!canEdit || isBusy}
-                            onClick={() => terminateSetupSandboxMutation.mutate()}
+                            onClick={() =>
+                              terminateSetupSandboxMutation.mutate()
+                            }
                           >
                             Close
                           </Button>

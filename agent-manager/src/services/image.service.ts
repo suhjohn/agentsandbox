@@ -272,6 +272,28 @@ export function canUserMutateImageVariant(input: {
   return input.variant.ownerUserId === input.userId;
 }
 
+function isUniqueViolation(err: unknown): boolean {
+  if (!err || (typeof err !== "object" && typeof err !== "function")) return false;
+  const anyErr = err as { readonly cause?: unknown; readonly message?: unknown };
+  const cause = anyErr.cause as { readonly code?: unknown; readonly message?: unknown } | null;
+  if (cause?.code === "23505") return true;
+  if (typeof anyErr.message === "string" && anyErr.message.includes("23505")) return true;
+  if (typeof cause?.message === "string" && cause.message.includes("23505")) return true;
+  return false;
+}
+
+function buildUniqueVariantName(input: {
+  readonly baseName: string;
+  readonly existingNames: ReadonlySet<string>;
+}): string {
+  if (!input.existingNames.has(input.baseName)) return input.baseName;
+  for (let i = 2; i <= 10_000; i++) {
+    const candidate = `${input.baseName} ${i}`;
+    if (!input.existingNames.has(candidate)) return candidate;
+  }
+  return `${input.baseName} ${Date.now()}`;
+}
+
 export async function createImageVariant(input: {
   readonly imageId: string;
   readonly name?: string;
@@ -280,19 +302,59 @@ export async function createImageVariant(input: {
   readonly baseImageId?: string | null;
 }) {
   if (!isUuid(input.imageId)) return null;
-  const name = (input.name ?? "").trim();
-  const [created] = await db
-    .insert(imageVariants)
-    .values({
-      imageId: input.imageId,
-      name: name.length > 0 ? name : "Variant",
-      scope: input.scope,
-      ownerUserId: input.scope === "private" ? input.ownerUserId ?? null : null,
-      baseImageId: normalizeNullableText(input.baseImageId),
-    })
-    .returning({ id: imageVariants.id });
-  if (!created) return null;
-  return getImageVariantById(created.id);
+
+  const trimmedName = (input.name ?? "").trim();
+  const baseName = trimmedName.length > 0 ? trimmedName : "Variant";
+  const ownerUserId = input.scope === "private" ? input.ownerUserId ?? null : null;
+  const baseImageId = normalizeNullableText(input.baseImageId);
+
+  // UI currently creates private variants without specifying a name. Auto-number
+  // default names so users can create multiple private variants per image.
+  let candidateName = baseName;
+  let knownNames: Set<string> | null = null;
+  const shouldAutoNumber =
+    trimmedName.length === 0 && ownerUserId !== null && isUuid(ownerUserId);
+  if (shouldAutoNumber) {
+    const existing = await db
+      .select({ name: imageVariants.name })
+      .from(imageVariants)
+      .where(
+        and(eq(imageVariants.imageId, input.imageId), eq(imageVariants.ownerUserId, ownerUserId))!,
+      );
+    knownNames = new Set(existing.map((row) => row.name));
+    candidateName = buildUniqueVariantName({
+      baseName,
+      existingNames: knownNames,
+    });
+  }
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const [created] = await db
+        .insert(imageVariants)
+        .values({
+          imageId: input.imageId,
+          name: candidateName,
+          scope: input.scope,
+          ownerUserId,
+          baseImageId,
+        })
+        .returning({ id: imageVariants.id });
+      if (!created) return null;
+      return getImageVariantById(created.id);
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      if (!shouldAutoNumber) return null;
+      if (!knownNames) return null;
+      knownNames.add(candidateName);
+      candidateName = buildUniqueVariantName({
+        baseName,
+        existingNames: knownNames,
+      });
+    }
+  }
+
+  return null;
 }
 
 export async function deleteImageVariant(input: {

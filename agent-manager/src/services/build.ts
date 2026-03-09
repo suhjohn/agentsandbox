@@ -269,7 +269,18 @@ export async function runModalImageBuild (input: {
         }
         const targetEnvPath = resolveSandboxSecretFilePath(binding.path)
         const dotenvContents = renderDotenv(cache.get(secret) ?? {})
-        await writeDotenvFile(sandbox, targetEnvPath, dotenvContents)
+        try {
+          await writeDotenvFile(sandbox, targetEnvPath, dotenvContents)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          throw new Error(
+            `Failed to write secret file binding (path=${JSON.stringify(
+              binding.path
+            )} resolved=${JSON.stringify(targetEnvPath)} secret=${JSON.stringify(
+              secret
+            )}): ${message}`
+          )
+        }
         logStep(
           `Wrote ${
             Object.keys(cache.get(secret) ?? {}).length
@@ -601,13 +612,27 @@ async function writeDotenvFile (
   contents: string
 ): Promise<void> {
   const parent = dirnamePosix(targetPath) || '/'
-  const mkdir = await execText(sandbox, [
+  const preflightScript = [
+    'set -euo pipefail',
+    `mkdir -p ${shellQuote(parent)}`,
+    `chmod 700 ${shellQuote(parent)}`,
+    `if [[ -d ${shellQuote(targetPath)} ]]; then`,
+    `  echo "target path is a directory: ${shellQuote(targetPath)}" >&2`,
+    `  exit 1`,
+    `fi`
+  ].join('\n')
+  const preflight = await execText(sandbox, [
     'bash',
     '-lc',
-    `mkdir -p ${shellQuote(parent)} && chmod 700 ${shellQuote(parent)}`
+    preflightScript
   ])
-  if (mkdir.exitCode !== 0) {
-    throw new Error(`Failed to create directory for: ${targetPath}`)
+  if (preflight.exitCode !== 0) {
+    const stderr = preflight.stderr.trim()
+    throw new Error(
+      `Secret file target is not writable: ${targetPath}${
+        stderr.length > 0 ? ` (stderr: ${stderr})` : ''
+      }`
+    )
   }
   await writeFile(sandbox, targetPath, contents)
   await execText(sandbox, [
