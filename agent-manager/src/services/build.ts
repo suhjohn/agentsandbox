@@ -31,12 +31,12 @@ const AGENT_SOURCE_UPDATE_COMMAND = [
   'fi'
 ].join('\n')
 
-const AGENT_SERVER_PREPARE_COMMAND = [
-  'if [[ ! -x /opt/agentsandbox/agent-go/docker/prepare-agent-server.sh ]]; then',
-  '  echo "[agent-go] prepare script missing: /opt/agentsandbox/agent-go/docker/prepare-agent-server.sh" >&2;',
+const AGENT_SERVER_VERIFY_COMMAND = [
+  'if [[ ! -f /opt/agentsandbox/agent-go/build-artifacts/agent-server ]]; then',
+  '  echo "[agent-go] binary missing: /opt/agentsandbox/agent-go/build-artifacts/agent-server" >&2;',
   '  exit 1;',
   'fi',
-  'AGENT_GO_SYNC_SOURCE=0 /opt/agentsandbox/agent-go/docker/prepare-agent-server.sh'
+  'chmod +x /opt/agentsandbox/agent-go/build-artifacts/agent-server'
 ].join('\n')
 
 export type BuildChunk = {
@@ -214,9 +214,9 @@ export async function runModalImageBuild (input: {
     }
 
     setupSteps.push({
-      label: 'agent-go binary prepare',
-      command: AGENT_SERVER_PREPARE_COMMAND,
-      errorPrefix: 'agent-go binary prepare step'
+      label: 'agent-go binary verify',
+      command: AGENT_SERVER_VERIFY_COMMAND,
+      errorPrefix: 'agent-go binary verify step'
     })
 
     for (const step of setupSteps) {

@@ -159,11 +159,9 @@ Runtime behavior intentionally keeps the same entrypoint/runit stack used by `ag
 - workspace tools sync + Codex `AGENTS.md` generation
 
 The API server command remains `/app/agent-server`, but this is an executable launcher
-that can `git pull` the source checkout in the image and then runs the shared
-`prepare-agent-server.sh` helper. The Docker image ships a bundled binary at
-`/opt/agent-image/agent-server` plus `/opt/agent-image/agent-server.rev`; startup
-reuses that bundled binary when the synced checkout matches, otherwise it rebuilds
-to `${ROOT_DIR}/bin/agent-server` and uses that runtime copy.
+that syncs the in-image source checkout and then runs the tracked repo binary at
+`agent-go/build-artifacts/agent-server`. The matching source revision is recorded in
+`agent-go/build-artifacts/agent-server.rev`.
 OpenVSCode proxying still uses the same command path (`/app/agent-server openvscode-proxy`).
 
 ### Entrypoint + `AGENT_RUNTIME_MODE`

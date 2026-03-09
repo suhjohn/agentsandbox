@@ -70,7 +70,10 @@ out/
 .nuxt/
 .output/
 .turbo/
-agent-go/build-artifacts/
+!agent-go/build-artifacts/
+agent-go/build-artifacts/*
+!agent-go/build-artifacts/agent-server
+!agent-go/build-artifacts/agent-server.rev
 
 # Lockfiles (repo standard is Bun)
 package-lock.json

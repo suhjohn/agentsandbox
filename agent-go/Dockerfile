@@ -145,13 +145,6 @@ RUN set -eux; \
 # Layer 10: Copy entire repo (includes agent-go/docker and agent-go/tools)
 COPY . ${AGENT_REPO_DIR}
 
-# Layer 11: Build the bundled agent-server binary for this image revision.
-RUN set -eux; \
-  mkdir -p /opt/agent-image; \
-  cd "${AGENT_REPO_DIR}/agent-go"; \
-  ./scripts/dev.sh build-server --output /opt/agent-image/agent-server; \
-  git rev-parse HEAD > /opt/agent-image/agent-server.rev
-
 # Symlink docker/tools to /app for backwards compatibility
 RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/docker" /app/docker \
   && ln -sfn "${AGENT_REPO_DIR}/agent-go/tools" /app/tools \
@@ -164,7 +157,6 @@ RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/docker" /app/docker \
   && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/index.html \
   && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/vnc.html \
   && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/vnc_lite.html \
-  && chmod +x "${AGENT_REPO_DIR}/agent-go/docker/prepare-agent-server.sh" \
   && chmod +x "${AGENT_REPO_DIR}/agent-go/docker/runit/"*.sh
 
 ARG PORT=3131
