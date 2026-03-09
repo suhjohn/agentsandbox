@@ -149,6 +149,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - valid thinking options are harness-specific: `codex` -> default or `minimal|low|medium|high|xhigh`; `pi` -> default or `off|minimal|low|medium|high|xhigh`
   - composer create/send/reset calls forward both `model` and `modelReasoningEffort` to the runtime session API
   - empty `Default model` / `Default thinking` selections are forwarded as explicit empty values so the runtime can materialize configured defaults onto the session record instead of silently keeping a previous override
+  - dragging files onto the composer uploads them to the runtime `POST /files/upload` endpoint, saves them under `~/uploaded`, and appends `@~/uploaded/<filename>` references into the draft text
   - tool icons for `Terminal`, `Browser`, `VSCode`, and `Diff` default to opening that tool in a side pane on click; hovering an icon opens a custom fixed-position hover card with `Open`, `Open to side`, `Open to bottom`, `Open to window side`, and `Open to window bottom`, and the card flips above the icon when needed instead of forcing panel scroll
   - session detail scroll snaps to the latest message once when a session first loads in a pane, and a local send also forces one jump to bottom; otherwise it only sticky-scrolls while the user remains near the bottom
 - Split resize handles are overlay controls (hover-visible; always visible while dragging) so they do not reserve permanent layout width/height between panes.

@@ -16,11 +16,125 @@
     "parameters": {}
   },
   "paths": {
+    "/files/upload": {
+      "post": {
+        "tags": ["files"],
+        "summary": "Upload a file into ~/uploaded",
+        "security": [
+          {
+            "agentAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "201 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "displayPath": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "filename": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sizeBytes": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": ["path", "displayPath", "filename", "sizeBytes"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": ["error", "status"]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": ["error", "status"]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": ["error", "status"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/session": {
       "post": {
-        "tags": [
-          "session"
-        ],
+        "tags": ["session"],
         "summary": "Create or fetch a session",
         "security": [
           {
@@ -39,24 +153,14 @@
                   },
                   "harness": {
                     "type": "string",
-                    "enum": [
-                      "codex",
-                      "pi"
-                    ]
+                    "enum": ["codex", "pi"]
                   },
                   "model": {
                     "type": "string"
                   },
                   "modelReasoningEffort": {
                     "type": "string",
-                    "enum": [
-                      "off",
-                      "minimal",
-                      "low",
-                      "medium",
-                      "high",
-                      "xhigh"
-                    ]
+                    "enum": ["off", "minimal", "low", "medium", "high", "xhigh"]
                   }
                 }
               }
@@ -89,30 +193,18 @@
                       "type": "string"
                     },
                     "externalSessionId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "title": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "firstUserMessageBody": {},
                     "lastMessageBody": {},
                     "model": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "modelReasoningEffort": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "enum": [
                         "off",
                         "minimal",
@@ -159,10 +251,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -181,10 +270,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -192,9 +278,7 @@
         }
       },
       "get": {
-        "tags": [
-          "session"
-        ],
+        "tags": ["session"],
         "summary": "List sessions",
         "security": [
           {
@@ -213,19 +297,19 @@
             "name": "limit",
             "in": "query"
           },
-	          {
-	            "schema": {
-	              "type": "string"
-	            },
-	            "required": false,
-	            "name": "cursor",
-	            "in": "query"
-	          },
-	          {
-	            "schema": {
-	              "type": "string",
-	              "minLength": 1
-	            },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
             "required": false,
             "name": "q",
             "in": "query"
@@ -262,30 +346,18 @@
                             "type": "string"
                           },
                           "externalSessionId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "title": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "firstUserMessageBody": {},
                           "lastMessageBody": {},
                           "model": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "modelReasoningEffort": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
+                            "type": ["string", "null"],
                             "enum": [
                               "off",
                               "minimal",
@@ -317,16 +389,10 @@
                       }
                     },
                     "nextCursor": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     }
                   },
-                  "required": [
-                    "sessions",
-                    "nextCursor"
-                  ]
+                  "required": ["sessions", "nextCursor"]
                 }
               }
             }
@@ -345,10 +411,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -367,10 +430,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -380,9 +440,7 @@
     },
     "/session/{id}": {
       "get": {
-        "tags": [
-          "session"
-        ],
+        "tags": ["session"],
         "summary": "Get a session with messages",
         "security": [
           {
@@ -425,30 +483,18 @@
                       "type": "string"
                     },
                     "externalSessionId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "title": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "firstUserMessageBody": {},
                     "lastMessageBody": {},
                     "model": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     },
                     "modelReasoningEffort": {
-                      "type": [
-                        "string",
-                        "null"
-                      ],
+                      "type": ["string", "null"],
                       "enum": [
                         "off",
                         "minimal",
@@ -480,23 +526,14 @@
                             "type": "string"
                           },
                           "turnId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "createdBy": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
+                            "type": ["string", "null"]
                           },
                           "body": {},
                           "embeddings": {
-                            "type": [
-                              "array",
-                              "null"
-                            ],
+                            "type": ["array", "null"],
                             "items": {
                               "type": "number"
                             }
@@ -551,10 +588,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -573,10 +607,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -595,10 +626,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -606,9 +634,7 @@
         }
       },
       "delete": {
-        "tags": [
-          "session"
-        ],
+        "tags": ["session"],
         "summary": "Delete a session",
         "security": [
           {
@@ -643,11 +669,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "success",
-                    "sessionId",
-                    "message"
-                  ]
+                  "required": ["success", "sessionId", "message"]
                 }
               }
             }
@@ -666,10 +688,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -688,10 +707,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -710,10 +726,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -732,10 +745,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -745,9 +755,7 @@
     },
     "/session/{id}/message": {
       "post": {
-        "tags": [
-          "session"
-        ],
+        "tags": ["session"],
         "summary": "Start a run for a session",
         "security": [
           {
@@ -779,47 +787,35 @@
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "text"
-                              ]
+                              "enum": ["text"]
                             },
                             "text": {
                               "type": "string",
                               "minLength": 1
                             }
                           },
-                          "required": [
-                            "type",
-                            "text"
-                          ]
+                          "required": ["type", "text"]
                         },
                         {
                           "type": "object",
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "local_image"
-                              ]
+                              "enum": ["local_image"]
                             },
                             "path": {
                               "type": "string",
                               "minLength": 1
                             }
                           },
-                          "required": [
-                            "type",
-                            "path"
-                          ]
+                          "required": ["type", "path"]
                         },
                         {
                           "type": "object",
                           "properties": {
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "image"
-                              ]
+                              "enum": ["image"]
                             },
                             "data": {
                               "type": "string",
@@ -830,10 +826,7 @@
                               "minLength": 1
                             }
                           },
-                          "required": [
-                            "type",
-                            "data"
-                          ]
+                          "required": ["type", "data"]
                         }
                       ]
                     },
@@ -844,19 +837,10 @@
                   },
                   "modelReasoningEffort": {
                     "type": "string",
-                    "enum": [
-                      "off",
-                      "minimal",
-                      "low",
-                      "medium",
-                      "high",
-                      "xhigh"
-                    ]
+                    "enum": ["off", "minimal", "low", "medium", "high", "xhigh"]
                   }
                 },
-                "required": [
-                  "input"
-                ]
+                "required": ["input"]
               }
             }
           }
@@ -884,11 +868,7 @@
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "success",
-                        "sessionId",
-                        "runId"
-                      ]
+                      "required": ["success", "sessionId", "runId"]
                     },
                     {
                       "type": "object",
@@ -906,11 +886,7 @@
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "success",
-                        "sessionId",
-                        "runId"
-                      ]
+                      "required": ["success", "sessionId", "runId"]
                     }
                   ]
                 }
@@ -931,10 +907,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -953,10 +926,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -975,10 +945,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -997,10 +964,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1010,9 +974,7 @@
     },
     "/session/{id}/stream": {
       "get": {
-        "tags": [
-          "session"
-        ],
+        "tags": ["session"],
         "summary": "Stream session events (SSE)",
         "security": [
           {
@@ -1054,10 +1016,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1076,10 +1035,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1098,10 +1054,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1111,9 +1064,7 @@
     },
     "/session/{id}/message/{runId}/stream": {
       "get": {
-        "tags": [
-          "session"
-        ],
+        "tags": ["session"],
         "summary": "Stream events for a single run (SSE)",
         "security": [
           {
@@ -1163,10 +1114,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1185,10 +1133,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1207,10 +1152,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1220,9 +1162,7 @@
     },
     "/session/{id}/stop": {
       "post": {
-        "tags": [
-          "session"
-        ],
+        "tags": ["session"],
         "summary": "Stop an active run",
         "security": [
           {
@@ -1257,11 +1197,7 @@
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "success",
-                    "sessionId",
-                    "message"
-                  ]
+                  "required": ["success", "sessionId", "message"]
                 }
               }
             }
@@ -1280,10 +1216,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1302,10 +1235,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1324,10 +1254,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1337,9 +1264,7 @@
     },
     "/workspaces": {
       "get": {
-        "tags": [
-          "workspaces"
-        ],
+        "tags": ["workspaces"],
         "summary": "List workspaces",
         "security": [
           {
@@ -1349,10 +1274,7 @@
         "parameters": [
           {
             "schema": {
-              "type": [
-                "boolean",
-                "null"
-              ]
+              "type": ["boolean", "null"]
             },
             "required": false,
             "name": "includeStatus",
@@ -1405,17 +1327,11 @@
                             ]
                           }
                         },
-                        "required": [
-                          "name",
-                          "path",
-                          "isGitRepo"
-                        ]
+                        "required": ["name", "path", "isGitRepo"]
                       }
                     }
                   },
-                  "required": [
-                    "workspaces"
-                  ]
+                  "required": ["workspaces"]
                 }
               }
             }
@@ -1434,10 +1350,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1447,9 +1360,7 @@
     },
     "/workspaces/{name}/diff": {
       "get": {
-        "tags": [
-          "workspaces"
-        ],
+        "tags": ["workspaces"],
         "summary": "Get a workspace diff",
         "security": [
           {
@@ -1468,10 +1379,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "repo_head",
-                "baseline"
-              ]
+              "enum": ["repo_head", "baseline"]
             },
             "required": false,
             "name": "basis",
@@ -1489,10 +1397,7 @@
           },
           {
             "schema": {
-              "type": [
-                "boolean",
-                "null"
-              ]
+              "type": ["boolean", "null"]
             },
             "required": false,
             "name": "includePatch",
@@ -1547,17 +1452,11 @@
                     },
                     "diffBasis": {
                       "type": "string",
-                      "enum": [
-                        "repo_head",
-                        "baseline"
-                      ]
+                      "enum": ["repo_head", "baseline"]
                     },
                     "baselineStatus": {
                       "type": "string",
-                      "enum": [
-                        "ready",
-                        "building"
-                      ]
+                      "enum": ["ready", "building"]
                     }
                   },
                   "required": [
@@ -1587,10 +1486,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1609,10 +1505,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1631,10 +1524,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1644,9 +1534,7 @@
     },
     "/workspaces/{name}/diff/stream": {
       "get": {
-        "tags": [
-          "workspaces"
-        ],
+        "tags": ["workspaces"],
         "summary": "Stream workspace diff (SSE)",
         "security": [
           {
@@ -1665,10 +1553,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "repo_head",
-                "baseline"
-              ]
+              "enum": ["repo_head", "baseline"]
             },
             "required": false,
             "name": "basis",
@@ -1686,10 +1571,7 @@
           },
           {
             "schema": {
-              "type": [
-                "boolean",
-                "null"
-              ]
+              "type": ["boolean", "null"]
             },
             "required": false,
             "name": "includePatch",
@@ -1721,10 +1603,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1743,10 +1622,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1765,10 +1641,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1778,9 +1651,7 @@
     },
     "/workspaces/{name}/diff/file-contents": {
       "get": {
-        "tags": [
-          "workspaces"
-        ],
+        "tags": ["workspaces"],
         "summary": "Get file contents for a diff view",
         "security": [
           {
@@ -1799,10 +1670,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "repo_head",
-                "baseline"
-              ]
+              "enum": ["repo_head", "baseline"]
             },
             "required": false,
             "name": "basis",
@@ -1851,10 +1719,7 @@
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "name",
-                        "contents"
-                      ]
+                      "required": ["name", "contents"]
                     },
                     "newFile": {
                       "type": "object",
@@ -1866,16 +1731,10 @@
                           "type": "string"
                         }
                       },
-                      "required": [
-                        "name",
-                        "contents"
-                      ]
+                      "required": ["name", "contents"]
                     }
                   },
-                  "required": [
-                    "oldFile",
-                    "newFile"
-                  ]
+                  "required": ["oldFile", "newFile"]
                 }
               }
             }
@@ -1894,10 +1753,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1916,10 +1772,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1938,10 +1791,7 @@
                       "type": "integer"
                     }
                   },
-                  "required": [
-                    "error",
-                    "status"
-                  ]
+                  "required": ["error", "status"]
                 }
               }
             }
@@ -1951,9 +1801,7 @@
     },
     "/health": {
       "get": {
-        "tags": [
-          "health"
-        ],
+        "tags": ["health"],
         "summary": "Health check",
         "responses": {
           "200": {
@@ -1965,18 +1813,13 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "ok"
-                      ]
+                      "enum": ["ok"]
                     },
                     "timestamp": {
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "status",
-                    "timestamp"
-                  ]
+                  "required": ["status", "timestamp"]
                 }
               }
             }

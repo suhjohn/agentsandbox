@@ -53,6 +53,7 @@ Must match method/path/status semantics from Bun:
 
 - `GET /health`
 - `GET /openapi.json`
+- `POST /files/upload`
 - `POST /session`
 - `GET /session`
 - `GET /session/:id`
@@ -175,6 +176,15 @@ On create message:
 - updates session model defaults using requested values when present, otherwise configured runtime defaults
 - rejects concurrent run with `409`
 - returns `{ success, sessionId, runId, threadId? | sessionFile? }`
+
+## 6.2 File upload contract
+
+`POST /files/upload`:
+
+- requires auth
+- accepts `multipart/form-data` with one `file` part
+- writes uploads into `~/uploaded/<filename>` (deduping collisions with suffixed filenames)
+- returns `{ path, displayPath, filename, sizeBytes }`
 
 ## 6.2 Session stream contract
 

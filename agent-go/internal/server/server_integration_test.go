@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -48,6 +49,7 @@ func newTestServer(t *testing.T) testServer {
 		AgentID:                 agentID,
 		DefaultModel:            "gpt-5.2",
 		DefaultReasoningEffort:  "high",
+		AgentHome:               tmpDir,
 		DatabasePath:            dbPath,
 		WorkspacesDir:           tmpDir,
 		RuntimeDir:              tmpDir,
@@ -287,6 +289,59 @@ func TestInternalAuthSessionAndMessageLifecycle(t *testing.T) {
 			t.Fatalf("timed out waiting for user message; currently %d messages", len(msgs))
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestUploadFile(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.close()
+
+	token := buildAuthToken(t, ts.seed, "sandbox-session", "integration-user", ts.agentID)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "notes.txt")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := io.WriteString(part, "hello upload"); err != nil {
+		t.Fatalf("write upload body: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	req, _ := http.NewRequest(http.MethodPost, ts.server.URL+"/files/upload", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-Agent-Auth", "Bearer "+token)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("upload file: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", res.StatusCode)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode upload response: %v", err)
+	}
+
+	gotPath := fmt.Sprintf("%v", payload["path"])
+	if gotPath != filepath.Join(ts.root, "uploaded", "notes.txt") {
+		t.Fatalf("unexpected upload path: %q", gotPath)
+	}
+	if gotDisplayPath := fmt.Sprintf("%v", payload["displayPath"]); gotDisplayPath != filepath.Join("~", "uploaded", "notes.txt") {
+		t.Fatalf("unexpected displayPath: %q", gotDisplayPath)
+	}
+
+	content, err := os.ReadFile(gotPath)
+	if err != nil {
+		t.Fatalf("read uploaded file: %v", err)
+	}
+	if string(content) != "hello upload" {
+		t.Fatalf("unexpected uploaded file contents: %q", string(content))
 	}
 }
 

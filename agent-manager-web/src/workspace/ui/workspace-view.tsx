@@ -1422,7 +1422,7 @@ export function WorkspaceView () {
               {sessionPanelOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
             </Button>
           </TopBarTooltip>
-          <p className='text-sm font-semibold text-text-secondary'>Sandmux</p>
+          <p className='text-sm font-semibold text-text-secondary'>wmux</p>
           <div className='ml-2 flex min-w-0 items-center gap-1'>
             <div className='flex min-w-0 max-w-[32rem] items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'>
               {windows.map(window => (

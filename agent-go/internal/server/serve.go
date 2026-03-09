@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -41,6 +42,7 @@ const (
 	defaultModel           = "gpt-5.2"
 	defaultReasoningEffort = "high"
 	maxJSONBodyBytes       = 20 * 1024 * 1024
+	maxUploadBodyBytes     = 100 * 1024 * 1024
 	sseKeepaliveMS         = 5 * time.Second
 	sseKeepalivePadding    = "................"
 	workspacePingPadding   = "................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................"
@@ -60,6 +62,7 @@ type serveConfig struct {
 	DefaultReasoningEffort  string
 	OpenAIAPIKey            string
 	PIDir                   string
+	AgentHome               string
 	WorkspacesDir           string
 	RuntimeDir              string
 	DefaultWorkingDir       string
@@ -155,6 +158,7 @@ func newServerRouter(app *server) http.Handler {
 
 	router.Get("/health", app.wrap(app.handleHealth))
 	router.Get("/openapi.json", app.wrap(app.handleOpenAPI))
+	router.Post("/files/upload", app.wrap(app.handleUploadFile))
 
 	router.Post("/session", app.wrap(app.handleCreateSession))
 	router.Get("/session", app.wrap(app.handleListSessions))
@@ -217,6 +221,7 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	fs.StringVar(&cfg.SecretSeed, "secret-seed", secretDefault, "SECRET_SEED used for X-Agent-Auth verification")
 	fs.StringVar(&cfg.DefaultModel, "default-model", modelDefault, "Default model for runtime sessions")
 	fs.StringVar(&cfg.DefaultReasoningEffort, "default-reasoning-effort", reasoningEffortDefault, "Default reasoning effort for runtime sessions")
+	fs.StringVar(&cfg.AgentHome, "agent-home", home, "Agent home directory")
 	fs.StringVar(&cfg.WorkspacesDir, "workspaces-dir", workspacesDefault, "Workspaces directory")
 	fs.StringVar(&cfg.RuntimeDir, "runtime-dir", runtimeDefault, "Runtime directory (used for image normalization)")
 	fs.StringVar(&cfg.DefaultWorkingDir, "working-dir", workingDirDefault, "Default working directory for agent and terminal")
@@ -238,6 +243,10 @@ func parseServeConfig(args []string) (serveConfig, error) {
 		return serveConfig{}, errors.New("SECRET_SEED must be at least 32 chars")
 	}
 	cfg.AgentID = strings.TrimSpace(cfg.AgentID)
+	cfg.AgentHome = strings.TrimSpace(cfg.AgentHome)
+	if cfg.AgentHome == "" {
+		cfg.AgentHome = "/home/agent"
+	}
 	if cfg.AgentID == "" {
 		return serveConfig{}, errors.New("AGENT_ID must be set")
 	}
@@ -471,6 +480,105 @@ func (s *server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) error {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(openapipkg.Spec)
 	return nil
+}
+
+func (s *server) handleUploadFile(w http.ResponseWriter, r *http.Request) error {
+	if _, err := s.requireAuth(r); err != nil {
+		return err
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBodyBytes)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return fail(http.StatusRequestEntityTooLarge, "Upload exceeds maximum size")
+		}
+		return fail(http.StatusBadRequest, "Invalid multipart form body")
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+
+	src, header, err := r.FormFile("file")
+	if err != nil {
+		return fail(http.StatusBadRequest, "file is required")
+	}
+	defer src.Close()
+
+	filename := sanitizeUploadedFilename(header.Filename)
+	if filename == "" {
+		return fail(http.StatusBadRequest, "file must include a filename")
+	}
+
+	dir := s.uploadedFilesDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	path, err := nextUploadedFilePath(dir, filename)
+	if err != nil {
+		return err
+	}
+	savedFilename := filepath.Base(path)
+
+	dst, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	sizeBytes, err := io.Copy(dst, src)
+	if err != nil {
+		return err
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"path":        path,
+		"displayPath": uploadedDisplayPath(savedFilename),
+		"filename":    savedFilename,
+		"sizeBytes":   sizeBytes,
+	})
+	return nil
+}
+
+func sanitizeUploadedFilename(raw string) string {
+	name := strings.TrimSpace(filepath.Base(raw))
+	switch name {
+	case "", ".", string(filepath.Separator):
+		return ""
+	default:
+		return name
+	}
+}
+
+func (s *server) uploadedFilesDir() string {
+	return filepath.Join(s.cfg.AgentHome, "uploaded")
+}
+
+func uploadedDisplayPath(filename string) string {
+	return filepath.Join("~", "uploaded", filename)
+}
+
+func nextUploadedFilePath(dir, filename string) (string, error) {
+	ext := filepath.Ext(filename)
+	base := strings.TrimSuffix(filename, ext)
+	if base == "" {
+		base = "file"
+	}
+	candidate := filepath.Join(dir, filename)
+	if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+		return candidate, nil
+	} else if err != nil {
+		return "", err
+	}
+	for i := 1; i < 10_000; i++ {
+		next := filepath.Join(dir, fmt.Sprintf("%s-%d%s", base, i, ext))
+		if _, err := os.Stat(next); errors.Is(err, os.ErrNotExist) {
+			return next, nil
+		} else if err != nil {
+			return "", err
+		}
+	}
+	return "", errors.New("failed to allocate upload filename")
 }
 
 func (s *server) handleCreateSession(w http.ResponseWriter, r *http.Request) error {
