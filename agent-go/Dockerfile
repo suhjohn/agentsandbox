@@ -14,7 +14,8 @@ ENV OPENVSCODE_SERVER_RELEASE=${OPENVSCODE_SERVER_RELEASE} \
   RUNC_VERSION=${RUNC_VERSION} \
   GO_VERSION=${GO_VERSION} \
   UV_INSTALL_DIR=/usr/local/bin \
-  UV_NO_MODIFY_PATH=1
+  UV_NO_MODIFY_PATH=1 \
+  PATH="/usr/local/go/bin:${PATH}"
 
 # Layer 1: Base system packages (rarely changes)
 RUN set -eux; \
@@ -129,9 +130,27 @@ RUN set -eux; \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --quiet
 
 ARG AGENT_REPO_DIR=/opt/agentsandbox
+ENV AGENT_GO_CACHE_DIR=/var/cache/agent-go \
+  GOCACHE=/var/cache/agent-go/build-cache \
+  GOMODCACHE=/var/cache/agent-go/mod-cache
 
-# Copy entire repo (includes agent-go/docker and agent-go/tools)
+RUN mkdir -p "${AGENT_REPO_DIR}/agent-go" "${GOCACHE}" "${GOMODCACHE}"
+
+# Layer 9: Prewarm Go module cache from agent-go/go.mod/go.sum
+COPY agent-go/go.mod agent-go/go.sum ${AGENT_REPO_DIR}/agent-go/
+RUN set -eux; \
+  cd "${AGENT_REPO_DIR}/agent-go"; \
+  go mod download
+
+# Layer 10: Copy entire repo (includes agent-go/docker and agent-go/tools)
 COPY . ${AGENT_REPO_DIR}
+
+# Layer 11: Build the bundled agent-server binary for this image revision.
+RUN set -eux; \
+  mkdir -p /opt/agent-image; \
+  cd "${AGENT_REPO_DIR}/agent-go"; \
+  ./scripts/dev.sh build-server --output /opt/agent-image/agent-server; \
+  git rev-parse HEAD > /opt/agent-image/agent-server.rev
 
 # Symlink docker/tools to /app for backwards compatibility
 RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/docker" /app/docker \
@@ -145,6 +164,7 @@ RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/docker" /app/docker \
   && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/index.html \
   && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/vnc.html \
   && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/vnc_lite.html \
+  && chmod +x "${AGENT_REPO_DIR}/agent-go/docker/prepare-agent-server.sh" \
   && chmod +x "${AGENT_REPO_DIR}/agent-go/docker/runit/"*.sh
 
 ARG PORT=3131
@@ -170,7 +190,6 @@ ENV ROOT_DIR=${AGENT_HOME}/runtime
 ENV AGENT_GO_REPO_DIR=${AGENT_REPO_DIR}/agent-go
 ENV AGENT_GO_AUTO_PULL=1
 ENV AGENT_GO_PULL_REF=main
-ENV AGENT_GO_CACHE_DIR=${ROOT_DIR}/go
 ENV CODEX_HOME=${AGENT_HOME}/.codex
 ENV PI_CODING_AGENT_DIR=${AGENT_HOME}/.pi
 ENV HOME=${AGENT_HOME}
@@ -202,8 +221,6 @@ ENV OPENVSCODE_UPSTREAM_HOST=127.0.0.1
 ENV OPENVSCODE_UPSTREAM_PORT=39395
 ENV BROWSER_START_URL=https://www.google.com
 ENV CHROMIUM_FLAGS=""
-ENV PATH="/usr/local/go/bin:${PATH}"
-
 RUN set -eux; \
   mkdir -p \
   "${AGENT_HOME}" \
