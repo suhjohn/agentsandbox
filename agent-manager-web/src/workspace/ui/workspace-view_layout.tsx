@@ -244,14 +244,15 @@ function createPanelRuntime (
     openPanel: (
       panelType: string,
       config?: unknown,
-      options?: { readonly placement?: PanelOpenPlacement }
+      options?: { readonly placement?: PanelOpenPlacement; readonly forceNew?: boolean }
     ) => {
       store.dispatch({
         type: 'panel/open',
         fromLeafId: leafId,
         placement: options?.placement ?? 'self',
         panelType,
-        config
+        config,
+        forceNew: options?.forceNew
       })
     }
   }

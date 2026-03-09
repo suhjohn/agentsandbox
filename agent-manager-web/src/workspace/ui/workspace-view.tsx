@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -15,20 +22,27 @@ import {
   AlertCircle,
   Archive,
   Bot,
+  Calendar,
+  Check,
   CheckCircle2,
   Circle,
   Clock,
   Columns2,
+  Copy,
   Keyboard,
   Layers,
   Loader2,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   Rows2,
   Square,
+  User,
   X
 } from 'lucide-react'
+import { TbTableColumn, TbTableRow } from 'react-icons/tb'
+import { PiParachute } from 'react-icons/pi'
 import { useAuth } from '@/lib/auth'
 import {
   getAgents,
@@ -438,19 +452,119 @@ function SessionStatusIcon ({ status }: { readonly status: string }) {
 function SessionMetaRow (props: {
   readonly label: string
   readonly value: string
+  readonly icon: ReactNode
   readonly mono?: boolean
+  readonly copyable?: boolean
 }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(props.value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }, [props.value])
+
+  const displayValue = useMemo(() => {
+    if (props.value.length <= 28) return props.value
+    return `${props.value.slice(0, 12)}…${props.value.slice(-12)}`
+  }, [props.value])
+
+  const isTruncated = displayValue !== props.value
+
   return (
-    <div className='grid grid-cols-[86px_minmax(0,1fr)] gap-2 items-start'>
-      <p className='text-text-tertiary'>{props.label}</p>
-      <p
-        className={`text-text-secondary break-all ${
-          props.mono ? 'font-mono' : ''
-        }`}
-      >
-        {props.value}
-      </p>
+    <div className='h-7 grid grid-cols-[20px_minmax(0,1fr)] gap-2 items-center group'>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className='flex items-center justify-center text-text-tertiary cursor-default'>
+            {props.icon}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side='left' sideOffset={4}>
+          {props.label}
+        </TooltipContent>
+      </Tooltip>
+
+      <div className='flex items-center gap-1 min-w-0'>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <p
+              className={cn(
+                'text-text-secondary text-xs truncate',
+                props.mono && 'font-mono',
+                props.copyable && 'cursor-pointer hover:text-text-primary'
+              )}
+              onClick={props.copyable ? handleCopy : undefined}
+            >
+              {displayValue}
+            </p>
+          </TooltipTrigger>
+          {(isTruncated || props.copyable) && (
+            <TooltipContent side='top' className='max-w-xs'>
+              <p className='font-mono text-xs break-all'>{props.value}</p>
+              {props.copyable && (
+                <p className='text-text-tertiary text-[10px] mt-1'>
+                  Click to copy
+                </p>
+              )}
+            </TooltipContent>
+          )}
+        </Tooltip>
+
+        {props.copyable && (
+          <button
+            type='button'
+            onClick={handleCopy}
+            className='opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-text-primary'
+          >
+            {copied ? (
+              <Check className='h-3 w-3 text-green-500' />
+            ) : (
+              <Copy className='h-3 w-3' />
+            )}
+          </button>
+        )}
+      </div>
     </div>
+  )
+}
+
+function SessionIdDisplay (props: { readonly sessionId: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(props.sessionId)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }, [props.sessionId])
+
+  const truncatedId = useMemo(() => {
+    if (props.sessionId.length <= 20) return props.sessionId
+    return `${props.sessionId.slice(0, 8)}…${props.sessionId.slice(-8)}`
+  }, [props.sessionId])
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type='button'
+            onClick={handleCopy}
+            className='flex items-center gap-1 mt-0.5 text-[10px] font-mono text-text-tertiary hover:text-text-secondary transition-colors group'
+          >
+            <span>{truncatedId}</span>
+            {copied ? (
+              <Check className='h-2.5 w-2.5 text-green-500' />
+            ) : (
+              <Copy className='h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity' />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side='bottom' className='max-w-xs'>
+          <p className='font-mono text-xs break-all'>{props.sessionId}</p>
+          <p className='text-text-tertiary text-[10px] mt-1'>Click to copy</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
@@ -875,6 +989,55 @@ export function WorkspaceView () {
       })
     },
     [panelTargetLeafId, store]
+  )
+
+  const openAgentSessionToWindowSplit = useCallback(
+    (input: {
+      readonly agentId: string
+      readonly sessionId: string
+      readonly sessionTitle?: string | null
+      readonly agentName?: string
+      readonly dir: 'row' | 'col'
+    }) => {
+      const beforeState = store.getState()
+      const beforeWindow = beforeState.windowsById[beforeState.activeWindowId]
+      if (!beforeWindow) return
+      const beforeLeafIds = listLeafIds(beforeWindow.root)
+
+      store.dispatch({
+        type: 'window/split-full',
+        dir: input.dir,
+        insertBefore: false
+      })
+
+      const afterState = store.getState()
+      const afterWindow = afterState.windowsById[afterState.activeWindowId]
+      if (!afterWindow) return
+      const afterLeafIds = listLeafIds(afterWindow.root)
+      const newLeafId =
+        afterLeafIds.find(id => !beforeLeafIds.includes(id)) ??
+        afterWindow.focusedLeafId ??
+        null
+      if (!newLeafId) return
+
+      store.dispatch({
+        type: 'panel/open',
+        fromLeafId: newLeafId,
+        placement: 'self',
+        panelType: 'agent_detail',
+        config: {
+          agentId: input.agentId,
+          agentName: input.agentName?.trim() ?? '',
+          activeTab: 'session_detail',
+          sessionLimit: 20,
+          sessionId: input.sessionId,
+          sessionTitle: input.sessionTitle?.trim() ?? '',
+          diffBasis: 'repo_head',
+          diffStyle: 'split'
+        }
+      })
+    },
+    [store]
   )
 
   const createSessionMutation = useMutation({
@@ -1689,128 +1852,170 @@ export function WorkspaceView () {
                 }}
                 onMouseEnter={clearSessionDetailHideTimeout}
                 onMouseLeave={scheduleHideSessionDetailCard}
-	              >
-	                <div className='w-[320px] rounded-lg border border-border bg-surface-1/95 shadow-xl backdrop-blur-sm p-3 space-y-2'>
-	                  <p className='text-xs font-semibold text-text-primary'>
-	                    Session Details
-	                  </p>
-	                  <div className='space-y-1.5 text-[11px] leading-4'>
-	                    <SessionMetaRow
-	                      label='image'
-	                      value={
-	                        hoveredSessionDetail.session.imageId
-                          ? `${
-                              imageNameById.get(
-                                hoveredSessionDetail.session.imageId
-                              ) ?? hoveredSessionDetail.session.imageId
-                            } (${hoveredSessionDetail.session.imageId})`
-                          : 'No image'
+              >
+                <div className='w-[320px] border border-border bg-surface-1/95 shadow-xl backdrop-blur-sm p-1'>
+                  <div className='p-2 pb-1'>
+                    <p className='text-xs font-semibold text-text-primary'>
+                      {hoveredSessionDetail.session.title?.trim() ||
+                        'Untitled session'}
+                    </p>
+                    <SessionIdDisplay
+                      sessionId={hoveredSessionDetail.session.id}
+                    />
+                  </div>
+                  <TooltipProvider delayDuration={200}>
+                    <div className='px-2 text-[11px] leading-4'>
+                      <SessionMetaRow
+                        label='Image'
+                        icon={<Package className='h-3.5 w-3.5' />}
+                        value={
+                          hoveredSessionDetail.session.imageId
+                            ? `${
+                                imageNameById.get(
+                                  hoveredSessionDetail.session.imageId
+                                ) ?? hoveredSessionDetail.session.imageId
+                              } (${hoveredSessionDetail.session.imageId})`
+                            : 'No image'
+                        }
+                        copyable={!!hoveredSessionDetail.session.imageId}
+                      />
+                      <SessionMetaRow
+                        label='Agent'
+                        icon={<Bot className='h-3.5 w-3.5' />}
+                        value={`${
+                          agentNameById.get(
+                            hoveredSessionDetail.session.agentId
+                          ) ?? hoveredSessionDetail.session.agentId
+                        } (${hoveredSessionDetail.session.agentId})`}
+                        copyable
+                      />
+                      <SessionMetaRow
+                        label='Harness'
+                        icon={<PiParachute className='h-3.5 w-3.5' />}
+                        value={
+                          hoveredSessionDetail.session.harness || 'unknown'
+                        }
+                      />
+                      <SessionMetaRow
+                        label='Created by'
+                        icon={<User className='h-3.5 w-3.5' />}
+                        value={
+                          userNameById.get(
+                            hoveredSessionDetail.session.createdBy
+                          ) ?? hoveredSessionDetail.session.createdBy
+                        }
+                      />
+                      <SessionMetaRow
+                        label='Updated'
+                        icon={<Calendar className='h-3.5 w-3.5' />}
+                        value={
+                          formatTimestamp(
+                            hoveredSessionDetail.session.updatedAt
+                          ) || hoveredSessionDetail.session.updatedAt
+                        }
+                      />
+                    </div>
+                  </TooltipProvider>
+                  <div className='flex flex-col'>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 justify-start text-xs [&_svg]:size-3.5'
+                      title='Open in this pane'
+                      aria-label='Open in this pane'
+                      onClick={() =>
+                        openAgentSession({
+                          agentId: hoveredSessionDetail.session.agentId,
+                          sessionId: hoveredSessionDetail.session.id,
+                          sessionTitle: hoveredSessionDetail.session.title,
+                          placement: 'self'
+                        })
                       }
-                    />
-                    <SessionMetaRow
-                      label='agent'
-                      value={`${
-                        agentNameById.get(
-                          hoveredSessionDetail.session.agentId
-                        ) ?? hoveredSessionDetail.session.agentId
-                      } (${hoveredSessionDetail.session.agentId})`}
-                    />
-                    <SessionMetaRow
-                      label='session'
-                      value={`${
-                        hoveredSessionDetail.session.title?.trim() ||
-                        'Untitled session'
-                      } (${hoveredSessionDetail.session.id})`}
-                    />
-                    <SessionMetaRow
-                      label='status'
-                      value={formatStatusLabel(
-                        hoveredSessionDetail.session.status
-                      )}
-                    />
-                    <SessionMetaRow
-                      label='harness'
-                      value={hoveredSessionDetail.session.harness || 'unknown'}
-                    />
-                    <SessionMetaRow
-                      label='created by'
-                      value={
-                        userNameById.get(
-                          hoveredSessionDetail.session.createdBy
-                        ) ?? hoveredSessionDetail.session.createdBy
-	                      }
-	                    />
-	                    <SessionMetaRow
-	                      label='updated'
-	                      value={
-	                        formatTimestamp(
-	                          hoveredSessionDetail.session.updatedAt
-	                        ) || hoveredSessionDetail.session.updatedAt
-	                      }
-	                    />
-	                  </div>
-	                  <div className='pt-2 border-t border-border/60 flex items-center justify-end gap-1.5'>
-	                    <Button
-	                      type='button'
-	                      variant='secondary'
-	                      size='sm'
-	                      className='h-7 px-2 text-[11px] [&_svg]:size-3.5'
-	                      title='Open in this pane'
-	                      aria-label='Open in this pane'
-	                      onClick={() =>
-	                        openAgentSession({
-	                          agentId: hoveredSessionDetail.session.agentId,
-	                          sessionId: hoveredSessionDetail.session.id,
-	                          sessionTitle: hoveredSessionDetail.session.title,
-	                          placement: 'self'
-	                        })
-	                      }
-	                    >
-	                      <Square />
-	                      Panel
-	                    </Button>
-	                    <Button
-	                      type='button'
-	                      variant='secondary'
-	                      size='sm'
-	                      className='h-7 px-2 text-[11px] [&_svg]:size-3.5'
-	                      title='Open on the right (split)'
-	                      aria-label='Open on the right (split)'
-	                      onClick={() =>
-	                        openAgentSession({
-	                          agentId: hoveredSessionDetail.session.agentId,
-	                          sessionId: hoveredSessionDetail.session.id,
-	                          sessionTitle: hoveredSessionDetail.session.title,
-	                          placement: 'right'
-	                        })
-	                      }
-	                    >
-	                      <Columns2 />
-	                      Right
-	                    </Button>
-	                    <Button
-	                      type='button'
-	                      variant='secondary'
-	                      size='sm'
-	                      className='h-7 px-2 text-[11px] [&_svg]:size-3.5'
-	                      title='Open on the bottom (stack)'
-	                      aria-label='Open on the bottom (stack)'
-	                      onClick={() =>
-	                        openAgentSession({
-	                          agentId: hoveredSessionDetail.session.agentId,
-	                          sessionId: hoveredSessionDetail.session.id,
-	                          sessionTitle: hoveredSessionDetail.session.title,
-	                          placement: 'bottom'
-	                        })
-	                      }
-	                    >
-	                      <Rows2 />
-	                      Bottom
-	                    </Button>
-	                  </div>
-	                </div>
-	              </div>
-	            ) : null}
+                    >
+                      <Square />
+                      Open on selected pane
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 justify-start text-xs [&_svg]:size-3.5'
+                      title='Open on the right (split)'
+                      aria-label='Open on the right (split)'
+                      onClick={() =>
+                        openAgentSession({
+                          agentId: hoveredSessionDetail.session.agentId,
+                          sessionId: hoveredSessionDetail.session.id,
+                          sessionTitle: hoveredSessionDetail.session.title,
+                          placement: 'right'
+                        })
+                      }
+                    >
+                      <Columns2 />
+                      Open to side
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 justify-start text-xs [&_svg]:size-3.5'
+                      title='Open on the bottom (stack)'
+                      aria-label='Open on the bottom (stack)'
+                      onClick={() =>
+                        openAgentSession({
+                          agentId: hoveredSessionDetail.session.agentId,
+                          sessionId: hoveredSessionDetail.session.id,
+                          sessionTitle: hoveredSessionDetail.session.title,
+                          placement: 'bottom'
+                        })
+                      }
+                    >
+                      <Rows2 />
+                      Open to bottom
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 justify-start text-xs [&_svg]:size-3.5'
+                      title='Open to window side (full height split)'
+                      aria-label='Open to window side'
+                      onClick={() =>
+                        openAgentSessionToWindowSplit({
+                          agentId: hoveredSessionDetail.session.agentId,
+                          sessionId: hoveredSessionDetail.session.id,
+                          sessionTitle: hoveredSessionDetail.session.title,
+                          dir: 'row'
+                        })
+                      }
+                    >
+                      <TbTableColumn className='-scale-x-100' />
+                      Open to window side
+                    </Button>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-7 justify-start text-xs [&_svg]:size-3.5'
+                      title='Open to window bottom (full width split)'
+                      aria-label='Open to window bottom'
+                      onClick={() =>
+                        openAgentSessionToWindowSplit({
+                          agentId: hoveredSessionDetail.session.agentId,
+                          sessionId: hoveredSessionDetail.session.id,
+                          sessionTitle: hoveredSessionDetail.session.title,
+                          dir: 'col'
+                        })
+                      }
+                    >
+                      <TbTableRow className='-scale-y-100' />
+                      Open to window bottom
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div
               role='separator'
               aria-orientation='vertical'

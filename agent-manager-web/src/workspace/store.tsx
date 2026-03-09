@@ -90,6 +90,7 @@ export type WorkspaceAction =
       readonly placement: "self" | "left" | "right" | "top" | "bottom";
       readonly panelType: string;
       readonly config?: unknown;
+      readonly forceNew?: boolean;
     }
   | { readonly type: "agent/archive"; readonly agentId: string }
   | { readonly type: "preset/pin"; readonly name: string }
@@ -100,6 +101,20 @@ export interface WorkspaceStore {
   getState: () => WorkspaceState;
   subscribe: (listener: Listener) => () => void;
   dispatch: (action: WorkspaceAction) => void;
+}
+
+declare global {
+  var __agentManagerWorkspaceStoreContext:
+    | React.Context<WorkspaceStore | null>
+    | undefined;
+}
+
+function getWorkspaceStoreContext(): React.Context<WorkspaceStore | null> {
+  if (!globalThis.__agentManagerWorkspaceStoreContext) {
+    globalThis.__agentManagerWorkspaceStoreContext =
+      createContext<WorkspaceStore | null>(null);
+  }
+  return globalThis.__agentManagerWorkspaceStoreContext;
 }
 
 function createPanelInstance(type: string): PanelInstance {
@@ -884,13 +899,15 @@ function reduce(state: WorkspaceState, action: WorkspaceAction): WorkspaceState 
 
         const dir: SplitDirection =
           action.placement === "left" || action.placement === "right" ? "row" : "col";
-        const adjacentLeafId = findAdjacentLeafIdByPlacement(
-          window.root,
-          action.fromLeafId,
-          action.placement,
-        );
-        if (adjacentLeafId) {
-          return replacePanelInLeaf(window, adjacentLeafId, action.panelType, action.config);
+        if (!action.forceNew) {
+          const adjacentLeafId = findAdjacentLeafIdByPlacement(
+            window.root,
+            action.fromLeafId,
+            action.placement,
+          );
+          if (adjacentLeafId) {
+            return replacePanelInLeaf(window, adjacentLeafId, action.panelType, action.config);
+          }
         }
 
         const newPanel = withPanelConfig(createPanelInstance(action.panelType), action.config);
@@ -1000,7 +1017,7 @@ function createStore(initialState: WorkspaceState): WorkspaceStore {
   return store;
 }
 
-const WorkspaceStoreContext = createContext<WorkspaceStore | null>(null);
+const WorkspaceStoreContext = getWorkspaceStoreContext();
 
 export function WorkspaceProvider(props: {
   readonly userId: string | null | undefined;

@@ -4,7 +4,8 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState
+  useState,
+  type ReactNode
 } from 'react'
 import {
   useMutation,
@@ -23,9 +24,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { ModelCombobox } from '@/components/ui/model-combobox'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
-import { Check, ChevronsUpDown, Code, Copy, GitCommit, GitCompare, Globe, Terminal } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Check, ChevronsUpDown, Code, Columns2, Columns3Icon, Copy, GitCommit, GitCompare, Globe, Rows, Rows2, Square, TableColumnsSplit, Terminal } from 'lucide-react'
 import { Loader, SandboxLoader } from '@/components/loader'
 import { toast } from 'sonner'
 import {
@@ -49,6 +51,9 @@ import { CodexMessages } from '@/components/messages/codex-message'
 import { PiMessages } from '@/components/messages/pi-message'
 import type { PanelProps } from './types'
 import { parseBody as parseBodyUtil } from './session-message-utils'
+import { useWorkspaceStore } from '../store'
+import { listLeafIds } from '../layout'
+import { TbTableColumn, TbTableRow } from 'react-icons/tb'
 
 export interface AgentSessionPanelConfig {
   readonly agentId: string
@@ -86,6 +91,7 @@ type ThinkingLevel =
   PostSessionBodyModelReasoningEffort &
   PostSessionIdMessageBodyModelReasoningEffort
 type SelectedThinkingLevel = '' | ThinkingLevel
+type SessionToolTab = 'terminal' | 'browser' | 'vscode' | 'diff'
 
 const CODEX_THINKING_LEVELS: readonly ThinkingLevel[] = [
   'minimal',
@@ -266,7 +272,11 @@ function ThinkingLevelCombobox (props: {
           <ChevronsUpDown className='h-3.5 w-3.5 shrink-0 opacity-50' />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className='w-[180px] p-1' align='start'>
+      <PopoverContent
+        align='start'
+        sideOffset={4}
+        className='w-[180px] p-1 bg-surface-1/95 backdrop-blur-sm'
+      >
         <div className='space-y-0.5'>
           <button
             type='button'
@@ -1332,6 +1342,7 @@ function useStickyScroll (
 
 function SessionComposer (props: {
   readonly agentId: string
+  readonly agentName?: string
   readonly sessionId: string
   readonly access: GetAgentsAgentIdAccess200
   readonly harness: 'codex' | 'pi'
@@ -1340,6 +1351,7 @@ function SessionComposer (props: {
   readonly availableModels: readonly CatalogModel[]
   readonly availableThinkingLevels: readonly ThinkingLevel[]
   readonly setConfig: PanelProps<AgentSessionPanelConfig>['setConfig']
+  readonly runtime: PanelProps<AgentSessionPanelConfig>['runtime']
   readonly isSendingOptimistic: boolean
   readonly onSelectedModelChange: (model: string) => void
   readonly onSelectedModelReasoningEffortChange: (
@@ -1353,11 +1365,203 @@ function SessionComposer (props: {
   readonly inputRef: { current: HTMLTextAreaElement | null }
 }) {
   const queryClient = useQueryClient()
+  const workspaceStore = useWorkspaceStore()
 
   const [draft, setDraft] = useState('')
   const [copied, setCopied] = useState(false)
   const [copyDropdownOpen, setCopyDropdownOpen] = useState(false)
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const buildAgentDetailConfig = useCallback(
+    (activeTab: SessionToolTab) => ({
+      agentId: props.agentId,
+      agentName: props.agentName?.trim() ?? '',
+      activeTab,
+      sessionLimit: 20,
+      sessionId: props.sessionId,
+      sessionTitle: '',
+      sessionModel: props.selectedModel,
+      sessionModelReasoningEffort: props.selectedModelReasoningEffort,
+      sessionHarness: props.harness,
+      diffStyle: 'split' as const
+    }),
+    [
+      props.agentId,
+      props.agentName,
+      props.harness,
+      props.selectedModel,
+      props.selectedModelReasoningEffort,
+      props.sessionId
+    ]
+  )
+
+  const replaceInPane = useCallback(
+    (activeTab: SessionToolTab) => {
+      props.runtime.replaceSelf('agent_detail', buildAgentDetailConfig(activeTab))
+    },
+    [buildAgentDetailConfig, props.runtime]
+  )
+
+  const openToSide = useCallback(
+    (activeTab: SessionToolTab) => {
+      props.runtime.openPanel('agent_detail', buildAgentDetailConfig(activeTab), {
+        placement: 'right',
+        forceNew: true
+      })
+    },
+    [buildAgentDetailConfig, props.runtime]
+  )
+
+  const openToBottom = useCallback(
+    (activeTab: SessionToolTab) => {
+      props.runtime.openPanel('agent_detail', buildAgentDetailConfig(activeTab), {
+        placement: 'bottom',
+        forceNew: true
+      })
+    },
+    [buildAgentDetailConfig, props.runtime]
+  )
+
+  const openToWindowSplit = useCallback(
+    (
+      activeTab: SessionToolTab,
+      dir: 'row' | 'col'
+    ) => {
+      const beforeState = workspaceStore.getState()
+      const beforeWindow = beforeState.windowsById[beforeState.activeWindowId]
+      if (!beforeWindow) return
+      const beforeLeafIds = listLeafIds(beforeWindow.root)
+
+      workspaceStore.dispatch({
+        type: 'window/split-full',
+        dir,
+        insertBefore: false
+      })
+
+      const afterState = workspaceStore.getState()
+      const afterWindow = afterState.windowsById[afterState.activeWindowId]
+      if (!afterWindow) return
+      const afterLeafIds = listLeafIds(afterWindow.root)
+      const newLeafId =
+        afterLeafIds.find(id => !beforeLeafIds.includes(id)) ??
+        afterWindow.focusedLeafId ??
+        null
+      if (!newLeafId) return
+
+      workspaceStore.dispatch({
+        type: 'panel/open',
+        fromLeafId: newLeafId,
+        placement: 'self',
+        panelType: 'agent_detail',
+        config: buildAgentDetailConfig(activeTab)
+      })
+    },
+    [buildAgentDetailConfig, workspaceStore]
+  )
+
+  function ToolOpenMenuButton (tool: {
+    readonly label: string
+    readonly icon: ReactNode
+    readonly tab: SessionToolTab
+  }) {
+    const [open, setOpen] = useState(false)
+
+    return (
+      <HoverCard open={open} onOpenChange={setOpen} openDelay={0} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          <Button
+            variant='icon'
+            size='icon'
+            title={tool.label}
+            aria-label={tool.label}
+            onClick={() => {
+              openToSide(tool.tab)
+              setOpen(false)
+            }}
+          >
+            {tool.icon}
+          </Button>
+        </HoverCardTrigger>
+        <HoverCardContent
+          align='end'
+          sideOffset={8}
+          className='w-[240px] p-2 bg-surface-1/95 backdrop-blur-sm'
+        >
+          <p className='px-1 pb-1 text-xs font-semibold text-text-primary'>
+            {tool.label}
+          </p>
+          <div className='flex flex-col'>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='h-8 justify-start px-2 text-xs'
+              onClick={() => {
+                replaceInPane(tool.tab)
+                setOpen(false)
+              }}
+            >
+              <Square className="h-4 w-4" />
+              Open
+            </Button>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='h-8 justify-start px-2 text-xs'
+              onClick={() => {
+                openToSide(tool.tab)
+                setOpen(false)
+              }}
+            >
+              <Columns2 className="h-4 w-4" />
+              Open to side
+            </Button>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='h-8 justify-start px-2 text-xs'
+              onClick={() => {
+                openToBottom(tool.tab)
+                setOpen(false)
+              }}
+            >
+              <Rows2 className="h-4 w-4 -scale-y-100" />
+              Open to bottom
+            </Button>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='h-8 justify-start px-2 text-xs'
+              onClick={() => {
+                openToWindowSplit(tool.tab, 'row')
+                setOpen(false)
+              }}
+            >
+              <TbTableColumn className="h-4 w-4 -scale-x-100" />
+              Open to window side
+            </Button>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='h-8 justify-start px-2 text-xs'
+              onClick={() => {
+                openToWindowSplit(tool.tab, 'col')
+                setOpen(false)
+              }}
+            >
+              <TbTableRow className="h-4 w-4 -scale-y-100" />
+
+              Open to window bottom
+            </Button>
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+    )
+  }
 
   const doCopy = useCallback(
     async (format: CopyFormat) => {
@@ -1501,19 +1705,27 @@ function SessionComposer (props: {
 
   return (
     <div className='mx-3 flex flex-col'>
-      <div className="w-full flex justify-end gap-1">
-        <Button variant="icon" size="icon">
-          <Terminal className="h-4 w-4" />
-        </Button>
-        <Button variant="icon" size="icon">
-          <Globe className="h-4 w-4" />
-        </Button>
-        <Button variant="icon" size="icon">
-          <Code className="h-4 w-4" />
-        </Button>
-        <Button variant="icon" size="icon">
-          <GitCompare className="h-4 w-4" />
-        </Button>
+      <div className='w-full flex justify-end gap-1'>
+        <ToolOpenMenuButton
+          label='Terminal'
+          tab='terminal'
+          icon={<Terminal className='h-4 w-4' />}
+        />
+        <ToolOpenMenuButton
+          label='Browser'
+          tab='browser'
+          icon={<Globe className='h-4 w-4' />}
+        />
+        <ToolOpenMenuButton
+          label='VSCode'
+          tab='vscode'
+          icon={<Code className='h-4 w-4' />}
+        />
+        <ToolOpenMenuButton
+          label='Diff'
+          tab='diff'
+          icon={<GitCompare className='h-4 w-4' />}
+        />
       </div>
       <div className='bg-surface-3'>
         <Textarea
@@ -2033,6 +2245,7 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
             <SessionComposer
               key={`${agentId}:${sessionId}`}
               agentId={agentId}
+              agentName={props.config.agentName}
               sessionId={sessionId}
               access={access}
               harness={sessionHarness}
@@ -2041,6 +2254,7 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
               availableModels={availableModels}
               availableThinkingLevels={availableThinkingLevels}
               setConfig={props.setConfig}
+              runtime={props.runtime}
               isSendingOptimistic={isOptimisticSending}
               onSelectedModelChange={model => {
                 props.setConfig(prev => ({

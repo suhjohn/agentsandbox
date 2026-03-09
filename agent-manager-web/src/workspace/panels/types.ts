@@ -9,7 +9,7 @@ export interface PanelRuntime {
   readonly openPanel: (
     panelType: PanelTypeId,
     config?: unknown,
-    options?: { readonly placement?: PanelOpenPlacement },
+    options?: { readonly placement?: PanelOpenPlacement; readonly forceNew?: boolean },
   ) => void;
 }
 

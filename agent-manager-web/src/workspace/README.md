@@ -36,6 +36,7 @@ This document describes how pane and panel behavior flows through the workspace 
 ## Top-Down Render Flow
 
 1. `WorkspacePage` wraps `WorkspaceView` with `WorkspaceProvider`.
+   `WorkspaceProvider` uses a `globalThis`-backed context singleton so Vite/Fast Refresh updates do not temporarily disconnect `useWorkspaceStore` consumers from the active provider.
 2. `WorkspaceView` renders:
    - the top bar (`Sandmux` + workspace controls + window chips)
    - `WorkspaceHotkeysLayer` (workspace keybinding engine + overlays)
@@ -144,10 +145,11 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
 - In `agent_detail` session detail, the bottom composer bar is owned by `panels/agent-session.tsx` and includes:
   - harness label
   - model combobox
-  - thinking-level dropdown persisted in panel config as `sessionModelReasoningEffort`
+  - thinking-level dropdown persisted in panel config as `sessionModelReasoningEffort`; it uses a custom fixed-position floating menu instead of `Popover`, and flips above the trigger when there is not enough room below
   - valid thinking options are harness-specific: `codex` -> default or `minimal|low|medium|high|xhigh`; `pi` -> default or `off|minimal|low|medium|high|xhigh`
   - composer create/send/reset calls forward both `model` and `modelReasoningEffort` to the runtime session API
   - empty `Default model` / `Default thinking` selections are forwarded as explicit empty values so the runtime can materialize configured defaults onto the session record instead of silently keeping a previous override
+  - tool icons for `Terminal`, `Browser`, `VSCode`, and `Diff` default to opening that tool in a side pane on click; hovering an icon opens a custom fixed-position hover card with `Open`, `Open to side`, `Open to bottom`, `Open to window side`, and `Open to window bottom`, and the card flips above the icon when needed instead of forcing panel scroll
   - session detail scroll snaps to the latest message once when a session first loads in a pane, and a local send also forces one jump to bottom; otherwise it only sticky-scrolls while the user remains near the bottom
 - Split resize handles are overlay controls (hover-visible; always visible while dragging) so they do not reserve permanent layout width/height between panes.
 - `split/resize-direction` adjusts the nearest eligible ancestor split for the focused leaf (tmux-style directional resize) using a small ratio step.
