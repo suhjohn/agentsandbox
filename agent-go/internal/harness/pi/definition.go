@@ -222,6 +222,9 @@ func compactEventForStream(value map[string]any) (map[string]any, bool) {
 		}, true
 	case "tool_execution_end":
 		out := map[string]any{"type": "tool_execution_end"}
+		if toolCallId := strings.TrimSpace(firstNonEmptyString(value["toolCallId"])); toolCallId != "" {
+			out["toolCallId"] = toolCallId
+		}
 		if toolName := strings.TrimSpace(firstNonEmptyString(value["toolName"])); toolName != "" {
 			out["toolName"] = toolName
 		}
@@ -325,6 +328,9 @@ func compactMessageContent(content any) []map[string]any {
 				})
 			case "toolCall":
 				next := map[string]any{"type": "toolCall"}
+				if id := strings.TrimSpace(firstNonEmptyString(item["id"])); id != "" {
+					next["id"] = id
+				}
 				if name := strings.TrimSpace(firstNonEmptyString(item["name"])); name != "" {
 					next["name"] = name
 				}

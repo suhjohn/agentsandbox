@@ -119,19 +119,8 @@ function toTextContent (content: unknown): string[] {
       parts.push(`**Thinking**\n\n${item.thinking}`)
       continue
     }
-    if (type === 'toolCall') {
-      const name = typeof item.name === 'string' ? item.name : 'tool'
-      const args =
-        item.arguments && typeof item.arguments === 'object'
-          ? JSON.stringify(item.arguments, null, 2)
-          : ''
-      parts.push(
-        args.length > 0
-          ? `**Tool call: ${name}**\n\n\`\`\`json\n${args}\n\`\`\``
-          : `**Tool call: ${name}**`
-      )
-      continue
-    }
+    // Skip toolCall items - they're shown via tool_execution_end events
+    if (type === 'toolCall') continue
     if (type === 'image' && typeof item.mimeType === 'string') {
       parts.push(`[image: ${item.mimeType}]`)
       continue
@@ -398,7 +387,7 @@ function PiCollapsibleBlock (props: {
     <Collapsible
       open={isOpen}
       onOpenChange={setIsOpen}
-      className='w-full text-sm text-text-primary'
+      className='w-full text-sm'
       data-collapsible-toggle-all='true'
       data-collapsible-open={isOpen ? 'true' : 'false'}
     >
@@ -424,7 +413,7 @@ function PiCollapsibleBlock (props: {
         ) : null}
         {props.status ? <StatusIcon status={props.status} /> : null}
       </CollapsibleTrigger>
-      <CollapsibleContent className='ml-6 mt-1 px-3 py-2 bg-surface-3 text-xs text-text-primary'>
+      <CollapsibleContent className='ml-6 mt-1 px-3 py-2 bg-surface-3 text-xs'>
         {props.children}
       </CollapsibleContent>
     </Collapsible>
@@ -583,7 +572,7 @@ export function PiMessage (props: {
       <div
         className={`${
           props.isFirst ? '' : 'mt-8'
-        } w-full bg-surface-3 px-3 py-2 text-sm text-text-primary whitespace-pre-wrap break-words`}
+        } w-full bg-surface-3 px-3 py-2 text-sm whitespace-pre-wrap break-words`}
       >
         {text}
       </div>
@@ -653,7 +642,7 @@ export function PiMessage (props: {
     const text = extractPiMessageText(message)
     if (text && text.trim().length > 0) {
       return (
-        <div className='text-sm text-text-primary'>
+        <div className='text-sm'>
           <Markdown>{text}</Markdown>
         </div>
       )
