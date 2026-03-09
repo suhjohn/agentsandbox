@@ -3,14 +3,13 @@ import type { GetSessionId200MessagesItem } from '@/api/generated/agent'
 import type { AgentSessionEvent } from '@mariozechner/pi-coding-agent'
 import type { UserInput } from '@openai/codex-sdk'
 import type { ChatMessage } from '@/types/chat'
-import { Check, ChevronRight, X } from 'lucide-react'
-import { getCssVarAsNumber } from '@/utils/css-vars'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible'
-import { Markdown } from '@/components/markdown'
+import { MessageTextBlock } from '@/components/messages/message-text-block'
+import { StatusIndicator } from '@/components/messages/status-indicator'
 
 type StoredSessionMessage = { readonly id: string; readonly body: unknown }
 type PiUserInputEvent = {
@@ -390,27 +389,76 @@ function useCollapsibleToggleAll (initial = false) {
   return [isOpen, setIsOpen] as const
 }
 
-function StatusIcon (props: { readonly status: string }) {
-  const iconSize = getCssVarAsNumber('--size-icon-sm', 14)
-  if (props.status === 'completed') {
-    return (
-      <Check size={iconSize - 2} className='flex-shrink-0 text-green-500' />
+function formatArgsFlat (args: unknown, prefix = ''): string[] {
+  if (args === null || args === undefined) return []
+  // If args is a JSON string, parse it first
+  if (typeof args === 'string') {
+    try {
+      const parsed = JSON.parse(args)
+      if (typeof parsed === 'object' && parsed !== null) {
+        return formatArgsFlat(parsed, prefix)
+      }
+    } catch {
+      // Not JSON, treat as plain string
+    }
+    return prefix ? [`${prefix}: ${args}`] : [args]
+  }
+  if (Array.isArray(args)) {
+    const items = args.map(item =>
+      typeof item === 'object' && item !== null
+        ? JSON.stringify(item)
+        : String(item)
     )
+    return prefix ? [`${prefix}: ${items.join(', ')}`] : [items.join(', ')]
   }
-  if (props.status === 'failed') {
-    return <X size={iconSize - 2} className='flex-shrink-0 text-red-500' />
+  if (typeof args === 'object') {
+    const lines: string[] = []
+    for (const [key, value] of Object.entries(
+      args as Record<string, unknown>
+    )) {
+      const fullKey = prefix ? `${prefix}.${key}` : key
+      if (value === null || value === undefined) {
+        lines.push(`${fullKey}: null`)
+      } else if (Array.isArray(value)) {
+        const items = value.map(item =>
+          typeof item === 'object' && item !== null
+            ? JSON.stringify(item)
+            : String(item)
+        )
+        lines.push(`${fullKey}: ${items.join(', ')}`)
+      } else if (typeof value === 'object') {
+        lines.push(...formatArgsFlat(value, fullKey))
+      } else {
+        lines.push(`${fullKey}: ${String(value)}`)
+      }
+    }
+    return lines
   }
-  return null
+  return prefix ? [`${prefix}: ${String(args)}`] : [String(args)]
 }
 
-function PiCollapsibleBlock (props: {
-  readonly title: string
-  readonly subtitle?: string
-  readonly badge?: string
+function truncateArgs (args: unknown, maxLen = 60): string {
+  if (!args) return ''
+  const lines = formatArgsFlat(args)
+  // If only one key, show just the value
+  let str: string
+  if (lines.length === 1 && lines[0].includes(': ')) {
+    str = lines[0].split(': ').slice(1).join(': ')
+  } else {
+    str = lines.join(', ')
+  }
+  if (str.length <= maxLen) return str
+  return str.slice(0, maxLen) + '…'
+}
+
+function PiToolExecutionBlock (props: {
+  readonly toolName: string
+  readonly resultText: string
   readonly status?: string
-  readonly children: React.ReactNode
 }) {
   const [isOpen, setIsOpen] = useCollapsibleToggleAll()
+  const status = props.status ?? 'completed'
+
   return (
     <Collapsible
       open={isOpen}
@@ -420,98 +468,99 @@ function PiCollapsibleBlock (props: {
       data-collapsible-open={isOpen ? 'true' : 'false'}
     >
       <CollapsibleTrigger className='flex items-center gap-2 w-full py-1 border-none cursor-pointer'>
-        <ChevronRight
-          size={getCssVarAsNumber('--size-icon-sm', 14)}
-          className={`flex-shrink-0 transition-transform duration-200 text-text-tertiary ${
-            isOpen ? 'rotate-90' : ''
-          }`}
-        />
-        {props.badge ? (
-          <span className='text-[10px] px-1.5 py-0.5 bg-surface-3 text-text-tertiary font-mono flex-shrink-0'>
-            {props.badge}
-          </span>
-        ) : null}
-        <span className='font-medium text-text-primary truncate'>
-          {props.title}
+        <StatusIndicator status={status} />
+        <span className='font-mono text-green-400 truncate'>
+          {props.toolName}
         </span>
-        {props.subtitle ? (
-          <span className='text-xs text-text-tertiary flex-shrink-0'>
-            {props.subtitle}
-          </span>
-        ) : null}
-        {props.status ? <StatusIcon status={props.status} /> : null}
       </CollapsibleTrigger>
-      <CollapsibleContent className='ml-6 mt-1 px-3 py-2 bg-surface-3 text-xs'>
-        {props.children}
+      <CollapsibleContent className='mt-1 px-3 py-2 bg-surface-3 text-xs'>
+        {props.resultText.length > 0 ? (
+          <>
+            <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
+              Response
+            </div>
+            <div className='pt-1 text-xs text-text-secondary font-mono space-y-0.5 max-h-60 overflow-y-auto'>
+              {formatArgsFlat(props.resultText).map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className='text-xs text-text-tertiary'>No response</div>
+        )}
       </CollapsibleContent>
     </Collapsible>
   )
 }
 
-function PiToolExecutionBlock (props: {
-  readonly toolName: string
-  readonly resultText: string
-  readonly status?: string
-}) {
-  return (
-    <PiCollapsibleBlock
-      title={props.toolName}
-      badge='tool_call'
-      status={props.status ?? 'completed'}
-    >
-      {props.resultText.length > 0 ? (
-        <>
-          <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
-            Response
-          </div>
-          <pre className='m-0 pt-1 text-xs text-text-secondary whitespace-pre-wrap break-all overflow-x-auto leading-relaxed max-h-60 overflow-y-auto'>
-            {props.resultText}
-          </pre>
-        </>
-      ) : (
-        <div className='text-xs text-text-tertiary'>No response</div>
-      )}
-    </PiCollapsibleBlock>
-  )
+function formatAsJson (value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return JSON.stringify(parsed, null, 2)
+    } catch {
+      return value
+    }
+  }
+  return JSON.stringify(value, null, 2)
 }
 
 function PiToolCallBlock (props: {
   readonly toolName: string
-  readonly argsText: string
+  readonly args: unknown
   readonly resultText: string
   readonly status: string
 }) {
+  const [isOpen, setIsOpen] = useCollapsibleToggleAll()
+  const truncatedArgsText = truncateArgs(props.args)
+  const argsJson = formatAsJson(props.args)
+  const resultJson = formatAsJson(props.resultText)
+
   return (
-    <PiCollapsibleBlock
-      title={props.toolName}
-      badge='tool_call'
-      status={props.status}
+    <Collapsible
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      className='w-full text-sm'
+      data-collapsible-toggle-all='true'
+      data-collapsible-open={isOpen ? 'true' : 'false'}
     >
-      {props.argsText.length > 0 ? (
-        <>
-          <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
-            Request
-          </div>
-          <pre className='m-0 pt-1 text-xs text-text-secondary whitespace-pre-wrap break-all overflow-x-auto leading-relaxed'>
-            {props.argsText}
-          </pre>
-        </>
-      ) : null}
-      {props.resultText.length > 0 ? (
-        <>
-          <div className='pt-2 text-[11px] uppercase tracking-wide text-text-tertiary'>
-            Response
-          </div>
-          <pre className='m-0 pt-1 text-xs text-text-secondary whitespace-pre-wrap break-all overflow-x-auto leading-relaxed max-h-60 overflow-y-auto'>
-            {props.resultText}
-          </pre>
-        </>
-      ) : props.status === 'pending' ? (
-        <div className='pt-2 text-xs text-text-tertiary'>Pending...</div>
-      ) : (
-        <div className='pt-2 text-xs text-text-tertiary'>No response</div>
-      )}
-    </PiCollapsibleBlock>
+      <CollapsibleTrigger className='flex items-center gap-2 w-full py-1 border-none cursor-pointer'>
+        <StatusIndicator status={props.status} />
+        <span className='font-mono text-text-primary truncate'>
+          <span className='font-bold'>{props.toolName}</span>
+          {truncatedArgsText ? (
+            <span className='text-text-tertiary ml-3'>{truncatedArgsText}</span>
+          ) : null}
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className='mt-1 px-3 py-2 bg-surface-3 text-xs'>
+        {argsJson.length > 0 ? (
+          <>
+            <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
+              Request
+            </div>
+            <pre className='m-0 pt-1 text-xs text-text-secondary font-mono whitespace-pre-wrap break-all'>
+              {argsJson}
+            </pre>
+          </>
+        ) : null}
+        {resultJson.length > 0 ? (
+          <>
+            <div className='pt-2 text-[11px] uppercase tracking-wide text-text-tertiary'>
+              Response
+            </div>
+            <pre className='m-0 pt-1 text-xs text-text-secondary font-mono whitespace-pre-wrap break-all max-h-60 overflow-y-auto'>
+              {resultJson}
+            </pre>
+          </>
+        ) : props.status === 'pending' ? (
+          <div className='pt-2 text-xs text-text-tertiary'>Pending...</div>
+        ) : (
+          <div className='pt-2 text-xs text-text-tertiary'>No response</div>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -520,45 +569,55 @@ function PiBashExecutionBlock (props: {
   readonly output: string
   readonly exitCode: number | undefined
 }) {
+  const [isOpen, setIsOpen] = useCollapsibleToggleAll()
   const status =
     props.exitCode === undefined
-      ? undefined
+      ? 'pending'
       : props.exitCode === 0
       ? 'completed'
       : 'failed'
+  const truncatedCommand =
+    props.command.length > 80 ? props.command.slice(0, 80) + '…' : props.command
 
   return (
-    <PiCollapsibleBlock
-      title={
-        props.command.length > 60
-          ? props.command.slice(0, 60) + '…'
-          : props.command
-      }
-      badge='command'
-      status={status}
+    <Collapsible
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      className='w-full text-sm'
+      data-collapsible-toggle-all='true'
+      data-collapsible-open={isOpen ? 'true' : 'false'}
     >
-      <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
-        Command
-      </div>
-      <pre className='m-0 pt-1 text-xs text-text-secondary whitespace-pre-wrap break-all leading-relaxed'>
-        {props.command}
-      </pre>
-      {props.exitCode !== undefined ? (
-        <div className='pt-2 text-xs text-text-tertiary'>
-          Exit code: {props.exitCode}
+      <CollapsibleTrigger className='flex items-center gap-2 w-full py-1 border-none cursor-pointer'>
+        <StatusIndicator status={status} />
+        <span className='font-mono text-text-primary truncate'>
+          bash
+          <span className='text-text-tertiary ml-2'>{truncatedCommand}</span>
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className='mt-1 px-3 py-2 bg-surface-3 text-xs'>
+        <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
+          Command
         </div>
-      ) : null}
-      {props.output.length > 0 ? (
-        <>
-          <div className='pt-2 text-[11px] uppercase tracking-wide text-text-tertiary'>
-            Output
+        <pre className='m-0 pt-1 text-xs text-text-secondary whitespace-pre-wrap break-all leading-relaxed'>
+          {props.command}
+        </pre>
+        {props.exitCode !== undefined ? (
+          <div className='pt-2 text-xs text-text-tertiary'>
+            Exit code: {props.exitCode}
           </div>
-          <pre className='m-0 pt-1 text-xs text-text-secondary whitespace-pre-wrap break-all overflow-x-auto leading-relaxed max-h-60 overflow-y-auto'>
-            {props.output}
-          </pre>
-        </>
-      ) : null}
-    </PiCollapsibleBlock>
+        ) : null}
+        {props.output.length > 0 ? (
+          <>
+            <div className='pt-2 text-[11px] uppercase tracking-wide text-text-tertiary'>
+              Output
+            </div>
+            <pre className='m-0 pt-1 text-xs text-text-secondary whitespace-pre-wrap break-all overflow-x-auto leading-relaxed max-h-60 overflow-y-auto'>
+              {props.output}
+            </pre>
+          </>
+        ) : null}
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -610,8 +669,19 @@ export function PiMessages (props: {
 
     // Skip tool_execution_end events that have a toolCallId (they'll be shown inline)
     const toolExec = getToolExecution(body)
-    if (toolExec?.toolCallId && toolCallIdsWithResults.has(toolExec.toolCallId)) {
+    if (
+      toolExec?.toolCallId &&
+      toolCallIdsWithResults.has(toolExec.toolCallId)
+    ) {
       continue
+    }
+
+    // Skip message_end with role === 'toolResult' (shown via tool_execution_end)
+    if (body.type === 'message_end') {
+      const bodyMessage = getMessage(body)
+      if (getRole(bodyMessage) === 'toolResult') {
+        continue
+      }
     }
 
     let key = message.id
@@ -739,9 +809,7 @@ export function PiMessage (props: {
     // Render text content if present
     const textElement =
       text && text.trim().length > 0 ? (
-        <div className='text-sm'>
-          <Markdown>{text}</Markdown>
-        </div>
+        <MessageTextBlock text={text} />
       ) : null
 
     // Render tool calls with their results
@@ -750,15 +818,11 @@ export function PiMessage (props: {
         toolCall.id && props.toolResultsByCallId
           ? props.toolResultsByCallId.get(toolCall.id)
           : null
-      const argsText =
-        toolCall.arguments && typeof toolCall.arguments === 'object'
-          ? JSON.stringify(toolCall.arguments, null, 2)
-          : ''
       return (
         <PiToolCallBlock
           key={toolCall.id ?? `toolcall-${index}`}
           toolName={result?.toolName ?? toolCall.name}
-          argsText={argsText}
+          args={toolCall.arguments}
           resultText={result?.resultText ?? ''}
           status={result ? 'completed' : 'pending'}
         />
