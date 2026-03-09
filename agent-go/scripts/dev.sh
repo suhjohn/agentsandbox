@@ -61,6 +61,20 @@ build_server_binary() {
   echo "built ${output_path}"
 }
 
+write_git_rev_file() {
+  local output_path="$1"
+  local rev_file="${output_path}.rev"
+  local rev=""
+
+  rev="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || true)"
+  if [[ -n "${rev}" ]]; then
+    printf '%s\n' "${rev}" > "${rev_file}"
+    echo "wrote ${rev_file}"
+  else
+    rm -f "${rev_file}" 2>/dev/null || true
+  fi
+}
+
 cmd_build_server() {
   local goos_value="${GOOS:-linux}"
   local goarch_value="${GOARCH:-$("${GO_BIN}" env GOARCH)}"
@@ -333,6 +347,7 @@ cmd_docker_stop() {
 
 cmd_ghcr_push_amd64() {
   local docker_cmd=("${DOCKER_BIN}")
+  local repo_binary_path="${MODULE_DIR}/build-artifacts/agent-server"
 
   if [[ -n "${DOCKER_CONTEXT:-}" ]]; then
     docker_cmd=("${DOCKER_BIN}" --context "${DOCKER_CONTEXT}")
@@ -378,6 +393,9 @@ cmd_ghcr_push_amd64() {
   elif [[ -n "${GHCR_TOKEN:-}" || -n "${GITHUB_USERNAME:-}" ]]; then
     die "Set both GHCR_TOKEN and GITHUB_USERNAME, or neither if already logged in."
   fi
+
+  build_server_binary "${repo_binary_path}" "linux" "amd64" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
+  write_git_rev_file "${repo_binary_path}"
 
   local tag_args=()
   local t

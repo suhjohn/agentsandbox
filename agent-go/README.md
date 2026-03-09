@@ -108,6 +108,10 @@ export GHCR_TAG="$(git rev-parse --short HEAD)"      # optional
 ./agent-go/scripts/dev.sh ghcr-push-amd64
 ```
 
+This push flow rebuilds the tracked `agent-go/build-artifacts/agent-server`
+artifact for `linux/amd64` and refreshes `agent-go/build-artifacts/agent-server.rev`
+before running `docker buildx build`.
+
 Or from `agent-go/`:
 
 ```bash
