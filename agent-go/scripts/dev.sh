@@ -65,9 +65,17 @@ write_git_rev_file() {
   local output_path="$1"
   local rev_file="${output_path}.rev"
   local rev=""
+  local current_rev=""
 
   rev="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || true)"
   if [[ -n "${rev}" ]]; then
+    if [[ -f "${rev_file}" ]]; then
+      current_rev="$(<"${rev_file}")"
+    fi
+    if [[ "${current_rev}" == "${rev}" ]]; then
+      echo "kept ${rev_file}"
+      return 0
+    fi
     printf '%s\n' "${rev}" > "${rev_file}"
     echo "wrote ${rev_file}"
   else

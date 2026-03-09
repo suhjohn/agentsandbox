@@ -122,8 +122,8 @@ export GHCR_TAG="$(git rev-parse --short HEAD)"      # optional
 ```
 
 This push flow rebuilds the tracked `agent-go/build-artifacts/agent-server`
-artifact for `linux/amd64` and refreshes `agent-go/build-artifacts/agent-server.rev`
-before running `docker buildx build`.
+artifact for `linux/amd64` and updates `agent-go/build-artifacts/agent-server.rev`
+only when the recorded Git revision changed before running `docker buildx build`.
 
 Or from `agent-go/`:
 
