@@ -473,7 +473,7 @@ function PiToolExecutionBlock (props: {
           {props.toolName}
         </span>
       </CollapsibleTrigger>
-      <CollapsibleContent className='mt-1 px-3 py-2 bg-surface-3 text-xs'>
+      <CollapsibleContent className='ml-4 mt-1 px-3 py-2 bg-surface-3 text-xs'>
         {props.resultText.length > 0 ? (
           <>
             <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
@@ -534,7 +534,7 @@ function PiToolCallBlock (props: {
           ) : null}
         </span>
       </CollapsibleTrigger>
-      <CollapsibleContent className='mt-1 px-3 py-2 bg-surface-3 text-xs'>
+      <CollapsibleContent className='ml-4 mt-1 px-3 py-2 bg-surface-3 text-xs'>
         {argsJson.length > 0 ? (
           <>
             <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
@@ -594,7 +594,7 @@ function PiBashExecutionBlock (props: {
           <span className='text-text-tertiary ml-2'>{truncatedCommand}</span>
         </span>
       </CollapsibleTrigger>
-      <CollapsibleContent className='mt-1 px-3 py-2 bg-surface-3 text-xs'>
+      <CollapsibleContent className='ml-4 mt-1 px-3 py-2 bg-surface-3 text-xs'>
         <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
           Command
         </div>

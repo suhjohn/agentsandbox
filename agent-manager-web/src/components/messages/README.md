@@ -7,14 +7,14 @@ This directory contains components for rendering agent messages from different a
 ### Tool Calls / MCP Tool Calls
 
 - **Trigger row**: Status indicator (dot/spinner) + tool name (green) + truncated args (tertiary)
-- **Collapsible content**: No left margin, no chevron
+- **Collapsible content**: Left inset (`ml-4`), no chevron
 - **Request section**: "REQUEST" label (uppercase, tertiary) + JSON-formatted arguments in `<pre>`
 - **Response section**: "RESPONSE" label (uppercase, tertiary) + JSON-formatted result in `<pre>`
 
 ### Bash / Command Execution
 
 - **Trigger row**: Status indicator (dot/spinner) + "bash" (primary text) + truncated command (tertiary)
-- **Collapsible content**: No left margin, no chevron
+- **Collapsible content**: Left inset (`ml-4`), no chevron
 - **Command section**: "COMMAND" label (uppercase, tertiary) + full command in `<pre>`
 - **Exit code**: Shown if available
 - **Output section**: "OUTPUT" label (uppercase, tertiary) + output in `<pre>` (max-height with scroll)
@@ -45,6 +45,7 @@ This directory contains components for rendering agent messages from different a
 
 - All collapsibles respond to global toggle events (`collapsible:toggle-all`)
 - Content background: `bg-surface-3`
+- Content left inset for tool/bash bodies: `ml-4`
 - Content padding: `px-3 py-2`
 - Max height for scrollable sections: `max-h-60`
 

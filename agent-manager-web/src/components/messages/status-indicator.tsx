@@ -5,6 +5,7 @@ type StatusIndicatorProps = {
 }
 
 export function StatusIndicator (props: StatusIndicatorProps) {
+  const circleSize = 8
   let icon: React.ReactNode
 
   if (
@@ -21,25 +22,25 @@ export function StatusIndicator (props: StatusIndicatorProps) {
   } else if (props.status === 'completed') {
     icon = (
       <Circle
-        size={6}
+        size={circleSize}
         className='text-green-500 fill-green-500'
       />
     )
   } else if (props.status === 'failed') {
     icon = (
-      <Circle size={6} className='text-red-500 fill-red-500' />
+      <Circle size={circleSize} className='text-red-500 fill-red-500' />
     )
   } else if (props.status === undefined) {
     icon = (
       <Circle
-        size={6}
+        size={circleSize}
         className='text-text-primary fill-text-primary'
       />
     )
   } else {
     icon = (
       <Circle
-        size={6}
+        size={circleSize}
         className='text-text-tertiary fill-text-tertiary'
       />
     )
