@@ -125,9 +125,9 @@ createSessionBootstrap(input: {
     readonly region?: string | readonly string[]
     readonly message: string
     readonly title?: string
-    readonly harness?: "codex" | "pi"
+    readonly harness?: string
     readonly model?: string
-    readonly modelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh"
+    readonly modelReasoningEffort?: string
   }
 })
 ```
@@ -135,6 +135,7 @@ createSessionBootstrap(input: {
 Behavior:
 - Creates the backing agent through `createAgent`, so bootstrap requests do not accept a caller-provided agent name.
 - Preserves optional runtime session metadata such as `title`, `harness`, `model`, and `modelReasoningEffort` when creating the deterministic runtime session and first run.
+- Treats `harness` and `modelReasoningEffort` as pass-through strings and leaves harness-specific validation to `agent-go`.
 - Uses manager-internal runtime auth (`X-Agent-Internal-Auth` + `X-Actor-User-Id`) for manager-origin `/session` and `/session/:id/message` calls, while still returning browser/runtime access payloads separately.
 
 ### `startAgentSession(input)`
@@ -147,9 +148,9 @@ startAgentSession(input: {
     readonly sessionId?: string
     readonly message: string
     readonly title?: string
-    readonly harness?: "codex" | "pi"
+    readonly harness?: string
     readonly model?: string
-    readonly modelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh"
+    readonly modelReasoningEffort?: string
   }
 })
 ```
@@ -157,6 +158,7 @@ startAgentSession(input: {
 Behavior:
 - Starts a new runtime session on an existing agent without exposing the runtime-internal secret to the caller.
 - Creates the runtime session first, then sends the first message as the authenticated manager-side actor user.
+- Treats `harness` and `modelReasoningEffort` as pass-through strings and leaves harness-specific validation to `agent-go`.
 - Returns session IDs and stream URLs, but not browser/runtime auth tokens.
 
 ## sandbox.service.ts

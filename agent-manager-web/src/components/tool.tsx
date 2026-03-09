@@ -134,9 +134,9 @@ interface CreateSessionArgs {
     parentAgentId?: string;
     region?: string | string[];
     title?: string;
-    harness?: "codex" | "pi";
+    harness?: string;
     model?: string;
-    modelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
+    modelReasoningEffort?: string;
   };
 }
 

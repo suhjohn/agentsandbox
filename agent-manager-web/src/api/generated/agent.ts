@@ -5,48 +5,43 @@
  * OpenAPI spec version: 0.0.1
  */
 import { orvalAgentFetcher } from '../orval-agent-fetcher';
-export type PostSessionBodyHarness = typeof PostSessionBodyHarness[keyof typeof PostSessionBodyHarness];
+export type PostFilesUploadBody = {
+  file: Blob;
+};
 
+export type PostFilesUpload201 = {
+  /** @minLength 1 */
+  path: string;
+  /** @minLength 1 */
+  displayPath: string;
+  /** @minLength 1 */
+  filename: string;
+  /** @minimum 0 */
+  sizeBytes: number;
+};
 
-export const PostSessionBodyHarness = {
-  codex: 'codex',
-  pi: 'pi',
-} as const;
+export type PostFilesUpload400 = {
+  error: string;
+  status: number;
+};
 
-export type PostSessionBodyModelReasoningEffort = typeof PostSessionBodyModelReasoningEffort[keyof typeof PostSessionBodyModelReasoningEffort];
+export type PostFilesUpload401 = {
+  error: string;
+  status: number;
+};
 
-
-export const PostSessionBodyModelReasoningEffort = {
-  off: 'off',
-  minimal: 'minimal',
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  xhigh: 'xhigh',
-} as const;
+export type PostFilesUpload413 = {
+  error: string;
+  status: number;
+};
 
 export type PostSessionBody = {
   /** @pattern ^[0-9a-f]{32}$/i */
   id?: string;
-  harness?: PostSessionBodyHarness;
+  harness?: string;
   model?: string;
-  modelReasoningEffort?: PostSessionBodyModelReasoningEffort;
+  modelReasoningEffort?: string;
 };
-
-/**
- * @nullable
- */
-export type PostSession201ModelReasoningEffort = typeof PostSession201ModelReasoningEffort[keyof typeof PostSession201ModelReasoningEffort] | null;
-
-
-export const PostSession201ModelReasoningEffort = {
-  off: 'off',
-  minimal: 'minimal',
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  xhigh: 'xhigh',
-} as const;
 
 export type PostSession201 = {
   id: string;
@@ -67,7 +62,7 @@ export type PostSession201 = {
   /** @nullable */
   model?: string | null;
   /** @nullable */
-  modelReasoningEffort?: PostSession201ModelReasoningEffort;
+  modelReasoningEffort?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -95,21 +90,6 @@ cursor?: string;
 q?: string;
 };
 
-/**
- * @nullable
- */
-export type GetSession200SessionsItemModelReasoningEffort = typeof GetSession200SessionsItemModelReasoningEffort[keyof typeof GetSession200SessionsItemModelReasoningEffort] | null;
-
-
-export const GetSession200SessionsItemModelReasoningEffort = {
-  off: 'off',
-  minimal: 'minimal',
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  xhigh: 'xhigh',
-} as const;
-
 export type GetSession200SessionsItem = {
   id: string;
   agentId: string;
@@ -129,7 +109,7 @@ export type GetSession200SessionsItem = {
   /** @nullable */
   model?: string | null;
   /** @nullable */
-  modelReasoningEffort?: GetSession200SessionsItemModelReasoningEffort;
+  modelReasoningEffort?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -149,21 +129,6 @@ export type GetSession401 = {
   error: string;
   status: number;
 };
-
-/**
- * @nullable
- */
-export type GetSessionId200ModelReasoningEffort = typeof GetSessionId200ModelReasoningEffort[keyof typeof GetSessionId200ModelReasoningEffort] | null;
-
-
-export const GetSessionId200ModelReasoningEffort = {
-  off: 'off',
-  minimal: 'minimal',
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  xhigh: 'xhigh',
-} as const;
 
 export type GetSessionId200MessagesItem = {
   id: string;
@@ -198,7 +163,7 @@ export type GetSessionId200 = {
   /** @nullable */
   model?: string | null;
   /** @nullable */
-  modelReasoningEffort?: GetSessionId200ModelReasoningEffort;
+  modelReasoningEffort?: string | null;
   createdAt: string;
   updatedAt: string;
   messages: GetSessionId200MessagesItem[];
@@ -262,23 +227,11 @@ export type PostSessionIdMessageBodyInputItem = {
   filename?: string;
 };
 
-export type PostSessionIdMessageBodyModelReasoningEffort = typeof PostSessionIdMessageBodyModelReasoningEffort[keyof typeof PostSessionIdMessageBodyModelReasoningEffort];
-
-
-export const PostSessionIdMessageBodyModelReasoningEffort = {
-  off: 'off',
-  minimal: 'minimal',
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  xhigh: 'xhigh',
-} as const;
-
 export type PostSessionIdMessageBody = {
   /** @minItems 1 */
   input: PostSessionIdMessageBodyInputItem[];
   model?: string;
-  modelReasoningEffort?: PostSessionIdMessageBodyModelReasoningEffort;
+  modelReasoningEffort?: string;
 };
 
 export type PostSessionIdMessage200 = {
@@ -569,6 +522,62 @@ export type GetHealth200 = {
   status: GetHealth200Status;
   timestamp: string;
 };
+
+/**
+ * @summary Upload a file into ~/uploaded
+ */
+export type postFilesUploadResponse201 = {
+  data: PostFilesUpload201
+  status: 201
+}
+
+export type postFilesUploadResponse400 = {
+  data: PostFilesUpload400
+  status: 400
+}
+
+export type postFilesUploadResponse401 = {
+  data: PostFilesUpload401
+  status: 401
+}
+
+export type postFilesUploadResponse413 = {
+  data: PostFilesUpload413
+  status: 413
+}
+    
+export type postFilesUploadResponseSuccess = (postFilesUploadResponse201) & {
+  headers: Headers;
+};
+export type postFilesUploadResponseError = (postFilesUploadResponse400 | postFilesUploadResponse401 | postFilesUploadResponse413) & {
+  headers: Headers;
+};
+
+export type postFilesUploadResponse = (postFilesUploadResponseSuccess | postFilesUploadResponseError)
+
+export const getPostFilesUploadUrl = () => {
+
+
+  
+
+  return `/files/upload`
+}
+
+export const postFilesUpload = async (postFilesUploadBody: PostFilesUploadBody, options?: RequestInit): Promise<postFilesUploadResponse> => {
+    const formData = new FormData();
+formData.append(`file`, postFilesUploadBody.file);
+
+  return orvalAgentFetcher<postFilesUploadResponse>(getPostFilesUploadUrl(),
+  {      
+    ...options,
+    method: 'POST'
+    ,
+    body: 
+      formData,
+  }
+);}
+
+
 
 /**
  * @summary Create or fetch a session

@@ -152,15 +152,13 @@
                     "pattern": "^[0-9a-f]{32}$/i"
                   },
                   "harness": {
-                    "type": "string",
-                    "enum": ["codex", "pi"]
+                    "type": "string"
                   },
                   "model": {
                     "type": "string"
                   },
                   "modelReasoningEffort": {
-                    "type": "string",
-                    "enum": ["off", "minimal", "low", "medium", "high", "xhigh"]
+                    "type": "string"
                   }
                 }
               }
@@ -204,16 +202,7 @@
                       "type": ["string", "null"]
                     },
                     "modelReasoningEffort": {
-                      "type": ["string", "null"],
-                      "enum": [
-                        "off",
-                        "minimal",
-                        "low",
-                        "medium",
-                        "high",
-                        "xhigh",
-                        null
-                      ]
+                      "type": ["string", "null"]
                     },
                     "createdAt": {
                       "type": "string"
@@ -357,16 +346,7 @@
                             "type": ["string", "null"]
                           },
                           "modelReasoningEffort": {
-                            "type": ["string", "null"],
-                            "enum": [
-                              "off",
-                              "minimal",
-                              "low",
-                              "medium",
-                              "high",
-                              "xhigh",
-                              null
-                            ]
+                            "type": ["string", "null"]
                           },
                           "createdAt": {
                             "type": "string"
@@ -494,16 +474,7 @@
                       "type": ["string", "null"]
                     },
                     "modelReasoningEffort": {
-                      "type": ["string", "null"],
-                      "enum": [
-                        "off",
-                        "minimal",
-                        "low",
-                        "medium",
-                        "high",
-                        "xhigh",
-                        null
-                      ]
+                      "type": ["string", "null"]
                     },
                     "createdAt": {
                       "type": "string"
@@ -836,8 +807,7 @@
                     "type": "string"
                   },
                   "modelReasoningEffort": {
-                    "type": "string",
-                    "enum": ["off", "minimal", "low", "medium", "high", "xhigh"]
+                    "type": "string"
                   }
                 },
                 "required": ["input"]

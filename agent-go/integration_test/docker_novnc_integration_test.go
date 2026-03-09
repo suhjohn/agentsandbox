@@ -89,6 +89,9 @@ func TestDockerNoVNCSmokeAndBasicAPIs(t *testing.T) {
 	agentsCmd := `CODEX_HOME_PATH="${CODEX_HOME:-${AGENT_HOME:-/home/agent}/.codex}"; test -f "${CODEX_HOME_PATH}/AGENTS.md" && rg -n "Tool READMEs|/home/agent/workspaces/tools/browser-tools/README.md" "${CODEX_HOME_PATH}/AGENTS.md" >/dev/null`
 	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", agentsCmd}, root, nil, false)
 
+	piAgentsCmd := `PI_HOME_PATH="${PI_CODING_AGENT_DIR:-${AGENT_HOME:-/home/agent}/.pi}"; test -f "${PI_HOME_PATH}/AGENTS.md" && rg -n "Tool READMEs|/home/agent/workspaces/tools/browser-tools/README.md" "${PI_HOME_PATH}/AGENTS.md" >/dev/null`
+	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", piAgentsCmd}, root, nil, false)
+
 	pgContainer := fmt.Sprintf("agent_go_it_pg_%d", time.Now().UnixNano())
 	defer runCmd(t, []string{"docker", "rm", "-f", pgContainer}, root, nil, true)
 	runCmd(t, []string{"docker", "run", "-d", "--name", pgContainer, "-e", "POSTGRES_PASSWORD=postgres", "-e", "POSTGRES_USER=postgres", "-e", "POSTGRES_DB=postgres", "postgres:17-alpine"}, root, nil, false)

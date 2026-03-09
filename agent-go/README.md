@@ -17,22 +17,21 @@ go run ./agent-go/cmd/agent-go openvscode-proxy
 
 ## Make targets
 
-`agent-go/Makefile` provides a single-command workflow:
+`agent-go/Makefile` is intentionally small and only keeps the core workflows:
 
 ```bash
 cd agent-go
 make help
 ```
 
-Key targets:
+Targets:
 
-- `make run`, `make serve`, `make proxy`
-- `make build`, `make build-server`
-- `make test`, `make test-docker`
-- `make fmt`, `make vet`
-- `make openapi` (prints OpenAPI spec path)
-- `make docker-build`, `make docker-run`, `make docker-run-server`
-- `./scripts/dev.sh ...` for direct build/restart/docker/publish flows
+- `make test`
+- `make build`
+- `make docker-build`
+- `make docker-push`
+
+Use `./scripts/dev.sh ...` directly for everything else, including local run/restart and Docker run/refresh flows.
 
 ## Server scope
 
@@ -43,15 +42,22 @@ Key targets:
 - Terminal websocket (`/terminal`)
 - SQLite persistence (sessions/messages/events outbox)
 - Manager outbox sync dispatcher
-- Codex and pi CLI wrappers used by run execution paths
+- A harness registry that dispatches runtime execution by harness ID
+- Codex and PI harness implementations backed by CLI wrappers
 
 ## Harness CLI model and thinking controls
 
-The runtime exposes model/thinking controls through the harness-specific CLI wrappers.
+The runtime exposes model/thinking controls through harness definitions in
+`agent-go/internal/harness/*`.
+
+- Shared harness contract and registry live in `agent-go/internal/harness/registry/`.
+- The server resolves harness IDs through the registry instead of branching directly on `codex` vs `pi`.
+- `agent-manager` and `agent-manager-web` should treat `harness` as a string contract and let the runtime validate the actual value.
 
 ### Codex
 
 - Wrapper types live in `agent-go/internal/harness/codex/cli.go`.
+- Harness definition lives in `agent-go/internal/harness/codex/definition.go`.
 - Model selection is a first-class field on `CodexRootOptions` as `Model`, which emits `--model <id>`.
 - Thinking level is not a dedicated struct field. It is passed through `CodexGlobalOptions.Config` as a raw config entry such as `model_reasoning_effort="high"`.
 - Supported thinking levels for Codex sessions are: `minimal`, `low`, `medium`, `high`, `xhigh`.
@@ -59,6 +65,7 @@ The runtime exposes model/thinking controls through the harness-specific CLI wra
 ### PI
 
 - Wrapper types live in `agent-go/internal/harness/pi/cli.go`.
+- Harness definition lives in `agent-go/internal/harness/pi/definition.go`.
 - Model selection is exposed directly on `PiOptions` as `Provider` and `Model`, which emit `--provider <provider>` and `--model <id>`.
 - Thinking level is a first-class field on `PiOptions` as `Thinking`, which emits `--thinking <level>`.
 - The PI RPC helpers also expose thinking controls through `PiRPCSetThinkingLevel(...)` and `PiRPCCycleThinkingLevel(...)`.
@@ -70,6 +77,12 @@ Build a publishable server binary:
 
 ```bash
 ./agent-go/scripts/dev.sh build-server
+```
+
+Or from `agent-go/`:
+
+```bash
+make build
 ```
 
 Build to a specific output path (example used by Docker below):
@@ -115,43 +128,44 @@ before running `docker buildx build`.
 Or from `agent-go/`:
 
 ```bash
-make ghcr-push
+make docker-push
 ```
 
-Run from the `agent-go` directory using Make:
+Build the Docker image from the `agent-go` directory using Make:
 
 ```bash
 cd agent-go
 make docker-build
-make docker-run
+```
+
+Run the full container from the repo root:
+
+```bash
+./agent-go/scripts/dev.sh docker-run --env-file .env
 ```
 
 Recreate the full container from the latest repo state in one command:
 
 ```bash
-cd agent-go
-make docker-refresh
+./agent-go/scripts/dev.sh docker-refresh --env-file .env
 ```
 
 Server-only mode (API on port `3131`, no OpenVSCode/noVNC):
 
 ```bash
-cd agent-go
-make docker-run-server
+./agent-go/scripts/dev.sh docker-run --env-file .env --server-only
 ```
 
 If you want the same pull + rebuild + recreate flow in API-only mode:
 
 ```bash
-cd agent-go
-make docker-refresh-server
+./agent-go/scripts/dev.sh docker-refresh --env-file .env --server-only
 ```
 
 Use a different env file (for example test config):
 
 ```bash
-cd agent-go
-make docker-run ENV_FILE=.env.test
+./agent-go/scripts/dev.sh docker-run --env-file .env.test
 ```
 
 Runtime behavior intentionally keeps the same entrypoint/runit stack used by `agent`:
@@ -160,7 +174,7 @@ Runtime behavior intentionally keeps the same entrypoint/runit stack used by `ag
 - browser/Xvfb/openbox/x11vnc/websockify startup
 - OpenVSCode service startup
 - optional dockerd service
-- workspace tools sync + Codex `AGENTS.md` generation
+- workspace tools sync + Codex/PI `AGENTS.md` generation
 
 The API server command remains `/app/agent-server`, but this is an executable launcher
 that syncs the in-image source checkout and then runs the tracked repo binary at

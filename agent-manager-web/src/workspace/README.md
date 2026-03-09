@@ -143,10 +143,12 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - when `config` is provided, it is normalized via the target panel definition’s `deserializeConfig` before storing
 - `agent_detail` remains a container panel with internal tabs in its own config (`session_list`, `session_detail`, `terminal`, `browser`, `diff`).
 - In `agent_detail` session detail, the bottom composer bar is owned by `panels/agent-session.tsx` and includes:
-  - harness label
+  - harness label from the active harness definition
   - model combobox
   - thinking-level dropdown persisted in panel config as `sessionModelReasoningEffort`; it uses a custom fixed-position floating menu instead of `Popover`, and flips above the trigger when there is not enough room below
-  - valid thinking options are harness-specific: `codex` -> default or `minimal|low|medium|high|xhigh`; `pi` -> default or `off|minimal|low|medium|high|xhigh`
+  - harness behavior is registry-driven from `src/harnesses/registry.ts`, which eagerly loads `src/harnesses/*/index.ts`; built-in harnesses currently include `codex` and `pi`
+  - valid thinking options are supplied by the active harness definition rather than hardcoded in the panel
+  - session config preserves arbitrary non-empty harness IDs from the runtime; unknown harnesses use a fallback message renderer instead of being coerced to `codex`
   - composer create/send/reset calls forward both `model` and `modelReasoningEffort` to the runtime session API
   - empty `Default model` / `Default thinking` selections are forwarded as explicit empty values so the runtime can materialize configured defaults onto the session record instead of silently keeping a previous override
   - dragging files onto the composer uploads them to the runtime `POST /files/upload` endpoint, saves them under `~/uploaded`, and appends `@~/uploaded/<filename>` references into the draft text

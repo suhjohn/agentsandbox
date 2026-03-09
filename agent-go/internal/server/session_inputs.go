@@ -183,7 +183,11 @@ func (s *server) generateSessionTitleFromText(sourceText string) (string, error)
 		return "", nil
 	}
 
-	resolvedModel, _, err := s.materializeSessionDefaults("codex", nil, nil)
+	def, err := s.harnessDefinition("codex")
+	if err != nil {
+		return "", err
+	}
+	resolvedModel, _, err := s.materializeSessionDefaults(def, nil, nil)
 	if err != nil {
 		return "", err
 	}

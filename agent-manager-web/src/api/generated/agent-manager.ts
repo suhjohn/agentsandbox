@@ -1335,25 +1335,6 @@ export type PostAgentsAgentIdSnapshot409 = {
   error: string;
 };
 
-export type PostAgentsAgentIdSessionBodyHarness = typeof PostAgentsAgentIdSessionBodyHarness[keyof typeof PostAgentsAgentIdSessionBodyHarness];
-
-
-export const PostAgentsAgentIdSessionBodyHarness = {
-  codex: 'codex',
-  pi: 'pi',
-} as const;
-
-export type PostAgentsAgentIdSessionBodyModelReasoningEffort = typeof PostAgentsAgentIdSessionBodyModelReasoningEffort[keyof typeof PostAgentsAgentIdSessionBodyModelReasoningEffort];
-
-
-export const PostAgentsAgentIdSessionBodyModelReasoningEffort = {
-  minimal: 'minimal',
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  xhigh: 'xhigh',
-} as const;
-
 export type PostAgentsAgentIdSessionBody = {
   /**
    * @minLength 32
@@ -1364,10 +1345,12 @@ export type PostAgentsAgentIdSessionBody = {
   title?: string;
   /** @minLength 1 */
   message: string;
-  harness?: PostAgentsAgentIdSessionBodyHarness;
+  /** @minLength 1 */
+  harness?: string;
   /** @minLength 1 */
   model?: string;
-  modelReasoningEffort?: PostAgentsAgentIdSessionBodyModelReasoningEffort;
+  /** @minLength 1 */
+  modelReasoningEffort?: string;
 };
 
 /**
@@ -1715,25 +1698,6 @@ export type GetSession400 = {
   error: string;
 };
 
-export type PostSessionBodyHarness = typeof PostSessionBodyHarness[keyof typeof PostSessionBodyHarness];
-
-
-export const PostSessionBodyHarness = {
-  codex: 'codex',
-  pi: 'pi',
-} as const;
-
-export type PostSessionBodyModelReasoningEffort = typeof PostSessionBodyModelReasoningEffort[keyof typeof PostSessionBodyModelReasoningEffort];
-
-
-export const PostSessionBodyModelReasoningEffort = {
-  minimal: 'minimal',
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
-  xhigh: 'xhigh',
-} as const;
-
 export type PostSessionBody = {
   parentAgentId?: string;
   imageId: string;
@@ -1743,10 +1707,12 @@ export type PostSessionBody = {
   title?: string;
   /** @minLength 1 */
   message: string;
-  harness?: PostSessionBodyHarness;
+  /** @minLength 1 */
+  harness?: string;
   /** @minLength 1 */
   model?: string;
-  modelReasoningEffort?: PostSessionBodyModelReasoningEffort;
+  /** @minLength 1 */
+  modelReasoningEffort?: string;
 };
 
 /**

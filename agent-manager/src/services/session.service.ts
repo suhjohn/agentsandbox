@@ -34,28 +34,18 @@ type CreateSessionBootstrapBody = {
   readonly region?: string | readonly string[]
   readonly message: string
   readonly title?: string
-  readonly harness?: 'codex' | 'pi'
+  readonly harness?: string
   readonly model?: string
-  readonly modelReasoningEffort?:
-    | 'minimal'
-    | 'low'
-    | 'medium'
-    | 'high'
-    | 'xhigh'
+  readonly modelReasoningEffort?: string
 }
 
 type StartAgentSessionBody = {
   readonly sessionId?: string
   readonly message: string
   readonly title?: string
-  readonly harness?: 'codex' | 'pi'
+  readonly harness?: string
   readonly model?: string
-  readonly modelReasoningEffort?:
-    | 'minimal'
-    | 'low'
-    | 'medium'
-    | 'high'
-    | 'xhigh'
+  readonly modelReasoningEffort?: string
 }
 
 function toPublicAgent<T extends Record<string, unknown>> (

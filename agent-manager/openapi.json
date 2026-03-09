@@ -5310,10 +5310,7 @@
                   },
                   "harness": {
                     "type": "string",
-                    "enum": [
-                      "codex",
-                      "pi"
-                    ]
+                    "minLength": 1
                   },
                   "model": {
                     "type": "string",
@@ -5321,13 +5318,7 @@
                   },
                   "modelReasoningEffort": {
                     "type": "string",
-                    "enum": [
-                      "minimal",
-                      "low",
-                      "medium",
-                      "high",
-                      "xhigh"
-                    ]
+                    "minLength": 1
                   }
                 },
                 "required": [
@@ -6483,10 +6474,7 @@
                   },
                   "harness": {
                     "type": "string",
-                    "enum": [
-                      "codex",
-                      "pi"
-                    ]
+                    "minLength": 1
                   },
                   "model": {
                     "type": "string",
@@ -6494,13 +6482,7 @@
                   },
                   "modelReasoningEffort": {
                     "type": "string",
-                    "enum": [
-                      "minimal",
-                      "low",
-                      "medium",
-                      "high",
-                      "xhigh"
-                    ]
+                    "minLength": 1
                   }
                 },
                 "required": [

@@ -193,8 +193,7 @@ cd /app
 mkdir -p "${AGENT_HOME}" "${WORKSPACES_DIR}" "${DEFAULT_WORKING_DIR}" 2>/dev/null || true
 mkdir -p "${ROOT_DIR}" 2>/dev/null || true
 
-ensure_codex_agents() {
-  local agents_file="${CODEX_HOME}/AGENTS.md"
+ensure_runtime_agents() {
   local tools_dir="${WORKSPACE_TOOLS_DIR_EFFECTIVE:-${WORKSPACE_TOOLS_DIR:-${WORKSPACES_DIR}/tools}}"
   if [[ ! -d "${tools_dir}" ]] && [[ -d /app/tools ]]; then
     tools_dir="/app/tools"
@@ -210,8 +209,10 @@ ensure_codex_agents() {
     )"
   fi
 
-  : >"${agents_file}"
-  cat <<EOF >>"${agents_file}"
+  local agents_file=""
+  for agents_file in "${CODEX_HOME}/AGENTS.md" "${PI_CODING_AGENT_DIR}/AGENTS.md"; do
+    : >"${agents_file}"
+    cat <<EOF >>"${agents_file}"
 # Environment
 - You are running inside a sandbox container.
 - Runtime state root: ${ROOT_DIR}
@@ -233,14 +234,15 @@ ensure_codex_agents() {
 - Each tool directory should contain a README.md describing usage. Read it before invoking the tool.
 EOF
 
-  if [[ -n "${tool_readmes}" ]]; then
-    echo "" >>"${agents_file}"
-    echo "## Tool READMEs" >>"${agents_file}"
-    while IFS= read -r p; do
-      [[ -n "${p}" ]] || continue
-      echo "- ${p}" >>"${agents_file}"
-    done <<<"${tool_readmes}"
-  fi
+    if [[ -n "${tool_readmes}" ]]; then
+      echo "" >>"${agents_file}"
+      echo "## Tool READMEs" >>"${agents_file}"
+      while IFS= read -r p; do
+        [[ -n "${p}" ]] || continue
+        echo "- ${p}" >>"${agents_file}"
+      done <<<"${tool_readmes}"
+    fi
+  done
 }
 
 ensure_codex_auth_json() {
@@ -379,13 +381,13 @@ if [[ "${1:-}" == "init" ]] || [[ "${1:-}" == "--init" ]]; then
   shift || true
   prepare_runtime_state
   ensure_codex_auth_json
-  ensure_codex_agents
+  ensure_runtime_agents
   exit 0
 fi
 
 prepare_runtime_state
 ensure_codex_auth_json
-ensure_codex_agents
+ensure_runtime_agents
 
 mkdir -p "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}" "${XDG_DATA_HOME}" 2>/dev/null || true
 

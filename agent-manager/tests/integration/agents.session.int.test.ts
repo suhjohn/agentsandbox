@@ -152,6 +152,9 @@ describe("POST /agents/:agentId/session (integration)", () => {
       body: JSON.stringify({
         message: "hi",
         title: "Say hi",
+        harness: "opencode",
+        model: "openrouter/qwen-coder",
+        modelReasoningEffort: "deliberate",
       }),
     });
 
@@ -164,6 +167,18 @@ describe("POST /agents/:agentId/session (integration)", () => {
     expect(observed).toHaveLength(2);
     expect(observed[0]?.path).toBe("/session");
     expect(observed[1]?.path).toBe(`/session/${body.session.id}/message`);
+    expect(observed[0]?.body).toEqual({
+      id: body.session.id,
+      title: "Say hi",
+      harness: "opencode",
+      model: "openrouter/qwen-coder",
+      modelReasoningEffort: "deliberate",
+    });
+    expect(observed[1]?.body).toEqual({
+      input: [{ type: "text", text: "hi" }],
+      model: "openrouter/qwen-coder",
+      modelReasoningEffort: "deliberate",
+    });
     for (const request of observed) {
       expect(request.internalAuth).toBe(runtimeInternalSecret);
       expect(request.actorUserId).toBe(userId);

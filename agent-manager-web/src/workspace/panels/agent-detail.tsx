@@ -65,6 +65,7 @@ import {
 } from './agent-diff'
 import { useWorkspaceStore } from '../store'
 import { formatLastMessagePreview } from '@/utils/message-preview'
+import { normalizeHarnessId } from '@/harnesses/helpers'
 
 export interface AgentDetailPanelConfig {
   readonly agentId: string
@@ -159,10 +160,9 @@ function deserializeAgentDetailConfig (raw: unknown): AgentDetailPanelConfig {
     typeof v.sessionModelReasoningEffort === 'string'
       ? v.sessionModelReasoningEffort
       : undefined
-  const sessionHarness =
-    v.sessionHarness === 'pi' || v.sessionHarness === 'codex'
-      ? v.sessionHarness
-      : undefined
+  const sessionHarness = normalizeHarnessId(
+    typeof v.sessionHarness === 'string' ? v.sessionHarness : undefined
+  )
   const diffStyle =
     v.diffStyle === 'unified' || v.diffStyle === 'split'
       ? v.diffStyle
@@ -612,10 +612,7 @@ function AgentDetailSessionListView (props: {
                   sessionModel: s.model?.trim() || undefined,
                   sessionModelReasoningEffort:
                     s.modelReasoningEffort?.trim() || undefined,
-                  sessionHarness:
-                    s.harness === 'pi' || s.harness === 'codex'
-                      ? s.harness
-                      : undefined
+                  sessionHarness: normalizeHarnessId(s.harness)
                 }))
               }
             />
@@ -848,11 +845,7 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
                 sessionTitle: next.sessionTitle?.trim() || '',
                 sessionModel: undefined,
                 sessionModelReasoningEffort: undefined,
-                sessionHarness:
-                  next.sessionHarness === 'pi' ||
-                  next.sessionHarness === 'codex'
-                    ? next.sessionHarness
-                    : undefined
+                sessionHarness: normalizeHarnessId(next.sessionHarness)
               }))
             }
           />

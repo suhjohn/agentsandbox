@@ -128,19 +128,13 @@ const agentRuntimeAccessSchema = z.object({
   agentAuthExpiresInSeconds: z.number().int().positive()
 })
 
-const modelReasoningEffortSchema = z.enum([
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh'
-])
+const modelReasoningEffortSchema = z.string().min(1)
 
 const startAgentSessionSchema = z.object({
   sessionId: z.string().length(32).optional(),
   title: z.string().min(1).optional(),
   message: z.string().min(1),
-  harness: z.enum(['codex', 'pi']).optional(),
+  harness: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
   modelReasoningEffort: modelReasoningEffortSchema.optional()
 }).strict()

@@ -14,7 +14,6 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import { getModels, getProviders } from "@mariozechner/pi-ai";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -68,11 +67,19 @@ import {
   type GetSessionId200,
   type GetSessionId200MessagesItem,
   type PostSession201,
-  type PostSessionBodyModelReasoningEffort,
-  type PostSessionIdMessageBodyModelReasoningEffort,
 } from "@/api/generated/agent";
-import { CodexMessages } from "@/components/messages/codex-message";
-import { PiMessages } from "@/components/messages/pi-message";
+import { getHarnessOrFallback } from "@/harnesses/registry";
+import {
+  formatThinkingLevelLabel,
+  normalizeThinkingLevel,
+  resolveHarnessId,
+  resolveSelectableModels,
+} from "@/harnesses/helpers";
+import type {
+  CatalogModel,
+  HarnessDefinition,
+  ThinkingLevel,
+} from "@/harnesses/types";
 import type { PanelProps } from "./types";
 import { parseBody as parseBodyUtil } from "./session-message-utils";
 import { useWorkspaceStore } from "../store";
@@ -112,9 +119,7 @@ const STICKY_SCROLL_BOTTOM_THRESHOLD_PX = 300;
 const SESSION_STATUS_PROCESSING = "processing";
 const SESSION_STATUS_INITIAL = "initial";
 const AGENT_UPLOAD_ENDPOINT = "/files/upload";
-type ThinkingLevel = PostSessionBodyModelReasoningEffort &
-  PostSessionIdMessageBodyModelReasoningEffort;
-type SelectedThinkingLevel = "" | ThinkingLevel;
+type SelectedThinkingLevel = string;
 type SessionToolTab = "terminal" | "browser" | "vscode" | "diff";
 type UploadedFileResult = {
   readonly path: string;
@@ -122,44 +127,6 @@ type UploadedFileResult = {
   readonly filename: string;
   readonly sizeBytes: number;
 };
-
-const CODEX_THINKING_LEVELS: readonly ThinkingLevel[] = [
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-];
-const PI_THINKING_LEVELS = [
-  "off",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-] as const satisfies readonly ThinkingLevel[];
-
-type CatalogModel = {
-  readonly id: string;
-  readonly name: string;
-  readonly provider: string;
-};
-
-const ALL_MODELS: readonly CatalogModel[] = getProviders()
-  .flatMap((provider) =>
-    getModels(provider).map((model) => ({
-      id: model.id,
-      name: model.name,
-      provider: model.provider,
-    })),
-  )
-  .sort((a, b) => {
-    const providerCompare = a.provider.localeCompare(b.provider);
-    if (providerCompare !== 0) return providerCompare;
-    return a.name.localeCompare(b.name);
-  });
-
-const OPENAI_MODELS = ALL_MODELS.filter((model) => model.provider === "openai");
 
 type SessionStreamConfig = {
   readonly agentId: string;
@@ -195,70 +162,6 @@ export function getSessionMessages(
 function makeSessionStreamKey(config: SessionStreamConfig): string {
   // Token rotation should not create a brand-new stream identity.
   return `${config.agentApiUrl}|${config.agentId}|${config.sessionId}`;
-}
-
-function getAvailableModelsForHarness(
-  harness: "codex" | "pi",
-): readonly CatalogModel[] {
-  if (harness === "codex") return OPENAI_MODELS;
-  return ALL_MODELS.map((model) => ({
-    ...model,
-    id: `${model.provider}/${model.id}`,
-  }));
-}
-
-function resolveSelectableModels(args: {
-  readonly harness: "codex" | "pi";
-  readonly selectedModel: string;
-}): readonly CatalogModel[] {
-  const available = getAvailableModelsForHarness(args.harness);
-  const selectedModel = args.selectedModel.trim();
-  if (
-    selectedModel.length === 0 ||
-    available.some((model) => model.id === selectedModel)
-  ) {
-    return available;
-  }
-
-  return [
-    {
-      id: selectedModel,
-      name:
-        args.harness === "pi" && !selectedModel.includes("/")
-          ? `${selectedModel} (provider unspecified)`
-          : args.harness === "codex"
-            ? `${selectedModel} (current)`
-            : `${selectedModel.split("/").slice(1).join("/")} (current)`,
-      provider:
-        args.harness === "pi" && !selectedModel.includes("/")
-          ? "saved"
-          : "current",
-    },
-    ...available,
-  ];
-}
-
-function getThinkingLevelsForHarness(
-  harness: "codex" | "pi",
-): readonly ThinkingLevel[] {
-  return harness === "pi" ? PI_THINKING_LEVELS : CODEX_THINKING_LEVELS;
-}
-
-function normalizeThinkingLevel(
-  harness: "codex" | "pi",
-  value: string | null | undefined,
-): SelectedThinkingLevel {
-  const trimmed = value?.trim().toLowerCase() ?? "";
-  if (trimmed.length === 0) return "";
-  return getThinkingLevelsForHarness(harness).includes(trimmed as ThinkingLevel)
-    ? (trimmed as ThinkingLevel)
-    : "";
-}
-
-function formatThinkingLevelLabel(value: ThinkingLevel): string {
-  if (value === "xhigh") return "X-High";
-  if (value === "off") return "Off";
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function hasThinkingLevel(
@@ -1220,59 +1123,12 @@ function toStoredMessageBody(value: unknown): string | null | undefined {
   }
 }
 
-function FallbackMessage(props: {
-  readonly message: GetSessionId200MessagesItem;
-}) {
-  const body = parseBody(props.message.body);
-  const fallback = (() => {
-    if (body == null) return null;
-    if (typeof body === "string") return body;
-    try {
-      return JSON.stringify(body, null, 2);
-    } catch {
-      return null;
-    }
-  })();
-
-  if (!fallback) return null;
-
-  return (
-    <div className="rounded-lg border border-border bg-background px-3 py-2">
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="text-[11px] px-2 py-0.5 rounded-full border border-border text-text-secondary">
-          message
-        </div>
-        <div className="flex-1" />
-        <div className="text-xs text-text-tertiary font-mono truncate">
-          {props.message.createdAt}
-        </div>
-      </div>
-      <div className="mt-2 text-sm whitespace-pre-wrap break-words">
-        {fallback}
-      </div>
-    </div>
-  );
-}
-
 function SessionMessages(props: {
   readonly messages: readonly GetSessionId200MessagesItem[];
-  readonly messageType: "codex" | "pi" | "unknown";
+  readonly harness: HarnessDefinition;
 }) {
-  if (props.messageType === "codex") {
-    return <CodexMessages messages={props.messages} />;
-  }
-
-  if (props.messageType === "pi") {
-    return <PiMessages messages={props.messages} />;
-  }
-
-  return (
-    <>
-      {props.messages.map((m) => (
-        <FallbackMessage key={m.id} message={m} />
-      ))}
-    </>
-  );
+  const MessageView = props.harness.MessageView;
+  return <MessageView messages={props.messages} />;
 }
 
 function useScrollParent(ref: React.RefObject<HTMLElement | null>) {
@@ -1410,7 +1266,7 @@ function SessionComposer(props: {
   readonly agentName?: string;
   readonly sessionId: string;
   readonly access: GetAgentsAgentIdAccess200;
-  readonly harness: "codex" | "pi";
+  readonly harness: HarnessDefinition;
   readonly selectedModel: string;
   readonly selectedModelReasoningEffort: SelectedThinkingLevel;
   readonly availableModels: readonly CatalogModel[];
@@ -1449,7 +1305,7 @@ function SessionComposer(props: {
       sessionTitle: "",
       sessionModel: props.selectedModel,
       sessionModelReasoningEffort: props.selectedModelReasoningEffort,
-      sessionHarness: props.harness,
+      sessionHarness: props.harness.id,
       diffStyle: "split" as const,
     }),
     [
@@ -1672,7 +1528,7 @@ function SessionComposer(props: {
         throw new Error("Missing agent runtime access");
       }
       const body: Record<string, unknown> = {
-        harness: props.harness,
+        harness: props.harness.id,
         model: args.model,
         modelReasoningEffort: args.modelReasoningEffort,
       };
@@ -1935,7 +1791,7 @@ function SessionComposer(props: {
       <div className="bg-surface-1 px-3 flex items-center gap-3 pt-0.5 pb-2">
         <div className="flex items-center gap-3">
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
-            {props.harness}
+            {props.harness.label}
           </p>
           {uploadingCount > 0 && (
             <p className="text-[11px] text-text-tertiary">
@@ -2084,18 +1940,21 @@ export function AgentSessionPanel(props: PanelProps<AgentSessionPanelConfig>) {
     () => mergeSessionMessages(initialMessages, stream.messages),
     [initialMessages, stream.messages],
   );
-  const messageType = useMemo((): "codex" | "pi" | "unknown" => {
-    const harness = sessionQuery.data?.harness?.trim().toLowerCase();
-    if (harness === "codex") return "codex";
-    if (harness === "pi") return "pi";
-    return "unknown";
-  }, [sessionQuery.data?.harness]);
-  const sessionHarness = useMemo((): "codex" | "pi" => {
-    if (props.config.sessionHarness === "pi") return "pi";
-    if (props.config.sessionHarness === "codex") return "codex";
-    const harness = sessionQuery.data?.harness?.trim().toLowerCase();
-    return harness === "pi" ? "pi" : "codex";
-  }, [props.config.sessionHarness, sessionQuery.data?.harness]);
+  const messageHarness = useMemo(
+    () =>
+      getHarnessOrFallback(
+        resolveHarnessId(sessionQuery.data?.harness, props.config.sessionHarness),
+      ),
+    [props.config.sessionHarness, sessionQuery.data?.harness],
+  );
+  const sessionHarnessID = useMemo(
+    () => resolveHarnessId(props.config.sessionHarness, sessionQuery.data?.harness),
+    [props.config.sessionHarness, sessionQuery.data?.harness],
+  );
+  const sessionHarness = useMemo(
+    () => getHarnessOrFallback(sessionHarnessID),
+    [sessionHarnessID],
+  );
   const selectedSessionModel = useMemo(() => {
     if (typeof props.config.sessionModel === "string") {
       return props.config.sessionModel.trim();
@@ -2125,7 +1984,7 @@ export function AgentSessionPanel(props: PanelProps<AgentSessionPanelConfig>) {
     [selectedSessionModel, sessionHarness],
   );
   const availableThinkingLevels = useMemo(
-    () => getThinkingLevelsForHarness(sessionHarness),
+    () => sessionHarness.getThinkingLevels(),
     [sessionHarness],
   );
   const displayedMessages = useMemo(
@@ -2420,7 +2279,7 @@ export function AgentSessionPanel(props: PanelProps<AgentSessionPanelConfig>) {
               <>
                 <SessionMessages
                   messages={messages}
-                  messageType={messageType}
+                  harness={messageHarness}
                 />
                 {stream.isRunning === true ||
                 isOptimisticSending ||

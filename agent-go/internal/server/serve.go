@@ -26,6 +26,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
 
+	"agent-go/internal/apierr"
+	harnessall "agent-go/internal/harness/all"
+	harnessregistry "agent-go/internal/harness/registry"
 	openapipkg "agent-go/internal/openapi"
 	sessionstate "agent-go/internal/session"
 	workspacepkg "agent-go/internal/workspace"
@@ -72,15 +75,8 @@ type serveConfig struct {
 	AgentManagerAuthToken   string
 }
 
-type apiError struct {
-	Status  int
-	Message string
-}
-
-func (e *apiError) Error() string { return e.Message }
-
 func fail(status int, message string) error {
-	return &apiError{Status: status, Message: message}
+	return apierr.Fail(status, message)
 }
 
 func runServe(args []string) error {
@@ -114,6 +110,13 @@ func runServe(args []string) error {
 	}
 	if strings.TrimSpace(cfg.PIDir) != "" {
 		app.pi.Env = append(app.pi.Env, "PI_CODING_AGENT_DIR="+strings.TrimSpace(cfg.PIDir))
+	}
+	app.harnesses, err = harnessall.Build(app.codex, app.pi, harnessall.Config{
+		DefaultWorkingDir: cfg.DefaultWorkingDir,
+		RuntimeDir:        cfg.RuntimeDir,
+	})
+	if err != nil {
+		return err
 	}
 	app.outbox = newEventOutbox(store, httpClient, cfg)
 	app.outbox.start()
@@ -379,14 +382,15 @@ func isLocalhostOrigin(origin string) bool {
 }
 
 type server struct {
-	cfg    serveConfig
-	store  *store
-	state  *sessionstate.State
-	http   *http.Client
-	codex  *CodexCLI
-	pi     *PiCLI
-	outbox *eventOutbox
-	runCtx context.Context
+	cfg       serveConfig
+	store     *store
+	state     *sessionstate.State
+	http      *http.Client
+	codex     *CodexCLI
+	pi        *PiCLI
+	harnesses *harnessregistry.Registry
+	outbox    *eventOutbox
+	runCtx    context.Context
 }
 
 type appHandler func(http.ResponseWriter, *http.Request) error
@@ -448,7 +452,7 @@ func (s *server) recoverer(next http.Handler) http.Handler {
 func (s *server) writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	message := "Internal Server Error"
-	var appErr *apiError
+	var appErr *apierr.Error
 	if errors.As(err, &appErr) {
 		status = appErr.Status
 		message = appErr.Message
@@ -459,6 +463,54 @@ func (s *server) writeError(w http.ResponseWriter, err error) {
 		"error":  message,
 		"status": status,
 	})
+}
+
+func (s *server) ensureHarnesses() error {
+	if s.harnesses != nil {
+		return nil
+	}
+	harnesses, err := harnessall.Build(s.codex, s.pi, harnessall.Config{
+		DefaultWorkingDir: s.cfg.DefaultWorkingDir,
+		RuntimeDir:        s.cfg.RuntimeDir,
+	})
+	if err != nil {
+		return err
+	}
+	s.harnesses = harnesses
+	return nil
+}
+
+func (s *server) harnessDefinition(id string) (harnessregistry.Definition, error) {
+	if err := s.ensureHarnesses(); err != nil {
+		return nil, err
+	}
+	value := strings.ToLower(strings.TrimSpace(id))
+	if value == "" {
+		value = "codex"
+	}
+	def, ok := s.harnesses.Get(value)
+	if !ok {
+		return nil, fail(http.StatusBadRequest, "Invalid harness")
+	}
+	return def, nil
+}
+
+func (s *server) configuredSessionDefaults(def harnessregistry.Definition) (*string, *string, error) {
+	return def.ResolveDefaults(s.cfg.DefaultModel, s.cfg.DefaultReasoningEffort)
+}
+
+func (s *server) materializeSessionDefaults(def harnessregistry.Definition, model, effort *string) (*string, *string, error) {
+	defaultModel, defaultEffort, err := s.configuredSessionDefaults(def)
+	if err != nil {
+		return nil, nil, err
+	}
+	if model == nil {
+		model = defaultModel
+	}
+	if effort == nil {
+		effort = defaultEffort
+	}
+	return model, effort, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -597,28 +649,27 @@ func (s *server) handleCreateSession(w http.ResponseWriter, r *http.Request) err
 	if input.ID != "" && !sessionIDRegex.MatchString(input.ID) {
 		return fail(http.StatusBadRequest, "Invalid session ID format")
 	}
-	if input.Harness == "" {
-		input.Harness = "codex"
-	}
-	if input.Harness != "codex" && input.Harness != "pi" {
-		return fail(http.StatusBadRequest, "Invalid harness")
-	}
-
-	var rawEffort *string
-	if strings.TrimSpace(input.ModelReasoningEffort) != "" {
-		rawEffort = &input.ModelReasoningEffort
-	}
-	selection, err := normalizeSessionModelSelection(input.Harness, input.Model, rawEffort)
+	def, err := s.harnessDefinition(input.Harness)
 	if err != nil {
 		return err
 	}
-	input.Model, selection.Effort, err = s.materializeSessionDefaults(input.Harness, selection.Model, selection.Effort)
+	input.Harness = def.ID()
+
+	var rawEffort *string
+	if input.ModelReasoningEffort != "" {
+		rawEffort = &input.ModelReasoningEffort
+	}
+	input.Model, rawEffort, err = def.NormalizeModelSelection(input.Model, rawEffort)
+	if err != nil {
+		return err
+	}
+	input.Model, rawEffort, err = s.materializeSessionDefaults(def, input.Model, rawEffort)
 	if err != nil {
 		return err
 	}
 	input.ModelReasoningEffort = ""
-	if selection.Effort != nil {
-		input.ModelReasoningEffort = *selection.Effort
+	if rawEffort != nil {
+		input.ModelReasoningEffort = *rawEffort
 	}
 
 	if input.ID != "" {
@@ -757,12 +808,15 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) error {
 		return fail(http.StatusBadRequest, err.Error())
 	}
 
-	selection, err := normalizeSessionModelSelection(session.Harness, req.Model, req.ModelReasoningEffort)
+	def, err := s.harnessDefinition(session.Harness)
 	if err != nil {
 		return err
 	}
-
-	nextModel, nextEffort, err := s.materializeSessionDefaults(session.Harness, selection.Model, selection.Effort)
+	nextModel, nextEffort, err := def.NormalizeModelSelection(req.Model, req.ModelReasoningEffort)
+	if err != nil {
+		return err
+	}
+	nextModel, nextEffort, err = s.materializeSessionDefaults(def, nextModel, nextEffort)
 	if err != nil {
 		return err
 	}
@@ -810,30 +864,36 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) error {
 	if runContext == nil {
 		runContext = context.Background()
 	}
-	go s.executeRunAsync(runContext, sessionID, runID, session, normalized)
-
 	resp := map[string]any{
 		"success":   true,
 		"sessionId": sessionID,
 		"runId":     runID,
 	}
-	if session.Harness == "pi" {
-		sessionFile := ""
-		if session.ExternalSessionID != nil && strings.TrimSpace(*session.ExternalSessionID) != "" {
-			sessionFile = strings.TrimSpace(*session.ExternalSessionID)
-		} else {
-			sessionFile = s.defaultPISessionFile(sessionID)
-			_ = s.store.updateSessionExternalID(sessionID, sessionFile)
-			s.queueManagerSessionSync(sessionID)
-		}
-		if sessionFile != "" {
-			resp["sessionFile"] = sessionFile
-		}
-	} else {
+	prep, err := def.PrepareStartRun(harnessregistry.StartRunRequest{
+		Session:    toHarnessSession(session),
+		RuntimeDir: s.cfg.RuntimeDir,
+	})
+	if err != nil {
+		return err
+	}
+	if prep.ExternalSessionID != nil {
+		next := strings.TrimSpace(*prep.ExternalSessionID)
+		current := ""
 		if session.ExternalSessionID != nil {
-			resp["threadId"] = *session.ExternalSessionID
+			current = strings.TrimSpace(*session.ExternalSessionID)
+		}
+		if next != "" && next != current {
+			if err := s.store.updateSessionExternalID(sessionID, next); err != nil {
+				return err
+			}
+			s.queueManagerSessionSync(sessionID)
+			session.ExternalSessionID = harnessregistry.StringPtr(next)
 		}
 	}
+	for key, value := range prep.ResponseFields {
+		resp[key] = value
+	}
+	go s.executeRunAsync(runContext, sessionID, runID, session, normalized)
 	writeJSON(w, http.StatusOK, resp)
 	return nil
 }
@@ -919,198 +979,27 @@ type modelRunResult struct {
 }
 
 func (s *server) executeModelRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
-	if strings.EqualFold(strings.TrimSpace(session.Harness), "pi") {
-		return s.executePiCLIRun(ctx, session, input, onEvent)
+	def, err := s.harnessDefinition(session.Harness)
+	if err != nil {
+		return modelRunResult{}, err
 	}
-	return s.executeCodexCLIRun(ctx, session, input, onEvent)
+	return s.executeHarnessRun(ctx, def, session, input, onEvent)
 }
 
 func (s *server) executeCodexCLIRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
-	prompt := promptFromInputs(input)
-	resolvedModel, resolvedEffort, err := s.materializeSessionDefaults("codex", session.Model, session.ModelReasoningEffort)
+	def, err := s.harnessDefinition("codex")
 	if err != nil {
 		return modelRunResult{}, err
 	}
-	model := ""
-	if resolvedModel != nil && strings.TrimSpace(*resolvedModel) != "" {
-		model = strings.TrimSpace(*resolvedModel)
-	}
-
-	config := []string{}
-	if resolvedEffort != nil && strings.TrimSpace(*resolvedEffort) != "" {
-		config = append(config, fmt.Sprintf("model_reasoning_effort=%q", strings.TrimSpace(*resolvedEffort)))
-	}
-
-	resumeSessionID := ""
-	if session.ExternalSessionID != nil {
-		resumeSessionID = strings.TrimSpace(*session.ExternalSessionID)
-	}
-	seenExternalSessionID := ""
-	persistedExternalSessionID := resumeSessionID
-	persistExternalSessionID := func(value string) {
-		next := strings.TrimSpace(value)
-		if next == "" {
-			return
-		}
-		seenExternalSessionID = next
-		if next == persistedExternalSessionID {
-			return
-		}
-		if err := s.store.updateSessionExternalID(session.ID, next); err != nil {
-			return
-		}
-		persistedExternalSessionID = next
-		s.queueManagerSessionSync(session.ID)
-	}
-
-	resultText := strings.Builder{}
-	args := s.codex.ExecArgs(CodexExecOptions{
-		CodexRootOptions: CodexRootOptions{
-			CodexGlobalOptions: CodexGlobalOptions{Config: config},
-			Prompt:             prompt,
-			Model:              model,
-			Sandbox:            "danger-full-access",
-			DangerouslyBypass:  true,
-			CD:                 s.cfg.DefaultWorkingDir,
-		},
-		SkipGitRepoCheck: true,
-		JSON:             true,
-	})
-	if resumeSessionID != "" {
-		args = s.codex.ExecResumeArgs(CodexResumeOptions{
-			CodexGlobalOptions: CodexGlobalOptions{Config: config},
-		})
-		if model != "" {
-			args = append(args, "--model", model)
-		}
-		args = append(
-			args,
-			"--dangerously-bypass-approvals-and-sandbox",
-			"--skip-git-repo-check",
-			"--json",
-			resumeSessionID,
-		)
-		if promptText := strings.TrimSpace(prompt); promptText != "" {
-			args = append(args, promptText)
-		}
-	}
-
-	_, err = s.codex.RunJSONL(ctx, args, nil, func(evt CodexJSONLEvent) {
-		if id := codexExternalSessionIDFromEvent(evt.Value); id != "" {
-			persistExternalSessionID(id)
-		}
-		if onEvent != nil {
-			onEvent(evt.Value)
-		}
-
-		typeValue, _ := evt.Value["type"].(string)
-		if typeValue == "item.completed" {
-			item, _ := evt.Value["item"].(map[string]any)
-			itemType, _ := item["type"].(string)
-			if itemType == "agent_message" {
-				if text := firstNonEmptyString(item["text"], item["output_text"]); text != "" {
-					if resultText.Len() > 0 {
-						resultText.WriteByte('\n')
-					}
-					resultText.WriteString(text)
-				}
-			}
-		}
-		if typeValue == "message_end" {
-			if message, ok := evt.Value["message"].(map[string]any); ok {
-				if role, _ := message["role"].(string); role == "assistant" {
-					if text := firstNonEmptyString(message["content"], message["text"]); text != "" {
-						if resultText.Len() > 0 {
-							resultText.WriteByte('\n')
-						}
-						resultText.WriteString(text)
-					}
-				}
-			}
-		}
-	})
-	if err != nil {
-		return modelRunResult{}, err
-	}
-	return modelRunResult{
-		ExternalSessionID: seenExternalSessionID,
-		Text:              strings.TrimSpace(resultText.String()),
-	}, nil
+	return s.executeHarnessRun(ctx, def, session, input, onEvent)
 }
 
 func (s *server) executePiCLIRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
-	prompt := promptFromInputs(input)
-	resolvedModel, resolvedEffort, err := s.materializeSessionDefaults("pi", session.Model, session.ModelReasoningEffort)
+	def, err := s.harnessDefinition("pi")
 	if err != nil {
 		return modelRunResult{}, err
 	}
-	sessionFile := ""
-	if session.ExternalSessionID != nil {
-		sessionFile = strings.TrimSpace(*session.ExternalSessionID)
-	}
-	if sessionFile == "" {
-		sessionFile = s.defaultPISessionFile(session.ID)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(sessionFile), 0o755); err != nil {
-		return modelRunResult{}, err
-	}
-
-	opts := PiOptions{
-		Print:      true,
-		Mode:       "json",
-		Session:    sessionFile,
-		SessionDir: filepath.Dir(sessionFile),
-		Messages:   []string{prompt},
-	}
-	if resolvedModel != nil {
-		opts.Model = strings.TrimSpace(*resolvedModel)
-	}
-	if resolvedEffort != nil {
-		opts.Thinking = strings.TrimSpace(*resolvedEffort)
-	}
-
-	var textBuilder strings.Builder
-	_, err = s.pi.RunJSONL(ctx, s.pi.Args(opts), nil, func(evt PiJSONLEvent) {
-		if onEvent != nil {
-			if compact, ok := compactPIEventForStream(evt.Value); ok {
-				onEvent(compact)
-			}
-		}
-
-		typeValue, _ := evt.Value["type"].(string)
-		if typeValue != "message_update" {
-			if typeValue == "message_end" && textBuilder.Len() == 0 {
-				message, _ := evt.Value["message"].(map[string]any)
-				if text := piAssistantTextFromMessage(message); text != "" {
-					textBuilder.WriteString(text)
-				}
-			}
-			return
-		}
-		assistant, _ := evt.Value["assistantMessageEvent"].(map[string]any)
-		if assistant == nil {
-			return
-		}
-		eventType, _ := assistant["type"].(string)
-		if eventType != "text_delta" && eventType != "text" {
-			return
-		}
-		if delta, ok := assistant["delta"].(string); ok {
-			textBuilder.WriteString(delta)
-			return
-		}
-		if text, ok := assistant["text"].(string); ok {
-			textBuilder.WriteString(text)
-		}
-	})
-	if err != nil {
-		return modelRunResult{}, err
-	}
-	return modelRunResult{
-		ExternalSessionID: sessionFile,
-		Text:              strings.TrimSpace(textBuilder.String()),
-	}, nil
+	return s.executeHarnessRun(ctx, def, session, input, onEvent)
 }
 
 func stringPtrsEqual(a, b *string) bool {
@@ -1120,287 +1009,67 @@ func stringPtrsEqual(a, b *string) bool {
 	return strings.TrimSpace(*a) == strings.TrimSpace(*b)
 }
 
-func (s *server) configuredSessionDefaults(harness string) (*string, *string, error) {
-	var rawModel *string
-	if trimmed := strings.TrimSpace(s.cfg.DefaultModel); trimmed != "" {
-		if strings.EqualFold(strings.TrimSpace(harness), "pi") && !strings.Contains(trimmed, "/") {
-			trimmed = "openai/" + trimmed
-		}
-		rawModel = stringPtr(trimmed)
+func (s *server) executeHarnessRun(ctx context.Context, def harnessregistry.Definition, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
+	persistedExternalSessionID := ""
+	if session.ExternalSessionID != nil {
+		persistedExternalSessionID = strings.TrimSpace(*session.ExternalSessionID)
 	}
-	var rawEffort *string
-	if trimmed := strings.TrimSpace(s.cfg.DefaultReasoningEffort); trimmed != "" {
-		rawEffort = stringPtr(trimmed)
-	}
-	return resolveSessionDefaultsForExecution(harness, rawModel, rawEffort)
-}
-
-func (s *server) materializeSessionDefaults(harness string, model, effort *string) (*string, *string, error) {
-	resolvedModel, resolvedEffort, err := resolveSessionDefaultsForExecution(harness, model, effort)
+	result, err := def.Execute(ctx, harnessregistry.ExecuteRequest{
+		Session:           toHarnessSession(session),
+		Input:             toHarnessInputs(input),
+		DefaultWorkingDir: s.cfg.DefaultWorkingDir,
+		RuntimeDir:        s.cfg.RuntimeDir,
+		EmitEvent:         onEvent,
+		PersistExternalSessionID: func(value string) {
+			next := strings.TrimSpace(value)
+			if next == "" || next == persistedExternalSessionID {
+				return
+			}
+			if s.store == nil {
+				persistedExternalSessionID = next
+				session.ExternalSessionID = harnessregistry.StringPtr(next)
+				return
+			}
+			if err := s.store.updateSessionExternalID(session.ID, next); err != nil {
+				return
+			}
+			persistedExternalSessionID = next
+			session.ExternalSessionID = harnessregistry.StringPtr(next)
+			s.queueManagerSessionSync(session.ID)
+		},
+	})
 	if err != nil {
-		return nil, nil, err
+		return modelRunResult{}, err
 	}
-	defaultModel, defaultEffort, err := s.configuredSessionDefaults(harness)
-	if err != nil {
-		return nil, nil, err
-	}
-	if resolvedModel == nil {
-		resolvedModel = defaultModel
-	}
-	if resolvedEffort == nil {
-		resolvedEffort = defaultEffort
-	}
-	return resolvedModel, resolvedEffort, nil
+	return modelRunResult{
+		ExternalSessionID: strings.TrimSpace(result.ExternalSessionID),
+		Text:              strings.TrimSpace(result.Text),
+	}, nil
 }
 
-func compactPIEventForStream(value map[string]any) (map[string]any, bool) {
-	if len(value) == 0 {
-		return nil, false
+func toHarnessSession(session *sessionRecord) harnessregistry.Session {
+	if session == nil {
+		return harnessregistry.Session{}
 	}
-	typeValue := strings.TrimSpace(firstNonEmptyString(value["type"]))
-	switch typeValue {
-	case "turn_start", "turn_end", "agent_start", "agent_end":
-		return map[string]any{"type": typeValue}, true
-	case "error":
-		message := strings.TrimSpace(firstNonEmptyString(value["message"], value["error"]))
-		if message == "" {
-			message = "Unknown error"
-		}
-		return map[string]any{
-			"type":    "error",
-			"message": message,
-		}, true
-	case "tool_execution_end":
-		out := map[string]any{"type": "tool_execution_end"}
-		if toolName := strings.TrimSpace(firstNonEmptyString(value["toolName"])); toolName != "" {
-			out["toolName"] = toolName
-		}
-		if result, ok := value["result"]; ok {
-			out["result"] = result
-		}
-		return out, true
-	case "message_end":
-		message, _ := value["message"].(map[string]any)
-		compact := compactPIMessage(message)
-		if compact == nil {
-			return nil, false
-		}
-		return map[string]any{
-			"type":    "message_end",
-			"message": compact,
-		}, true
-	default:
-		return nil, false
+	return harnessregistry.Session{
+		ID:                   session.ID,
+		Harness:              session.Harness,
+		ExternalSessionID:    session.ExternalSessionID,
+		Model:                session.Model,
+		ModelReasoningEffort: session.ModelReasoningEffort,
 	}
 }
 
-func compactPIMessage(message map[string]any) map[string]any {
-	if len(message) == 0 {
-		return nil
-	}
-	role := strings.TrimSpace(firstNonEmptyString(message["role"]))
-	if role == "" {
-		return nil
-	}
-	out := map[string]any{"role": role}
-	if id := strings.TrimSpace(firstNonEmptyString(message["id"])); id != "" {
-		out["id"] = id
-	}
-
-	switch role {
-	case "bashExecution":
-		if command := firstNonEmptyString(message["command"]); command != "" {
-			out["command"] = command
-		}
-		if output := firstNonEmptyString(message["output"]); output != "" {
-			out["output"] = output
-		}
-		if exitCode, ok := message["exitCode"]; ok {
-			out["exitCode"] = exitCode
-		}
-		return out
-	case "toolResult":
-		if toolName := strings.TrimSpace(firstNonEmptyString(message["toolName"])); toolName != "" {
-			out["toolName"] = toolName
-		}
-		if details, ok := message["details"]; ok {
-			out["details"] = details
-		}
-	case "custom":
-		if customType := strings.TrimSpace(firstNonEmptyString(message["customType"])); customType != "" {
-			out["customType"] = customType
-		}
-	}
-	if usage, ok := message["usage"].(map[string]any); ok && len(usage) > 0 {
-		out["usage"] = usage
-	}
-
-	if content := compactPIMessageContent(message["content"]); len(content) > 0 {
-		out["content"] = content
-		return out
-	}
-	if text := strings.TrimSpace(firstNonEmptyString(message["text"])); text != "" {
-		out["content"] = []map[string]any{{"type": "text", "text": text}}
-		return out
+func toHarnessInputs(input []normalizedInput) []harnessregistry.Input {
+	out := make([]harnessregistry.Input, 0, len(input))
+	for _, item := range input {
+		out = append(out, harnessregistry.Input{
+			Type: item.Type,
+			Text: item.Text,
+			Path: item.Path,
+		})
 	}
 	return out
-}
-
-func compactPIMessageContent(content any) []map[string]any {
-	switch typed := content.(type) {
-	case string:
-		text := strings.TrimSpace(typed)
-		if text == "" {
-			return nil
-		}
-		return []map[string]any{{"type": "text", "text": text}}
-	case []any:
-		out := make([]map[string]any, 0, len(typed))
-		for _, rawItem := range typed {
-			item, _ := rawItem.(map[string]any)
-			if len(item) == 0 {
-				continue
-			}
-			itemType, _ := item["type"].(string)
-			switch itemType {
-			case "text":
-				text, _ := item["text"].(string)
-				text = strings.TrimSpace(text)
-				if text == "" {
-					continue
-				}
-				out = append(out, map[string]any{
-					"type": "text",
-					"text": text,
-				})
-			case "toolCall":
-				next := map[string]any{"type": "toolCall"}
-				if name := strings.TrimSpace(firstNonEmptyString(item["name"])); name != "" {
-					next["name"] = name
-				}
-				if args, ok := item["arguments"]; ok {
-					next["arguments"] = args
-				}
-				out = append(out, next)
-			case "image":
-				next := map[string]any{"type": "image"}
-				if mimeType := strings.TrimSpace(firstNonEmptyString(item["mimeType"])); mimeType != "" {
-					next["mimeType"] = mimeType
-				}
-				out = append(out, next)
-			}
-		}
-		if len(out) == 0 {
-			return nil
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
-func piAssistantTextFromMessage(message map[string]any) string {
-	if len(message) == 0 {
-		return ""
-	}
-	role := strings.TrimSpace(firstNonEmptyString(message["role"]))
-	if role != "assistant" {
-		return ""
-	}
-	if text := strings.TrimSpace(firstNonEmptyString(message["text"])); text != "" {
-		return text
-	}
-	contentString, _ := message["content"].(string)
-	if trimmed := strings.TrimSpace(contentString); trimmed != "" {
-		return trimmed
-	}
-	content, _ := message["content"].([]any)
-	var textBuilder strings.Builder
-	for _, rawItem := range content {
-		item, _ := rawItem.(map[string]any)
-		if len(item) == 0 {
-			continue
-		}
-		itemType, _ := item["type"].(string)
-		if itemType != "text" {
-			continue
-		}
-		text, _ := item["text"].(string)
-		text = strings.TrimSpace(text)
-		if text == "" {
-			continue
-		}
-		if textBuilder.Len() > 0 {
-			textBuilder.WriteByte('\n')
-		}
-		textBuilder.WriteString(text)
-	}
-	return strings.TrimSpace(textBuilder.String())
-}
-
-func promptFromInputs(input []normalizedInput) string {
-	parts := []string{}
-	for _, item := range input {
-		switch item.Type {
-		case "text":
-			if v := strings.TrimSpace(item.Text); v != "" {
-				parts = append(parts, v)
-			}
-		case "local_image":
-			if v := strings.TrimSpace(item.Path); v != "" {
-				parts = append(parts, fmt.Sprintf("[Image: %s]", v))
-			}
-		}
-	}
-	if len(parts) == 0 {
-		return "User provided non-text input. Describe what you can do next."
-	}
-	return strings.Join(parts, "\n")
-}
-
-func firstNonEmptyString(values ...any) string {
-	for _, v := range values {
-		switch t := v.(type) {
-		case string:
-			if trimmed := strings.TrimSpace(t); trimmed != "" {
-				return trimmed
-			}
-		case []any:
-			buf := strings.Builder{}
-			for _, item := range t {
-				if s := firstNonEmptyString(item); s != "" {
-					if buf.Len() > 0 {
-						buf.WriteByte('\n')
-					}
-					buf.WriteString(s)
-				}
-			}
-			if buf.Len() > 0 {
-				return buf.String()
-			}
-		case map[string]any:
-			if s := firstNonEmptyString(t["text"], t["content"], t["output_text"]); s != "" {
-				return s
-			}
-		}
-	}
-	return ""
-}
-
-func codexExternalSessionIDFromEvent(value map[string]any) string {
-	return firstNonEmptyString(
-		value["thread_id"],
-		value["threadId"],
-		value["session_id"],
-		value["sessionId"],
-		value["conversation_id"],
-		value["conversationId"],
-	)
-}
-
-func (s *server) defaultPISessionFile(sessionID string) string {
-	base := filepath.Join(s.cfg.RuntimeDir, "runtime", "pi-sessions")
-	return filepath.Join(base, sessionID+".jsonl")
 }
 
 func (s *server) handleSessionStream(w http.ResponseWriter, r *http.Request) error {

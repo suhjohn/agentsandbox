@@ -12,6 +12,8 @@
 - PI harness execution semantics
 - manager-sync event outbox behavior
 
+Harness semantics should be implemented behind a registry so the server does not hardcode a binary `codex` vs `pi` execution branch.
+
 No backward-compat shims are required beyond matching current server behavior.
 
 ## 2. Sources of Truth
@@ -20,6 +22,7 @@ No backward-compat shims are required beyond matching current server behavior.
 
 - Agent server implementation:
   - `agent-go/internal/server/*`
+  - `agent-go/internal/harness/*`
   - `agent-go/internal/store/*`
   - `agent-go/internal/session/*`
   - `agent-go/internal/workspace/*`
@@ -150,6 +153,7 @@ Match Bun schema:
 - Existing session harness change (`codex` <-> `pi`) with same id => `409`
 - Default `agentId=default`, `status=initial`, `harness=codex`
 - Empty/default model or reasoning selections are materialized into `sessions.model` and `sessions.model_reasoning_effort` using configured runtime defaults instead of being stored as `NULL`
+- Harness IDs are validated by runtime registry lookup rather than by a hardcoded server enum
 
 ## 5.3 Message semantics
 
@@ -176,6 +180,7 @@ On create message:
 - updates session model defaults using requested values when present, otherwise configured runtime defaults
 - rejects concurrent run with `409`
 - returns `{ success, sessionId, runId, threadId? | sessionFile? }`
+- harness-specific response metadata is produced by the selected harness definition
 
 ## 6.2 File upload contract
 

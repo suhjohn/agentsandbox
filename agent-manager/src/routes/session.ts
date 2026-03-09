@@ -22,13 +22,7 @@ const createAgentSchema = z.object({
     .optional()
 }).strict()
 
-const modelReasoningEffortSchema = z.enum([
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh'
-])
+const modelReasoningEffortSchema = z.string().min(1)
 const SESSION_STATUS_GUIDANCE =
   'Cosmetic session status for human filtering. Suggested values: initial, processing, blocked (agent needs human input to continue with todos), completed (no next todo).'
 const sessionStatusSchema = z.string().min(1).describe(SESSION_STATUS_GUIDANCE)
@@ -36,7 +30,7 @@ const sessionStatusSchema = z.string().min(1).describe(SESSION_STATUS_GUIDANCE)
 const createSessionBootstrapSchema = createAgentSchema.extend({
   title: z.string().min(1).optional(),
   message: z.string().min(1),
-  harness: z.enum(['codex', 'pi']).optional(),
+  harness: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
   modelReasoningEffort: modelReasoningEffortSchema.optional()
 }).strict()
