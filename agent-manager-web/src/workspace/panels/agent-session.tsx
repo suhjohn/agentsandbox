@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils'
 import { ModelCombobox } from '@/components/ui/model-combobox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
-import { Check, ChevronsUpDown, Copy } from 'lucide-react'
+import { Check, ChevronsUpDown, Code, Copy, GitCommit, GitCompare, Globe, Terminal } from 'lucide-react'
 import { Loader, SandboxLoader } from '@/components/loader'
 import { toast } from 'sonner'
 import {
@@ -1500,8 +1500,22 @@ function SessionComposer (props: {
     createSessionMutation.isPending
 
   return (
-    <div className='flex flex-col'>
-      <div className='bg-background border-y border-border'>
+    <div className='mx-3 flex flex-col'>
+      <div className="w-full flex justify-end gap-1">
+        <Button variant="icon" size="icon">
+          <Terminal className="h-4 w-4" />
+        </Button>
+        <Button variant="icon" size="icon">
+          <Globe className="h-4 w-4" />
+        </Button>
+        <Button variant="icon" size="icon">
+          <Code className="h-4 w-4" />
+        </Button>
+        <Button variant="icon" size="icon">
+          <GitCompare className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className='bg-surface-3'>
         <Textarea
           data-agent-session-composer-input='true'
           ref={props.inputRef}
@@ -1520,7 +1534,7 @@ function SessionComposer (props: {
           className='resize-none bg-transparent border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 px-4 py-3 text-sm'
         />
       </div>
-      <div className='bg-background px-3 flex items-center gap-3 pt-0.5 pb-2'>
+      <div className='bg-surface-1 px-3 flex items-center gap-3 pt-0.5 pb-2'>
         <div className='flex items-center gap-3'>
           <p className='text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary'>
             {props.harness}

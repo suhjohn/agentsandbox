@@ -26,6 +26,7 @@ import {
   PanelLeftOpen,
   Plus,
   Rows2,
+  Square,
   X
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
@@ -48,6 +49,7 @@ import { LayoutNodeView } from './workspace-view_layout'
 import { WorkspaceHotkeysLayer } from './workspace-hotkeys-layer'
 import { useWorkspaceSelector, useWorkspaceStore } from '../store'
 import { listLeafIds } from '../layout'
+import type { PanelOpenPlacement } from '../panels/types'
 import {
   DEFAULT_LEADER_SEQUENCE,
   resolveWorkspaceKeybindings
@@ -473,7 +475,8 @@ export function WorkspaceView () {
   )
 
   const resolvedLeaderSequence =
-    resolvedWorkspaceKeybindingOverrides.leaderSequence ?? DEFAULT_LEADER_SEQUENCE
+    resolvedWorkspaceKeybindingOverrides.leaderSequence ??
+    DEFAULT_LEADER_SEQUENCE
 
   const formatBindingShortcut = useCallback(
     (binding: WorkspaceKeybinding): string => {
@@ -851,12 +854,13 @@ export function WorkspaceView () {
       readonly sessionId: string
       readonly sessionTitle?: string | null
       readonly agentName?: string
+      readonly placement?: PanelOpenPlacement
     }) => {
       if (!panelTargetLeafId) return
       store.dispatch({
         type: 'panel/open',
         fromLeafId: panelTargetLeafId,
-        placement: 'self',
+        placement: input.placement ?? 'self',
         panelType: 'agent_detail',
         config: {
           agentId: input.agentId,
@@ -1047,15 +1051,7 @@ export function WorkspaceView () {
               <p className='text-sm font-medium text-text-primary truncate flex-1 min-w-0'>
                 {session.title?.trim() || 'Untitled session'}
               </p>
-              <p className='text-[11px] font-mono text-text-tertiary flex-shrink-0'>
-                {session.id.slice(0, 8)}
-              </p>
             </div>
-            <p className='text-xs text-text-secondary mt-1 truncate'>
-              {formatLastMessagePreview(session.lastMessageBody, () => (
-                <Loader label='Working…' />
-              ))}
-            </p>
             <p className='text-[11px] text-text-tertiary mt-0.5'>
               {formatTimestamp(session.updatedAt)}
             </p>
@@ -1693,16 +1689,16 @@ export function WorkspaceView () {
                 }}
                 onMouseEnter={clearSessionDetailHideTimeout}
                 onMouseLeave={scheduleHideSessionDetailCard}
-              >
-                <div className='w-[320px] rounded-lg border border-border bg-surface-1/95 shadow-xl backdrop-blur-sm p-3 space-y-2'>
-                  <p className='text-xs font-semibold text-text-primary'>
-                    Session Details
-                  </p>
-                  <div className='space-y-1.5 text-[11px] leading-4'>
-                    <SessionMetaRow
-                      label='image'
-                      value={
-                        hoveredSessionDetail.session.imageId
+	              >
+	                <div className='w-[320px] rounded-lg border border-border bg-surface-1/95 shadow-xl backdrop-blur-sm p-3 space-y-2'>
+	                  <p className='text-xs font-semibold text-text-primary'>
+	                    Session Details
+	                  </p>
+	                  <div className='space-y-1.5 text-[11px] leading-4'>
+	                    <SessionMetaRow
+	                      label='image'
+	                      value={
+	                        hoveredSessionDetail.session.imageId
                           ? `${
                               imageNameById.get(
                                 hoveredSessionDetail.session.imageId
@@ -1742,20 +1738,79 @@ export function WorkspaceView () {
                         userNameById.get(
                           hoveredSessionDetail.session.createdBy
                         ) ?? hoveredSessionDetail.session.createdBy
-                      }
-                    />
-                    <SessionMetaRow
-                      label='updated'
-                      value={
-                        formatTimestamp(
-                          hoveredSessionDetail.session.updatedAt
-                        ) || hoveredSessionDetail.session.updatedAt
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : null}
+	                      }
+	                    />
+	                    <SessionMetaRow
+	                      label='updated'
+	                      value={
+	                        formatTimestamp(
+	                          hoveredSessionDetail.session.updatedAt
+	                        ) || hoveredSessionDetail.session.updatedAt
+	                      }
+	                    />
+	                  </div>
+	                  <div className='pt-2 border-t border-border/60 flex items-center justify-end gap-1.5'>
+	                    <Button
+	                      type='button'
+	                      variant='secondary'
+	                      size='sm'
+	                      className='h-7 px-2 text-[11px] [&_svg]:size-3.5'
+	                      title='Open in this pane'
+	                      aria-label='Open in this pane'
+	                      onClick={() =>
+	                        openAgentSession({
+	                          agentId: hoveredSessionDetail.session.agentId,
+	                          sessionId: hoveredSessionDetail.session.id,
+	                          sessionTitle: hoveredSessionDetail.session.title,
+	                          placement: 'self'
+	                        })
+	                      }
+	                    >
+	                      <Square />
+	                      Panel
+	                    </Button>
+	                    <Button
+	                      type='button'
+	                      variant='secondary'
+	                      size='sm'
+	                      className='h-7 px-2 text-[11px] [&_svg]:size-3.5'
+	                      title='Open on the right (split)'
+	                      aria-label='Open on the right (split)'
+	                      onClick={() =>
+	                        openAgentSession({
+	                          agentId: hoveredSessionDetail.session.agentId,
+	                          sessionId: hoveredSessionDetail.session.id,
+	                          sessionTitle: hoveredSessionDetail.session.title,
+	                          placement: 'right'
+	                        })
+	                      }
+	                    >
+	                      <Columns2 />
+	                      Right
+	                    </Button>
+	                    <Button
+	                      type='button'
+	                      variant='secondary'
+	                      size='sm'
+	                      className='h-7 px-2 text-[11px] [&_svg]:size-3.5'
+	                      title='Open on the bottom (stack)'
+	                      aria-label='Open on the bottom (stack)'
+	                      onClick={() =>
+	                        openAgentSession({
+	                          agentId: hoveredSessionDetail.session.agentId,
+	                          sessionId: hoveredSessionDetail.session.id,
+	                          sessionTitle: hoveredSessionDetail.session.title,
+	                          placement: 'bottom'
+	                        })
+	                      }
+	                    >
+	                      <Rows2 />
+	                      Bottom
+	                    </Button>
+	                  </div>
+	                </div>
+	              </div>
+	            ) : null}
             <div
               role='separator'
               aria-orientation='vertical'

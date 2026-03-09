@@ -113,3 +113,18 @@ func TestIsAllowedOriginRejectsMissingOrUnknown(t *testing.T) {
 		t.Fatalf("expected unknown origin to be rejected")
 	}
 }
+
+func TestIsAllowedOriginDefaultPortMatches(t *testing.T) {
+	origins := normalizeAllowedOrigins("https://allowed.example.com")
+	if !isAllowedOrigin(origins, "https://allowed.example.com:443") {
+		t.Fatalf("expected default :443 to be treated as same origin: %#v", origins)
+	}
+}
+
+func TestIsAllowedWebSocketOriginAllowsSameOriginProxy(t *testing.T) {
+	req := httptest.NewRequest("GET", "http://ta-01.w.modal.host:443/", nil)
+	req.Header.Set("Origin", "https://ta-01.w.modal.host")
+	if !isAllowedWebSocketOrigin([]string{}, req) {
+		t.Fatalf("expected same-origin websocket request to be allowed")
+	}
+}

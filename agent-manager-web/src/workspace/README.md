@@ -77,11 +77,15 @@ This document describes how pane and panel behavior flows through the workspace 
     - `GET /session/groups` for grouped list mode.
     - When a message is sent from an `agent_detail` session, that session is patched optimistically to `processing` in side-panel caches before stream/server reconciliation.
     - When an `agent_detail` session stream transitions from running to stopped, side-panel session query caches are patched optimistically for that session (`status`, `updatedAt`, `title`, `lastMessageBody`) before server reconciliation.
-    - Hovering a session row shows a right-side hover detail card (`image`, `agent`, `session`, `status`, `harness`, `created by`, `updated`); `created by` is resolved via `GET /users` ID->name mapping, and the card stays open while either the row or card is hovered.
+    - Hovering a session row shows a right-side hover detail card with quick-open buttons at the bottom:
+      - `Panel` -> open in the focused pane (`panel/open` with `placement: "self"`)
+      - `Right` -> open in the pane to the right or split right (`panel/open` with `placement: "right"`)
+      - `Bottom` -> open in the pane below or stack down (`panel/open` with `placement: "bottom"`)
+    - The card also shows session metadata (`image`, `agent`, `session`, `status`, `harness`, `created by`, `updated`); `created by` is resolved via `GET /users` ID->name mapping, and the card stays open while either the row or card is hovered.
   - Session rows show an archive action button on hover; archiving sets `isArchived = true` via `PUT /session/{id}` and refreshes list/group queries.
   - Filter menu fields: `image name` (stored/query-backed by `imageId`), `agentId`, `createdBy`, `archived` (`false` default, `true`, `all`), `status`, `updatedAt` range, `createdAt` range.
   - Group-by menu options: `image name` (`imageId` key with display joined to image names), `createdBy`, `status` (or none).
-- Clicking a listed session opens/replaces the focused pane with `agent_detail` in `session_detail` tab for that session (`panel/open` with `placement: "self"`).
+- Clicking a listed session opens/replaces the focused pane with `agent_detail` in `session_detail` tab for that session (`panel/open` with `placement: "self"`). The hover detail card provides explicit open targets for `self`/`right`/`bottom`.
 
 ## Event -> Action -> State Flow
 

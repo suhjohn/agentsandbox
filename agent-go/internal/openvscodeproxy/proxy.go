@@ -214,7 +214,28 @@ func normalizeOrigin(value string) string {
 	if err != nil || parsed == nil || parsed.Scheme == "" || parsed.Host == "" {
 		return ""
 	}
-	return strings.ToLower(parsed.Scheme + "://" + parsed.Host)
+	scheme := strings.ToLower(parsed.Scheme)
+	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	if host == "" {
+		return ""
+	}
+	port := strings.TrimSpace(parsed.Port())
+	switch {
+	case port == "":
+		// keep empty
+	case scheme == "https" && port == "443":
+		port = ""
+	case scheme == "http" && port == "80":
+		port = ""
+	}
+
+	hostPort := host
+	if port != "" {
+		hostPort = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
+		hostPort = "[" + host + "]"
+	}
+	return scheme + "://" + hostPort
 }
 
 func isLocalhostOrigin(origin string) bool {
@@ -241,6 +262,22 @@ func isAllowedOrigin(allowedOrigins []string, origin string) bool {
 		}
 	}
 	return false
+}
+
+func isAllowedWebSocketOrigin(allowedOrigins []string, r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if isAllowedOrigin(allowedOrigins, origin) {
+		return true
+	}
+	proxyOrigin := buildProxyOrigin(r)
+	if proxyOrigin == "" {
+		return false
+	}
+	normalizedOrigin := normalizeOrigin(origin)
+	if normalizedOrigin == "" {
+		return false
+	}
+	return normalizedOrigin == normalizeOrigin(proxyOrigin)
 }
 
 func newOpenVSCodeReverseProxy(cfg openVSCodeProxyConfig, upstreamURL *url.URL) http.Handler {
@@ -297,14 +334,14 @@ type proxyRequestMeta struct {
 }
 
 func proxyWebSocket(w http.ResponseWriter, r *http.Request, cfg openVSCodeProxyConfig) {
-	if !isAllowedOrigin(cfg.CORSAllowedOrigins, r.Header.Get("Origin")) {
+	if !isAllowedWebSocketOrigin(cfg.CORSAllowedOrigins, r) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(req *http.Request) bool {
-			return isAllowedOrigin(cfg.CORSAllowedOrigins, req.Header.Get("Origin"))
+			return isAllowedWebSocketOrigin(cfg.CORSAllowedOrigins, req)
 		},
 		Subprotocols: parseWebSocketProtocols(
 			r.Header.Get("Sec-WebSocket-Protocol"),

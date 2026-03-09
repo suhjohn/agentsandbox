@@ -54,6 +54,10 @@ import {
   type AgentBrowserPanelConfig
 } from './agent-browser'
 import {
+  AgentVscodePanel,
+  type AgentVscodePanelConfig
+} from './agent-vscode'
+import {
   AgentDiffPanel,
   readAgentDiffStylePreference,
   writeAgentDiffStylePreference,
@@ -79,6 +83,7 @@ type AgentDetailTab =
   | 'session_list'
   | 'session_detail'
   | 'terminal'
+  | 'vscode'
   | 'browser'
   | 'diff'
 
@@ -89,6 +94,7 @@ const AGENT_DETAIL_VIEW_ITEMS: ReadonlyArray<{
   { id: 'session_list', label: 'Session List' },
   { id: 'session_detail', label: 'Session Detail' },
   { id: 'terminal', label: 'Terminal' },
+  { id: 'vscode', label: 'VSCode' },
   { id: 'browser', label: 'Browser' },
   { id: 'diff', label: 'Diff' }
 ]
@@ -106,6 +112,7 @@ function clampLimit (value: number): number {
 function parseDetailTab (value: unknown): AgentDetailTab {
   return value === 'session_detail' ||
     value === 'terminal' ||
+    value === 'vscode' ||
     value === 'browser' ||
     value === 'diff'
     ? value
@@ -285,6 +292,13 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
     }),
     [props.config.agentId, props.config.agentName]
   )
+  const vscodeConfig: AgentVscodePanelConfig = useMemo(
+    () => ({
+      agentId: props.config.agentId,
+      agentName: props.config.agentName
+    }),
+    [props.config.agentId, props.config.agentName]
+  )
   const diffConfig: AgentDiffPanelConfig = useMemo(
     () => ({
       agentId: props.config.agentId,
@@ -338,6 +352,22 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
   )
   const setBrowserConfig = useCallback(
     (updater: (prev: AgentBrowserPanelConfig) => AgentBrowserPanelConfig) => {
+      props.setConfig(prev => {
+        const next = updater({
+          agentId: prev.agentId,
+          agentName: prev.agentName
+        })
+        return {
+          ...prev,
+          agentId: next.agentId,
+          agentName: next.agentName
+        }
+      })
+    },
+    [props.setConfig]
+  )
+  const setVscodeConfig = useCallback(
+    (updater: (prev: AgentVscodePanelConfig) => AgentVscodePanelConfig) => {
       props.setConfig(prev => {
         const next = updater({
           agentId: prev.agentId,
@@ -408,6 +438,14 @@ export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
             <AgentBrowserPanel
               config={browserConfig}
               setConfig={setBrowserConfig}
+              runtime={props.runtime}
+            />
+          </div>
+        ) : props.config.activeTab === 'vscode' ? (
+          <div className='h-full min-h-0 overflow-hidden'>
+            <AgentVscodePanel
+              config={vscodeConfig}
+              setConfig={setVscodeConfig}
               runtime={props.runtime}
             />
           </div>
@@ -1069,7 +1107,7 @@ export const agentDetailPanelDefinition: PanelDefinition<AgentDetailPanelConfig>
         agentName || (agentId.length > 0 ? agentId.slice(0, 8) : '')
       const sessionTitle = config.sessionTitle?.trim() || ''
       if (agentLabel.length > 0 && sessionTitle.length > 0) {
-        return `${agentLabel} - ${sessionTitle}`
+        return `[${agentLabel}] ${sessionTitle}`
       }
       if (agentLabel.length > 0) return agentLabel
       if (sessionTitle.length > 0) return sessionTitle
