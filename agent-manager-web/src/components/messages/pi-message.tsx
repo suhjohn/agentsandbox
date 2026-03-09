@@ -331,11 +331,17 @@ function getMessage (event: unknown): Record<string, unknown> | null {
   return message
 }
 
-function getToolExecution (
-  event: unknown
-): { toolName: string; resultText: string } | null {
+type ToolExecutionInfo = {
+  readonly toolCallId: string | null
+  readonly toolName: string
+  readonly resultText: string
+}
+
+function getToolExecution (event: unknown): ToolExecutionInfo | null {
   if (!isRecord(event)) return null
   if (event.type !== 'tool_execution_end') return null
+  const toolCallId =
+    typeof event.toolCallId === 'string' ? event.toolCallId : null
   const toolName = typeof event.toolName === 'string' ? event.toolName : 'tool'
   const result = event.result
   const resultText =
@@ -344,7 +350,29 @@ function getToolExecution (
       : typeof result === 'string'
       ? result
       : ''
-  return { toolName, resultText }
+  return { toolCallId, toolName, resultText }
+}
+
+type ToolCallItem = {
+  readonly id: string | null
+  readonly name: string
+  readonly arguments: unknown
+}
+
+function extractToolCalls (message: unknown): ToolCallItem[] {
+  if (!isRecord(message)) return []
+  const content = message.content
+  if (!Array.isArray(content)) return []
+
+  const toolCalls: ToolCallItem[] = []
+  for (const item of content) {
+    if (!isRecord(item)) continue
+    if (item.type !== 'toolCall') continue
+    const id = typeof item.id === 'string' ? item.id : null
+    const name = typeof item.name === 'string' ? item.name : 'tool'
+    toolCalls.push({ id, name, arguments: item.arguments })
+  }
+  return toolCalls
 }
 
 function useCollapsibleToggleAll (initial = false) {
@@ -447,6 +475,46 @@ function PiToolExecutionBlock (props: {
   )
 }
 
+function PiToolCallBlock (props: {
+  readonly toolName: string
+  readonly argsText: string
+  readonly resultText: string
+  readonly status: string
+}) {
+  return (
+    <PiCollapsibleBlock
+      title={props.toolName}
+      badge='tool_call'
+      status={props.status}
+    >
+      {props.argsText.length > 0 ? (
+        <>
+          <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
+            Request
+          </div>
+          <pre className='m-0 pt-1 text-xs text-text-secondary whitespace-pre-wrap break-all overflow-x-auto leading-relaxed'>
+            {props.argsText}
+          </pre>
+        </>
+      ) : null}
+      {props.resultText.length > 0 ? (
+        <>
+          <div className='pt-2 text-[11px] uppercase tracking-wide text-text-tertiary'>
+            Response
+          </div>
+          <pre className='m-0 pt-1 text-xs text-text-secondary whitespace-pre-wrap break-all overflow-x-auto leading-relaxed max-h-60 overflow-y-auto'>
+            {props.resultText}
+          </pre>
+        </>
+      ) : props.status === 'pending' ? (
+        <div className='pt-2 text-xs text-text-tertiary'>Pending...</div>
+      ) : (
+        <div className='pt-2 text-xs text-text-tertiary'>No response</div>
+      )}
+    </PiCollapsibleBlock>
+  )
+}
+
 function PiBashExecutionBlock (props: {
   readonly command: string
   readonly output: string
@@ -513,6 +581,22 @@ function parsePiBody (raw: unknown): PiMessageBody | null {
 export function PiMessages (props: {
   readonly messages: readonly GetSessionId200MessagesItem[]
 }) {
+  // First pass: build map of toolCallId → tool execution result
+  const toolResultsByCallId = new Map<string, ToolExecutionInfo>()
+  const toolCallIdsWithResults = new Set<string>()
+
+  for (const message of props.messages) {
+    const body = parsePiBody(message.body)
+    if (!body) continue
+    const toolExec = getToolExecution(body)
+    if (toolExec?.toolCallId) {
+      toolResultsByCallId.set(toolExec.toolCallId, toolExec)
+      toolCallIdsWithResults.add(toolExec.toolCallId)
+    }
+  }
+
+  // Second pass: build display messages, skipping tool_execution_end events
+  // that will be shown inline with their corresponding tool calls
   const displayMessages: Array<{
     readonly key: string
     readonly message: GetSessionId200MessagesItem
@@ -523,6 +607,12 @@ export function PiMessages (props: {
   for (const message of props.messages) {
     const body = parsePiBody(message.body)
     if (!body) continue
+
+    // Skip tool_execution_end events that have a toolCallId (they'll be shown inline)
+    const toolExec = getToolExecution(body)
+    if (toolExec?.toolCallId && toolCallIdsWithResults.has(toolExec.toolCallId)) {
+      continue
+    }
 
     let key = message.id
     if (isPiUserInputEvent(body)) {
@@ -552,6 +642,7 @@ export function PiMessages (props: {
             message={message}
             body={body}
             isFirst={index === 0}
+            toolResultsByCallId={toolResultsByCallId}
           />
         )
       })}
@@ -563,6 +654,7 @@ export function PiMessage (props: {
   readonly message: GetSessionId200MessagesItem
   readonly body: PiMessageBody
   readonly isFirst?: boolean
+  readonly toolResultsByCallId?: Map<string, ToolExecutionInfo>
 }) {
   const event = props.body
   if (isPiUserInputEvent(event)) {
@@ -581,6 +673,7 @@ export function PiMessage (props: {
 
   const eventType = (event as { type?: string }).type
 
+  // Handle standalone tool_execution_end events (without toolCallId match)
   const toolExec = getToolExecution(event)
   if (toolExec) {
     return (
@@ -602,7 +695,7 @@ export function PiMessage (props: {
         <div
           className={`${
             props.isFirst ? '' : 'mt-8'
-          } w-full bg-surface-3 px-3 py-2 text-sm text-text-primary whitespace-pre-wrap break-words`}
+          } w-full bg-surface-3 px-3 py-2 text-sm whitespace-pre-wrap break-words`}
         >
           {text}
         </div>
@@ -639,12 +732,45 @@ export function PiMessage (props: {
       )
     }
 
+    // For assistant messages, extract text and tool calls
     const text = extractPiMessageText(message)
-    if (text && text.trim().length > 0) {
-      return (
+    const toolCalls = extractToolCalls(message)
+
+    // Render text content if present
+    const textElement =
+      text && text.trim().length > 0 ? (
         <div className='text-sm'>
           <Markdown>{text}</Markdown>
         </div>
+      ) : null
+
+    // Render tool calls with their results
+    const toolCallElements = toolCalls.map((toolCall, index) => {
+      const result =
+        toolCall.id && props.toolResultsByCallId
+          ? props.toolResultsByCallId.get(toolCall.id)
+          : null
+      const argsText =
+        toolCall.arguments && typeof toolCall.arguments === 'object'
+          ? JSON.stringify(toolCall.arguments, null, 2)
+          : ''
+      return (
+        <PiToolCallBlock
+          key={toolCall.id ?? `toolcall-${index}`}
+          toolName={result?.toolName ?? toolCall.name}
+          argsText={argsText}
+          resultText={result?.resultText ?? ''}
+          status={result ? 'completed' : 'pending'}
+        />
+      )
+    })
+
+    if (textElement || toolCallElements.length > 0) {
+      return (
+        <>
+          {textElement}
+          {toolCallElements}
+        </>
       )
     }
   }
