@@ -523,7 +523,11 @@ func isSecureRequest(r *http.Request) bool {
 		}
 	}
 
-	host := stripHostPort(headers.Get("Host"))
+	// net/http exposes the Host header via r.Host (it is not guaranteed to be present in r.Header).
+	host := stripHostPort(strings.TrimSpace(r.Host))
+	if host == "" {
+		host = stripHostPort(headers.Get("Host"))
+	}
 	forwardedHost := stripHostPort(headers.Get("X-Forwarded-Host"))
 	return hasModalSuffix(host) || hasModalSuffix(forwardedHost)
 }

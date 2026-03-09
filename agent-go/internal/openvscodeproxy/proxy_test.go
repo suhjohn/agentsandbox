@@ -25,6 +25,15 @@ func TestIsSecureRequestModalHostWithPort(t *testing.T) {
 	}
 }
 
+func TestIsSecureRequestModalHostViaRequestHost(t *testing.T) {
+	req := httptest.NewRequest("GET", "http://ta-123.w.modal.host:39393/", nil)
+	req.URL.Host = ""
+	req.Host = "ta-123.w.modal.host:443"
+	if !isSecureRequest(req) {
+		t.Fatalf("expected request host to be treated as secure")
+	}
+}
+
 func TestIsSecureRequestCrossSiteIframe(t *testing.T) {
 	req := httptest.NewRequest("GET", "http://127.0.0.1:39393/", nil)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
