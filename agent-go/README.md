@@ -174,7 +174,7 @@ Runtime behavior intentionally keeps the same entrypoint/runit stack used by `ag
 - browser/Xvfb/openbox/x11vnc/websockify startup
 - OpenVSCode service startup
 - optional dockerd service
-- workspace tools sync + Codex/PI `AGENTS.md` generation
+- workspace tools sync + harness runtime setup on `agent-server serve` startup (`AGENTS.md`, Codex auth seeding)
 
 The API server command remains `/app/agent-server`, but this is an executable launcher
 that syncs the in-image source checkout and then runs the tracked repo binary at
@@ -197,6 +197,14 @@ are installed/launched by the container entrypoint (`agent-entrypoint`).
   - `openvscode-server` (`agent-go/docker/runit/openvscode-server.sh`)
   - `openvscode-proxy` (`agent-go/docker/runit/openvscode-proxy.sh`, runs `/app/agent-server openvscode-proxy`)
   - `ui-stack` (Xvfb/VNC/noVNC/Chromium) (`agent-go/docker/runit/ui-stack.sh`)
+
+Service control:
+
+- Restart all installed runit services inside the container:
+
+  ```bash
+  sv restart /home/agent/runtime/runit/services/*
+  ```
 
 Operational implications:
 

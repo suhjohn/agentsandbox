@@ -129,6 +129,65 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 	}, nil
 }
 
+func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
+	runtimeCtx := ctx.RuntimeContext
+	if strings.TrimSpace(runtimeCtx.PIDir) == "" {
+		return nil
+	}
+	_, err := registry.EnsureManagedContextFile(registry.ManagedFileSpec{
+		Harness: h.ID(),
+		Path:    filepath.Join(runtimeCtx.PIDir, "AGENTS.md"),
+		Version: 1,
+		Content: renderAgentsContent(runtimeCtx),
+	})
+	return err
+}
+
+func renderAgentsContent(ctx registry.RuntimeContext) string {
+	var content strings.Builder
+	content.WriteString("# Environment\n")
+	content.WriteString("- You are PI running inside a sandbox container.\n")
+	content.WriteString("- Runtime state root: " + strings.TrimSpace(ctx.RootDir) + "\n")
+	content.WriteString("- Home/workspace root: " + strings.TrimSpace(ctx.AgentHome) + "\n")
+	content.WriteString("- Agent identity: AGENT_ID=" + strings.TrimSpace(ctx.AgentID) + "\n")
+	content.WriteString("- PI state dir: " + strings.TrimSpace(ctx.PIDir) + "\n")
+	if codexHome := strings.TrimSpace(ctx.CodexHome); codexHome != "" {
+		content.WriteString("- Codex state dir: " + codexHome + "\n")
+	}
+	if display := strings.TrimSpace(ctx.Display); display != "" {
+		content.WriteString("- Chromium is already running under Xvfb on display " + display + " at " + strings.TrimSpace(ctx.ScreenWidth) + "x" + strings.TrimSpace(ctx.ScreenHeight) + "x" + strings.TrimSpace(ctx.ScreenDepth) + ".\n")
+	}
+	if addr, port := strings.TrimSpace(ctx.ChromiumRemoteDebugAddress), strings.TrimSpace(ctx.ChromiumRemoteDebugPort); addr != "" && port != "" {
+		content.WriteString("- Remote debugging is enabled at " + addr + ":" + port + " unless CHROMIUM_FLAGS overrides it.\n")
+	}
+	if vncPort, noVNCPort := strings.TrimSpace(ctx.VNCPort), strings.TrimSpace(ctx.NoVNCPort); vncPort != "" && noVNCPort != "" {
+		content.WriteString("- VNC server: 127.0.0.1:" + vncPort + "; noVNC: 0.0.0.0:" + noVNCPort + ".\n")
+	}
+	if profileDir := strings.TrimSpace(ctx.ChromiumUserDataDir); profileDir != "" {
+		content.WriteString("- Browser profile directory: " + profileDir + ".\n")
+	}
+	if workingDir := strings.TrimSpace(ctx.AgentHome); workingDir != "" {
+		content.WriteString("- Working directory: " + workingDir + ".\n")
+	}
+	content.WriteString("- Prefer reusing the existing browser rather than launching a new one.\n")
+	content.WriteString("\n# Tools (Workspace)\n")
+	if toolsDir := strings.TrimSpace(ctx.ToolsDir); toolsDir != "" {
+		content.WriteString("- Tools are synced from /app/tools into: " + toolsDir + "\n")
+	}
+	content.WriteString("- Each tool directory should contain a README.md describing usage. Read it before invoking the tool.\n")
+	if len(ctx.ToolReadmes) > 0 {
+		content.WriteString("\n## Tool READMEs\n")
+		for _, path := range ctx.ToolReadmes {
+			path = strings.TrimSpace(path)
+			if path == "" {
+				continue
+			}
+			content.WriteString("- " + path + "\n")
+		}
+	}
+	return content.String()
+}
+
 func (h *Harness) resolveModelPattern(pattern string) (string, *string, error) {
 	return registry.ResolveCatalogModelPattern(pattern, modelcatalog.All(), h.ID(), func(def modelcatalog.ModelDef) string {
 		return def.Provider + "/" + def.ID

@@ -27,6 +27,10 @@ func (s stubDefinition) Execute(ctx context.Context, req ExecuteRequest) (RunRes
 	return RunResult{}, nil
 }
 
+func (s stubDefinition) SetupRuntime(ctx SetupContext) error {
+	return nil
+}
+
 func TestNewRejectsDuplicateHarnessesAfterNormalization(t *testing.T) {
 	_, err := New(
 		stubDefinition{id: "Codex"},

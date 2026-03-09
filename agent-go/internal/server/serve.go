@@ -118,6 +118,9 @@ func runServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := app.setupHarnessRuntime(); err != nil {
+		return err
+	}
 	app.outbox = newEventOutbox(store, httpClient, cfg)
 	app.outbox.start()
 	defer app.outbox.stop()

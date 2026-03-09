@@ -2,7 +2,9 @@ package codex
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -142,6 +144,119 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 		ExternalSessionID: strings.TrimSpace(seenExternalSessionID),
 		Text:              strings.TrimSpace(resultText.String()),
 	}, nil
+}
+
+func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
+	runtimeCtx := ctx.RuntimeContext
+	if codexHome := strings.TrimSpace(runtimeCtx.CodexHome); codexHome != "" {
+		if _, err := registry.EnsureManagedContextFile(registry.ManagedFileSpec{
+			Harness: h.ID(),
+			Path:    filepath.Join(codexHome, "AGENTS.md"),
+			Version: 1,
+			Content: renderAgentsContent(runtimeCtx),
+		}); err != nil {
+			return err
+		}
+	}
+	return ensureAuthJSON(runtimeCtx.CodexHome, ctx.OpenAIAPIKey)
+}
+
+func renderAgentsContent(ctx registry.RuntimeContext) string {
+	var content strings.Builder
+	content.WriteString("# Environment\n")
+	content.WriteString("- You are Codex running inside a sandbox container.\n")
+	content.WriteString("- Runtime state root: " + strings.TrimSpace(ctx.RootDir) + "\n")
+	content.WriteString("- Home/workspace root: " + strings.TrimSpace(ctx.AgentHome) + "\n")
+	content.WriteString("- Agent identity: AGENT_ID=" + strings.TrimSpace(ctx.AgentID) + "\n")
+	content.WriteString("- Codex state dir: " + strings.TrimSpace(ctx.CodexHome) + "\n")
+	if piDir := strings.TrimSpace(ctx.PIDir); piDir != "" {
+		content.WriteString("- PI state dir: " + piDir + "\n")
+	}
+	if display := strings.TrimSpace(ctx.Display); display != "" {
+		content.WriteString("- Chromium is already running under Xvfb on display " + display + " at " + strings.TrimSpace(ctx.ScreenWidth) + "x" + strings.TrimSpace(ctx.ScreenHeight) + "x" + strings.TrimSpace(ctx.ScreenDepth) + ".\n")
+	}
+	if addr, port := strings.TrimSpace(ctx.ChromiumRemoteDebugAddress), strings.TrimSpace(ctx.ChromiumRemoteDebugPort); addr != "" && port != "" {
+		content.WriteString("- Remote debugging is enabled at " + addr + ":" + port + " unless CHROMIUM_FLAGS overrides it.\n")
+	}
+	if vncPort, noVNCPort := strings.TrimSpace(ctx.VNCPort), strings.TrimSpace(ctx.NoVNCPort); vncPort != "" && noVNCPort != "" {
+		content.WriteString("- VNC server: 127.0.0.1:" + vncPort + "; noVNC: 0.0.0.0:" + noVNCPort + ".\n")
+	}
+	if profileDir := strings.TrimSpace(ctx.ChromiumUserDataDir); profileDir != "" {
+		content.WriteString("- Browser profile directory: " + profileDir + ".\n")
+	}
+	if workingDir := strings.TrimSpace(ctx.AgentHome); workingDir != "" {
+		content.WriteString("- Working directory: " + workingDir + ".\n")
+	}
+	content.WriteString("- Prefer reusing the existing browser rather than launching a new one.\n")
+	content.WriteString("\n# Tools (Workspace)\n")
+	if toolsDir := strings.TrimSpace(ctx.ToolsDir); toolsDir != "" {
+		content.WriteString("- Tools are synced from /app/tools into: " + toolsDir + "\n")
+	}
+	content.WriteString("- Each tool directory should contain a README.md describing usage. Read it before invoking the tool.\n")
+	if len(ctx.ToolReadmes) > 0 {
+		content.WriteString("\n## Tool READMEs\n")
+		for _, path := range ctx.ToolReadmes {
+			path = strings.TrimSpace(path)
+			if path == "" {
+				continue
+			}
+			content.WriteString("- " + path + "\n")
+		}
+	}
+	return content.String()
+}
+
+func ensureAuthJSON(codexHome, openaiAPIKey string) error {
+	codexHome = strings.TrimSpace(codexHome)
+	if codexHome == "" {
+		return nil
+	}
+	openaiAPIKey = strings.TrimSpace(openaiAPIKey)
+	if openaiAPIKey == "" {
+		return nil
+	}
+
+	authPath := filepath.Join(codexHome, "auth.json")
+	if _, err := os.Stat(authPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if err := os.MkdirAll(codexHome, 0o755); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(map[string]string{
+		"auth_mode":      "apikey",
+		"OPENAI_API_KEY": openaiAPIKey,
+	})
+	if err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp(codexHome, ".auth-*.json")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(append(raw, '\n')); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Rename(tmpPath, authPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }
 
 func (h *Harness) resolveModelPattern(pattern string) (string, *string, error) {

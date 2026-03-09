@@ -193,103 +193,6 @@ cd /app
 mkdir -p "${AGENT_HOME}" "${WORKSPACES_DIR}" "${DEFAULT_WORKING_DIR}" 2>/dev/null || true
 mkdir -p "${ROOT_DIR}" 2>/dev/null || true
 
-ensure_runtime_agents() {
-  local tools_dir="${WORKSPACE_TOOLS_DIR_EFFECTIVE:-${WORKSPACE_TOOLS_DIR:-${WORKSPACES_DIR}/tools}}"
-  if [[ ! -d "${tools_dir}" ]] && [[ -d /app/tools ]]; then
-    tools_dir="/app/tools"
-  fi
-
-  local tool_readmes=""
-  if [[ -d "${tools_dir}" ]]; then
-    tool_readmes="$(
-      find -L "${tools_dir}" \
-        -type d \( -name node_modules -o -name .git -o -name dist -o -name build -o -name coverage \) -prune -o \
-        -type f -name README.md -print 2>/dev/null \
-      | sort || true
-    )"
-  fi
-
-  local agents_file=""
-  for agents_file in "${CODEX_HOME}/AGENTS.md" "${PI_CODING_AGENT_DIR}/AGENTS.md"; do
-    : >"${agents_file}"
-    cat <<EOF >>"${agents_file}"
-# Environment
-- You are running inside a sandbox container.
-- Runtime state root: ${ROOT_DIR}
-- Home/workspace root: ${AGENT_HOME}
-- Agent identity: AGENT_ID=${AGENT_ID}
-- Agent runtime dir: ${ROOT_DIR}
-- Codex state dir: ${CODEX_HOME}
-- PI state dir: ${PI_CODING_AGENT_DIR}
-- Chromium is already running under Xvfb on display ${DISPLAY} at ${SCREEN_WIDTH}x${SCREEN_HEIGHT}x${SCREEN_DEPTH}.
-- Remote debugging is enabled at ${CHROMIUM_REMOTE_DEBUG_ADDRESS}:${CHROMIUM_REMOTE_DEBUG_PORT} unless CHROMIUM_FLAGS overrides it.
-- VNC server: 127.0.0.1:${VNC_PORT}; noVNC: 0.0.0.0:${NOVNC_PORT}.
-- Browser profile directory: ${CHROMIUM_USER_DATA_DIR}.
-- Working directory: ${AGENT_HOME}.
-- Prefer reusing the existing browser rather than launching a new one.
-
-# Tools (Workspace)
-- Tools are synced from /app/tools into: ${tools_dir}
-- If ${WORKSPACES_DIR}/tools is already occupied, tools may be exposed under: ${WORKSPACE_TOOLS_DIR_EFFECTIVE:-}
-- Each tool directory should contain a README.md describing usage. Read it before invoking the tool.
-EOF
-
-    if [[ -n "${tool_readmes}" ]]; then
-      echo "" >>"${agents_file}"
-      echo "## Tool READMEs" >>"${agents_file}"
-      while IFS= read -r p; do
-        [[ -n "${p}" ]] || continue
-        echo "- ${p}" >>"${agents_file}"
-      done <<<"${tool_readmes}"
-    fi
-  done
-}
-
-ensure_codex_auth_json() {
-  local auth_file="${CODEX_HOME}/auth.json"
-
-  if [[ -f "${auth_file}" ]]; then
-    return 0
-  fi
-
-  local openai_api_key="${OPENAI_API_KEY:-}"
-  openai_api_key="${openai_api_key#"${openai_api_key%%[![:space:]]*}"}"
-  openai_api_key="${openai_api_key%"${openai_api_key##*[![:space:]]}"}"
-  if [[ -z "${openai_api_key}" ]]; then
-    return 0
-  fi
-
-  mkdir -p "${CODEX_HOME}" 2>/dev/null || true
-
-  local tmp="${auth_file}.tmp"
-  rm -f "${tmp}" 2>/dev/null || true
-
-  if command -v jq >/dev/null 2>&1; then
-    jq -n --arg api_key "${openai_api_key}" \
-      '{"auth_mode":"apikey","OPENAI_API_KEY":$api_key}' \
-      >"${tmp}" 2>/dev/null || true
-  elif command -v python3 >/dev/null 2>&1; then
-    python3 - <<'PY' >"${tmp}" 2>/dev/null || true
-import json
-import os
-
-api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
-print(json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": api_key}))
-PY
-  else
-    printf '{"auth_mode":"apikey","OPENAI_API_KEY":"%s"}\n' "${openai_api_key}" \
-      >"${tmp}" 2>/dev/null || true
-  fi
-
-  if [[ -s "${tmp}" ]]; then
-    mv -f "${tmp}" "${auth_file}" 2>/dev/null || true
-    chmod 600 "${auth_file}" 2>/dev/null || true
-    echo "[auth] Seeded ${auth_file}." >&2
-  else
-    rm -f "${tmp}" 2>/dev/null || true
-  fi
-}
-
 ensure_workspace_tools_link() {
   local tools_path="${WORKSPACES_DIR}/tools"
   local effective_tools_path="${WORKSPACES_DIR}/tools"
@@ -380,14 +283,10 @@ prepare_runtime_state() {
 if [[ "${1:-}" == "init" ]] || [[ "${1:-}" == "--init" ]]; then
   shift || true
   prepare_runtime_state
-  ensure_codex_auth_json
-  ensure_runtime_agents
   exit 0
 fi
 
 prepare_runtime_state
-ensure_codex_auth_json
-ensure_runtime_agents
 
 mkdir -p "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}" "${XDG_DATA_HOME}" 2>/dev/null || true
 

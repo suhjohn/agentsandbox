@@ -35,6 +35,33 @@ type ExecuteRequest struct {
 	PersistExternalSessionID func(string)
 }
 
+type RuntimeContext struct {
+	RootDir                    string
+	RuntimeDir                 string
+	AgentHome                  string
+	AgentID                    string
+	WorkspacesDir              string
+	DefaultWorkingDir          string
+	CodexHome                  string
+	PIDir                      string
+	ToolsDir                   string
+	ToolReadmes                []string
+	Display                    string
+	ScreenWidth                string
+	ScreenHeight               string
+	ScreenDepth                string
+	ChromiumRemoteDebugAddress string
+	ChromiumRemoteDebugPort    string
+	VNCPort                    string
+	NoVNCPort                  string
+	ChromiumUserDataDir        string
+}
+
+type SetupContext struct {
+	RuntimeContext RuntimeContext
+	OpenAIAPIKey   string
+}
+
 type StartRunRequest struct {
 	Session    Session
 	RuntimeDir string
@@ -51,6 +78,7 @@ type Definition interface {
 	ResolveDefaults(defaultModel, defaultEffort string) (model *string, effort *string, err error)
 	PrepareStartRun(req StartRunRequest) (StartRunPreparation, error)
 	Execute(ctx context.Context, req ExecuteRequest) (RunResult, error)
+	SetupRuntime(ctx SetupContext) error
 }
 
 type Registry struct {
