@@ -100,12 +100,10 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 				req.PersistExternalSessionID(sessionID)
 			}
 		}
-		if req.EmitEvent != nil {
-			if compact, ok := compactEventForStream(evt.Value); ok {
-				req.EmitEvent(compact)
-			}
+		if req.EmitEvent != nil && len(evt.Value) > 0 {
+			req.EmitEvent(evt.Value)
 		}
-		if text := textFromEvent(evt.Value); text != "" {
+		if text := streamedMessageText(evt.Value); text != "" {
 			if textBuilder.Len() > 0 {
 				textBuilder.WriteString("\n\n")
 			}
@@ -210,117 +208,13 @@ func splitInputs(input []registry.Input) (string, []string) {
 	return strings.TrimSpace(strings.Join(textParts, "\n")), files
 }
 
-func compactEventForStream(value map[string]any) (map[string]any, bool) {
-	if len(value) == 0 {
-		return nil, false
-	}
-
-	switch strings.TrimSpace(registry.FirstNonEmptyString(value["type"])) {
-	case "text", "reasoning":
-		part := compactTextPart(value["part"])
-		if part == nil {
-			return nil, false
-		}
-		return map[string]any{
-			"type": strings.TrimSpace(registry.FirstNonEmptyString(value["type"])),
-			"part": part,
-		}, true
-	case "tool_use":
-		part := compactToolPart(value["part"])
-		if part == nil {
-			return nil, false
-		}
-		return map[string]any{
-			"type": "tool_use",
-			"part": part,
-		}, true
-	case "error":
-		message := strings.TrimSpace(firstErrorMessage(value["error"]))
-		if message == "" {
-			message = "Unknown error"
-		}
-		return map[string]any{
-			"type":    "error",
-			"message": message,
-		}, true
-	default:
-		return nil, false
-	}
-}
-
-func compactTextPart(raw any) map[string]any {
-	part, _ := raw.(map[string]any)
-	text := strings.TrimSpace(registry.FirstNonEmptyString(part["text"]))
-	if text == "" {
-		return nil
-	}
-	out := map[string]any{"text": text}
-	if id := strings.TrimSpace(registry.FirstNonEmptyString(part["id"])); id != "" {
-		out["id"] = id
-	}
-	return out
-}
-
-func compactToolPart(raw any) map[string]any {
-	part, _ := raw.(map[string]any)
-	if len(part) == 0 {
-		return nil
-	}
-	tool := strings.TrimSpace(registry.FirstNonEmptyString(part["tool"]))
-	if tool == "" {
-		return nil
-	}
-
-	state, _ := part["state"].(map[string]any)
-	out := map[string]any{"tool": tool}
-	if id := strings.TrimSpace(registry.FirstNonEmptyString(part["id"])); id != "" {
-		out["id"] = id
-	}
-	if status := strings.TrimSpace(registry.FirstNonEmptyString(state["status"])); status != "" {
-		out["status"] = status
-	}
-	if input, ok := state["input"]; ok {
-		out["input"] = input
-	}
-	if output, ok := state["output"]; ok {
-		out["output"] = output
-	}
-	if metadata, ok := state["metadata"]; ok {
-		out["metadata"] = metadata
-	}
-	if errMsg := strings.TrimSpace(firstErrorMessage(state["error"])); errMsg != "" {
-		out["error"] = errMsg
-	}
-	return out
-}
-
 func eventSessionID(value map[string]any) string {
 	return strings.TrimSpace(registry.FirstNonEmptyString(value["sessionID"]))
 }
 
-func textFromEvent(value map[string]any) string {
-	if strings.TrimSpace(registry.FirstNonEmptyString(value["type"])) != "text" {
-		return ""
-	}
+func streamedMessageText(value map[string]any) string {
 	part, _ := value["part"].(map[string]any)
 	return strings.TrimSpace(registry.FirstNonEmptyString(part["text"]))
-}
-
-func firstErrorMessage(value any) string {
-	switch t := value.(type) {
-	case string:
-		return strings.TrimSpace(t)
-	case map[string]any:
-		if msg := strings.TrimSpace(registry.FirstNonEmptyString(t["message"])); msg != "" {
-			return msg
-		}
-		if data, ok := t["data"].(map[string]any); ok {
-			if msg := strings.TrimSpace(registry.FirstNonEmptyString(data["message"])); msg != "" {
-				return msg
-			}
-		}
-	}
-	return ""
 }
 
 func runtimeConfigDir(runtimeDir string) string {

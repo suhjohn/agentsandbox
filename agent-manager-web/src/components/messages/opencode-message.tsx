@@ -46,11 +46,17 @@ type OpencodeErrorEvent = {
   readonly message?: unknown;
 };
 
+type OpencodeRawEvent = {
+  readonly type: string;
+  readonly [key: string]: unknown;
+};
+
 type OpencodeMessageBody =
   | OpencodeUserInputEvent
   | OpencodeTextEvent
   | OpencodeToolUseEvent
-  | OpencodeErrorEvent;
+  | OpencodeErrorEvent
+  | OpencodeRawEvent;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -88,21 +94,34 @@ function isOpencodeToolPart(value: unknown): value is OpencodeToolPart {
   return true;
 }
 
+function isOpencodeTextEvent(value: unknown): value is OpencodeTextEvent {
+  return (
+    isRecord(value) &&
+    (value.type === "text" || value.type === "reasoning") &&
+    isOpencodeTextPart(value.part)
+  );
+}
+
+function isOpencodeToolUseEvent(value: unknown): value is OpencodeToolUseEvent {
+  return (
+    isRecord(value) &&
+    value.type === "tool_use" &&
+    isOpencodeToolPart(value.part)
+  );
+}
+
+function isOpencodeErrorEvent(value: unknown): value is OpencodeErrorEvent {
+  return isRecord(value) && value.type === "error";
+}
+
 export function isOpencodeMessageBody(
   value: unknown,
 ): value is OpencodeMessageBody {
   if (isOpencodeUserInputEvent(value)) return true;
-  if (!isRecord(value)) return false;
-
-  if (
-    (value.type === "text" || value.type === "reasoning") &&
-    isOpencodeTextPart(value.part)
-  ) {
-    return true;
-  }
-  if (value.type === "tool_use" && isOpencodeToolPart(value.part)) return true;
-  if (value.type === "error") return true;
-  return false;
+  if (isOpencodeTextEvent(value)) return true;
+  if (isOpencodeToolUseEvent(value)) return true;
+  if (isOpencodeErrorEvent(value)) return true;
+  return isRecord(value) && typeof value.type === "string";
 }
 
 function parseOpencodeBody(raw: unknown): OpencodeMessageBody | null {
@@ -225,16 +244,79 @@ function normalizeToolStatus(status: string | undefined): string {
 }
 
 function extractText(body: OpencodeMessageBody): string | null {
-  if (body.type === "user_input") return formatUserInput(body.input);
-  if (body.type === "text" || body.type === "reasoning") {
+  if (isOpencodeUserInputEvent(body)) return formatUserInput(body.input);
+  if (isOpencodeTextEvent(body)) {
     const text = body.part.text?.trim() ?? "";
     return text.length > 0 ? text : null;
   }
-  if (body.type === "error") {
+  if (isOpencodeErrorEvent(body)) {
     const message = typeof body.message === "string" ? body.message.trim() : "";
     return message.length > 0 ? message : null;
   }
+  const raw = body as Record<string, unknown>;
+  const part = isRecord(raw.part) ? raw.part : null;
+  const partText = typeof part?.text === "string" ? part.text.trim() : "";
+  if (partText.length > 0) return partText;
+  const message = typeof raw.message === "string" ? raw.message.trim() : "";
+  if (message.length > 0) return message;
+  const error = isRecord(raw.error) ? raw.error : null;
+  const errorMessage =
+    typeof error?.message === "string" ? error.message.trim() : "";
+  if (errorMessage.length > 0) return errorMessage;
   return null;
+}
+
+function summarizeRawEvent(body: OpencodeRawEvent): string {
+  const text = extractText(body);
+  if (text) return text.length > 80 ? text.slice(0, 80) + "…" : text;
+
+  const part = isRecord(body.part) ? body.part : null;
+  const reason = typeof part?.reason === "string" ? part.reason.trim() : "";
+  if (reason.length > 0) return reason;
+
+  const tokens = isRecord(part?.tokens) ? part.tokens : null;
+  if (tokens) {
+    const input = typeof tokens.input === "number" ? tokens.input : null;
+    const output = typeof tokens.output === "number" ? tokens.output : null;
+    if (input !== null || output !== null) {
+      const pieces: string[] = [];
+      if (input !== null) pieces.push(`in ${input}`);
+      if (output !== null) pieces.push(`out ${output}`);
+      return pieces.join(", ");
+    }
+  }
+
+  return "";
+}
+
+function RawEventBlock(props: { readonly body: OpencodeRawEvent }) {
+  const [isOpen, setIsOpen] = useCollapsibleToggleAll();
+  const payload = formatMaybeJson(props.body);
+  const summary = summarizeRawEvent(props.body);
+
+  return (
+    <Collapsible
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      className="w-full text-sm"
+      data-collapsible-toggle-all="true"
+      data-collapsible-open={isOpen ? "true" : "false"}
+    >
+      <CollapsibleTrigger className="flex items-center gap-2 w-full py-1 border-none cursor-pointer">
+        <span className="font-mono text-text-primary truncate">
+          <span className="font-bold">{props.body.type}</span>
+          {summary ? (
+            <span className="text-text-tertiary ml-3">{summary}</span>
+          ) : null}
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="ml-4 mt-1 px-3 py-2 bg-surface-3 text-xs">
+        <pre className="m-0 text-xs text-text-secondary font-mono whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
+          {payload}
+        </pre>
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
 
 function ToolUseBlock(props: { readonly part: OpencodeToolPart }) {
@@ -349,7 +431,7 @@ function OpencodeMessage(props: {
 }) {
   const { body } = props;
 
-  if (body.type === "user_input") {
+  if (isOpencodeUserInputEvent(body)) {
     const text = formatUserInput(body.input);
     if (!text) return null;
     return (
@@ -362,26 +444,30 @@ function OpencodeMessage(props: {
     );
   }
 
-  if (body.type === "tool_use") {
+  if (isOpencodeToolUseEvent(body)) {
     return <ToolUseBlock part={body.part} />;
   }
 
-  if (body.type === "error") {
+  if (isOpencodeErrorEvent(body)) {
     const text = extractText(body);
     if (!text) return null;
     return <div className="text-sm text-red-500">{text}</div>;
   }
 
-  const text = extractText(body);
-  if (!text) return null;
-  return (
-    <MessageTextBlock
-      text={text}
-      className={
-        body.type === "reasoning" ? "py-2 text-text-secondary" : undefined
-      }
-    />
-  );
+  if (isOpencodeTextEvent(body)) {
+    const text = extractText(body);
+    if (!text) return null;
+    return (
+      <MessageTextBlock
+        text={text}
+        className={
+          body.type === "reasoning" ? "py-2 text-text-secondary" : undefined
+        }
+      />
+    );
+  }
+
+  return <RawEventBlock body={body} />;
 }
 
 function getMessageSender(

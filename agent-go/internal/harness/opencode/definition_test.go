@@ -1,6 +1,7 @@
 package opencode
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,41 +103,66 @@ func TestSetupRuntimeSeedsManagedAgentsFile(t *testing.T) {
 }
 
 func TestCompactEventForStream(t *testing.T) {
-	toolEvent, ok := compactEventForStream(map[string]any{
-		"type":      "tool_use",
-		"sessionID": "session-123",
-		"part": map[string]any{
-			"id":   "tool-1",
-			"tool": "read",
-			"state": map[string]any{
-				"status": "completed",
-				"input": map[string]any{
-					"filePath": "/tmp/file.txt",
-				},
-				"output": "done",
-			},
-		},
-	})
-	if !ok {
-		t.Fatalf("expected tool event to compact")
-	}
-	if got := registry.FirstNonEmptyString(toolEvent["type"]); got != "tool_use" {
-		t.Fatalf("expected tool_use type, got %q", got)
-	}
-
-	textEvent, ok := compactEventForStream(map[string]any{
+	if got := streamedMessageText(map[string]any{
 		"type": "text",
 		"part": map[string]any{
 			"id":   "part-1",
 			"text": "final answer",
 		},
-	})
-	if !ok {
-		t.Fatalf("expected text event to compact")
-	}
-	part, _ := textEvent["part"].(map[string]any)
-	if got := registry.FirstNonEmptyString(part["text"]); got != "final answer" {
+	}); got != "final answer" {
 		t.Fatalf("expected text payload, got %q", got)
+	}
+}
+
+func TestExecuteAppendsAllStreamedMessageTextAndEmitsRawEvents(t *testing.T) {
+	tmpDir := t.TempDir()
+	runtimeDir := filepath.Join(tmpDir, "runtime")
+	scriptPath := filepath.Join(tmpDir, "fake-opencode.sh")
+	script := strings.Join([]string{
+		"#!/bin/sh",
+		"printf '%s\\n' '{\"type\":\"step_start\",\"sessionID\":\"session-abc\",\"part\":{\"type\":\"step-start\"}}'",
+		"printf '%s\\n' '{\"type\":\"reasoning\",\"part\":{\"text\":\"thinking\"}}'",
+		"printf '%s\\n' '{\"type\":\"text\",\"part\":{\"text\":\"final answer\"}}'",
+		"printf '%s\\n' '{\"type\":\"step_finish\",\"part\":{\"type\":\"step-finish\",\"tokens\":{\"input\":1,\"output\":2}}}'",
+	}, "\n")
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatalf("WriteFile fake opencode: %v", err)
+	}
+
+	h := NewHarness(&OpencodeCLI{Path: scriptPath})
+	var streamed []map[string]any
+	result, err := h.Execute(context.Background(), registry.ExecuteRequest{
+		Session: registry.Session{
+			ID: "session-123",
+		},
+		Input: []registry.Input{
+			{Type: "text", Text: "fix tests"},
+		},
+		DefaultWorkingDir: tmpDir,
+		RuntimeDir:        runtimeDir,
+		EmitEvent: func(evt map[string]any) {
+			streamed = append(streamed, evt)
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if got := result.Text; got != "thinking\n\nfinal answer" {
+		t.Fatalf("expected all streamed message text to be appended, got %q", got)
+	}
+	if result.ExternalSessionID != "session-abc" {
+		t.Fatalf("expected raw session id to be preserved, got %q", result.ExternalSessionID)
+	}
+	if len(streamed) != 4 {
+		t.Fatalf("expected 4 raw streamed events, got %d", len(streamed))
+	}
+	if got := registry.FirstNonEmptyString(streamed[0]["type"]); got != "step_start" {
+		t.Fatalf("expected first raw event type step_start, got %q", got)
+	}
+	part, _ := streamed[3]["part"].(map[string]any)
+	tokens, _ := part["tokens"].(map[string]any)
+	if got := tokens["output"]; got != float64(2) {
+		t.Fatalf("expected raw token usage to be preserved, got %#v", got)
 	}
 }
 

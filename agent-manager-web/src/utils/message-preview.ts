@@ -146,6 +146,17 @@ function extractOpencodeMessageText(value: unknown): string | null {
       : null;
   }
 
+  const part = record.part;
+  if (isRecord(part) && typeof part.text === "string") {
+    const text = part.text.trim();
+    return text.length > 0 ? text : null;
+  }
+
+  if (typeof record.message === "string") {
+    const message = record.message.trim();
+    return message.length > 0 ? message : null;
+  }
+
   return null;
 }
 

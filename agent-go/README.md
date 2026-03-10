@@ -76,7 +76,7 @@ The runtime exposes model/thinking controls through harness definitions in
 - Wrapper types live in `agent-go/internal/harness/opencode/cli.go`.
 - Harness definition lives in `agent-go/internal/harness/opencode/definition.go`.
 - The current `anomalyco/opencode` CLI is driven through the `run` subcommand, not root-level prompt flags.
-- The harness executes `opencode run --format json ...` and consumes JSONL events such as `text`, `reasoning`, `tool_use`, and `error`.
+- The harness executes `opencode run --format json ...` and now forwards the raw JSONL event stream without provider-side compaction. OpenCode currently emits events including `step_start`, `text`, and `step_finish` with token/cost metadata.
 - Session continuation is supported through the OpenCode session ID returned in the streamed events and replayed back through `--session <id>`.
 - Model selection is passed directly through `--model <provider/model>`, using the shared model catalog for validation and normalization.
 - Thinking/reasoning is passed through `--variant <value>`. The runtime validates a simple token format and does not hard-code a short enum because upstream variants are provider-specific.
