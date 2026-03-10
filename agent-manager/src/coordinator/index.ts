@@ -258,8 +258,6 @@ The \`setupScript\` is executed inside a Modal sandbox during image build. It ru
 - \`AGENT_HOME=/home/agent\` — agent user home directory
 - \`WORKSPACES_DIR=/home/agent/workspaces\` — primary workspace root (script starts here)
 - \`ROOT_DIR=/home/agent/runtime\` — runtime root directory
-- \`RUNTIME_DIR=/home/agent/runtime/runtime\` — nested runtime directory
-- \`DATABASE_PATH=/home/agent/runtime/app/agent.db\` — SQLite database path
 - \`CODEX_HOME=/home/agent/.codex\` — Codex configuration directory
 - \`PI_CODING_AGENT_DIR=/home/agent/.pi\` — PI configuration directory
 - \`BROWSER_STATE_DIR=/home/agent/runtime/browser\` — browser state directory
@@ -363,11 +361,10 @@ Trigger conditions:
 Core runtime facts inside the sandbox:
 - Agent API usually runs on \`127.0.0.1:\${PORT:-8080}\` (health endpoint: \`/health\`).
 - Agent runtime root is typically \`/home/agent/runtime\` (or \`$ROOT_DIR\` when overridden).
-- Agent app runtime copy is typically \`/home/agent/runtime/app\`.
-- Agent SQLite DB defaults to \`/home/agent/runtime/app/agent.db\` (unless \`DATABASE_PATH\` is overridden).
+- Agent SQLite DB defaults to \`/home/agent/runtime/agent.db\` (unless \`DATABASE_PATH\` is overridden).
 - Agent server stdout/stderr is typically captured to \`$AGENT_SERVER_LOG_FILE\` (default: \`$ROOT_DIR/logs/agent-server.log\`).
-- Agent container app source is \`/app\`; runtime wiring is in \`/app/docker/entrypoint.sh\`.
-- Browser automation capabilities live in \`/app/tools/browser-tools\` and are usually exposed in the workspace at \`/home/agent/workspaces/tools/browser-tools\` (with fallbacks like \`/home/agent/_agent_tools/browser-tools\` or \`/home/agent/runtime/tools/browser-tools\`).
+- Agent image repo checkout is typically \`/opt/agentsandbox/agent-go\`; runtime wiring is in \`$AGENT_DOCKER_DIR/entrypoint.sh\` (default: \`/opt/agentsandbox/agent-go/docker/entrypoint.sh\`).
+- Browser automation capabilities live in \`$AGENT_TOOLS_DIR/browser-tools\` (default: \`/opt/agentsandbox/agent-go/tools/browser-tools\`) and are usually exposed in the workspace at \`/home/agent/workspaces/tools/browser-tools\` (with fallbacks like \`/home/agent/_agent_tools/browser-tools\` or \`/home/agent/runtime/tools/browser-tools\`).
 
 When investigating:
 - Prefer read-only inspection first (\`pwd\`, \`env\`, \`ls\`, \`find\`, \`cat\`, \`head\`, \`tail\`, \`grep\`).
@@ -375,8 +372,8 @@ When investigating:
 - For browser manipulation requests, check browser tooling directories above first and use those scripts via \`agent_sandbox_bash\`.
 - If checking DB-backed state, inspect SQLite path/size before querying, then query directly with \`sqlite3\` when available.
 - Typical direct SQLite checks in sandbox:
-  \`sqlite3 /home/agent/runtime/app/agent.db ".tables"\`
-  \`sqlite3 /home/agent/runtime/app/agent.db "SELECT id, status, updated_at FROM sessions ORDER BY updated_at DESC LIMIT 20;"\`
+  \`sqlite3 /home/agent/runtime/agent.db ".tables"\`
+  \`sqlite3 /home/agent/runtime/agent.db "SELECT id, status, updated_at FROM sessions ORDER BY updated_at DESC LIMIT 20;"\`
 - Only mutate files/state when the user explicitly asks for it.
 
 Always provide concise summaries of actions and outcomes.

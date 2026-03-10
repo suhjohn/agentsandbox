@@ -5,7 +5,6 @@ const modalClient = new ModalClient()
 const SANDBOX_AGENT_HOME = '/home/agent'
 const SANDBOX_WORKSPACES_DIR = `${SANDBOX_AGENT_HOME}/workspaces`
 const SANDBOX_ROOT_DIR = `${SANDBOX_AGENT_HOME}/runtime`
-const SANDBOX_RUNTIME_DIR = `${SANDBOX_ROOT_DIR}/runtime`
 const SANDBOX_CODEX_HOME = `${SANDBOX_AGENT_HOME}/.codex`
 const SANDBOX_PI_DIR = `${SANDBOX_AGENT_HOME}/.pi`
 const SANDBOX_BROWSER_STATE_DIR = `${SANDBOX_ROOT_DIR}/browser`
@@ -162,8 +161,7 @@ export async function runModalImageBuild (input: {
       AGENT_ID: input.imageId,
       WORKSPACES_DIR: SANDBOX_WORKSPACES_DIR,
       ROOT_DIR: SANDBOX_ROOT_DIR,
-      RUNTIME_DIR: SANDBOX_RUNTIME_DIR,
-      DATABASE_PATH: `${SANDBOX_ROOT_DIR}/app/agent.db`,
+      DATABASE_PATH: `${SANDBOX_ROOT_DIR}/agent.db`,
       CODEX_HOME: SANDBOX_CODEX_HOME,
       PI_CODING_AGENT_DIR: SANDBOX_PI_DIR,
       BROWSER_STATE_DIR: SANDBOX_BROWSER_STATE_DIR,

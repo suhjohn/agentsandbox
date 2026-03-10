@@ -80,7 +80,7 @@ func TestDockerNoVNCSmokeAndBasicAPIs(t *testing.T) {
 		t.Fatalf("unexpected noVNC html")
 	}
 
-	toolsSymlinkCmd := `test -L "${WORKSPACES_DIR:-/home/agent/workspaces}/tools" && readlink -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools" | rg -n '/app/tools$' >/dev/null`
+	toolsSymlinkCmd := `EXPECTED_TOOLS_DIR="${AGENT_TOOLS_DIR:-${AGENT_GO_REPO_DIR:-/opt/agentsandbox/agent-go}/tools}"; test -L "${WORKSPACES_DIR:-/home/agent/workspaces}/tools" && readlink -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools" | rg -n "${EXPECTED_TOOLS_DIR}\$" >/dev/null`
 	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", toolsSymlinkCmd}, root, nil, false)
 
 	browserToolsCmd := `test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/browser-tools/README.md" && test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/browser-tools/start.py"`

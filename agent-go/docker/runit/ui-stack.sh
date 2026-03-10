@@ -32,7 +32,6 @@ BROWSER_XDG_CONFIG_HOME="${BROWSER_XDG_CONFIG_HOME:-${BROWSER_STATE_DIR}/xdg/con
 BROWSER_XDG_CACHE_HOME="${BROWSER_XDG_CACHE_HOME:-${BROWSER_STATE_DIR}/xdg/cache}"
 BROWSER_XDG_DATA_HOME="${BROWSER_XDG_DATA_HOME:-${BROWSER_STATE_DIR}/xdg/data}"
 OPENBOX_LOG_FILE="${OPENBOX_LOG_FILE:-${ROOT_DIR}/logs/openbox.log}"
-RUNTIME_DIR="${RUNTIME_DIR:-${ROOT_DIR}/runtime}"
 VNC_PASSWD_FILE="${VNC_PASSWD_FILE:-${ROOT_DIR}/vnc/passwd}"
 
 display_num="${DISPLAY#:}"
@@ -47,7 +46,6 @@ mkdir -p \
   "$(dirname "${CHROMIUM_LOG_FILE}")" \
   "$(dirname "${OPENBOX_LOG_FILE}")" \
   "$(dirname "${CHROMIUM_PID_FILE}")" \
-  "${RUNTIME_DIR}" \
   "$(dirname "${VNC_PASSWD_FILE}")" \
   2>/dev/null || true
 
@@ -85,7 +83,7 @@ clear_stale_x_locks() {
 }
 
 start_xvfb() {
-  local xvfb_log="${RUNTIME_DIR}/xvfb.log"
+  local xvfb_log="${ROOT_DIR}/logs/xvfb.log"
   ensure_x11_socket_dir
   if ! clear_stale_x_locks; then
     for _ in {1..50}; do

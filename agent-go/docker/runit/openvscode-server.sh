@@ -13,18 +13,17 @@ OPENVSCODE_CONNECTION_TOKEN="${OPENVSCODE_CONNECTION_TOKEN:-}"
 OPENVSCODE_PROXY_ENABLED="${OPENVSCODE_PROXY_ENABLED:-1}"
 OPENVSCODE_UPSTREAM_HOST="${OPENVSCODE_UPSTREAM_HOST:-127.0.0.1}"
 OPENVSCODE_UPSTREAM_PORT="${OPENVSCODE_UPSTREAM_PORT:-39395}"
+AGENT_GO_REPO_DIR="${AGENT_GO_REPO_DIR:-/opt/agentsandbox/agent-go}"
+AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server}"
 
-app_dir="/app"
-if [[ -n "${ROOT_DIR:-}" ]] && [[ -d "${ROOT_DIR}/app" ]]; then
-  app_dir="${ROOT_DIR}/app"
-fi
+app_dir="${AGENT_GO_REPO_DIR}"
 cd "${app_dir}"
 mkdir -p "${OPENVSCODE_SERVER_WORKSPACE_DIR}"
 
 host="${OPENVSCODE_SERVER_HOST}"
 port="${OPENVSCODE_SERVER_PORT}"
 if [[ "${OPENVSCODE_PROXY_ENABLED}" == "1" ]] \
-  && [[ -x "/app/agent-server" ]]; then
+  && [[ -x "${AGENT_SERVER_BIN}" ]]; then
   host="${OPENVSCODE_UPSTREAM_HOST}"
   port="${OPENVSCODE_UPSTREAM_PORT}"
 fi

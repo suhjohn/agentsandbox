@@ -1,8 +1,8 @@
 # Agent Image Versioning & Upgrade Specification
 
 > Status update (2026-03-05):
-> The runtime now uses `/app/agent-server`, which points directly at the tracked
-> `agent-go/build-artifacts/agent-server` binary. Source sync
+> The runtime now uses `/usr/local/bin/agent-server`, which points directly at the
+> tracked `/opt/agentsandbox/agent-go/build-artifacts/agent-server` binary. Source sync
 > via `agent-go-update-source` happens during the build flow, not on sandbox startup.
 > This document still captures the previous release-infrastructure proposal and
 > should be treated as historical design context rather than the active rollout plan.

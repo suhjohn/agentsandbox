@@ -62,8 +62,8 @@ try:
     run("/usr/local/bin/agent-entrypoint --init", "init")
 
     # 2. Copy agent-server launcher into /home/agent
-    print("Copying /app/agent-server → /home/agent …")
-    run(f"cp /app/agent-server {AGENT_HOME}/agent-server", "copy-launcher")
+    print("Copying tracked agent-server binary → /home/agent …")
+    run(f'cp "${{AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server}}" {AGENT_HOME}/agent-server', "copy-launcher")
 
     # 3. Show what was created
     print("\n--- /home/agent after init ---")

@@ -126,11 +126,8 @@ RUN mkdir -p "${AGENT_REPO_DIR}/agent-go"
 # Layer 8: Copy entire repo (includes agent-go/docker and agent-go/tools)
 COPY . ${AGENT_REPO_DIR}
 
-# Symlink docker/tools to /app for backwards compatibility
-RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/docker" /app/docker \
-  && ln -sfn "${AGENT_REPO_DIR}/agent-go/tools" /app/tools \
-  && ln -sfn "${AGENT_REPO_DIR}/agent-go/build-artifacts/agent-server" /app/agent-server \
-  && ln -sfn /app/agent-server /usr/local/bin/agent-server \
+# Install runtime entrypoints against the tracked repo checkout.
+RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/build-artifacts/agent-server" /usr/local/bin/agent-server \
   && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/update-agent-go-source.sh" /usr/local/bin/agent-go-update-source \
   && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/entrypoint.sh" /usr/local/bin/agent-entrypoint \
   && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/docker-wrapper.sh" /usr/local/bin/docker \
@@ -161,12 +158,14 @@ ENV AGENT_ID=default
 ENV WORKSPACES_DIR=${AGENT_HOME}/workspaces
 ENV ROOT_DIR=${AGENT_HOME}/runtime
 ENV AGENT_GO_REPO_DIR=${AGENT_REPO_DIR}/agent-go
+ENV AGENT_DOCKER_DIR=${AGENT_GO_REPO_DIR}/docker
+ENV AGENT_TOOLS_DIR=${AGENT_GO_REPO_DIR}/tools
+ENV AGENT_SERVER_BIN=${AGENT_GO_REPO_DIR}/build-artifacts/agent-server
 ENV AGENT_GO_PULL_REF=main
 ENV CODEX_HOME=${AGENT_HOME}/.codex
 ENV PI_CODING_AGENT_DIR=${AGENT_HOME}/.pi
 ENV HOME=${AGENT_HOME}
-ENV RUNTIME_DIR=${ROOT_DIR}/runtime
-ENV DATABASE_PATH=${ROOT_DIR}/app/agent.db
+ENV DATABASE_PATH=${ROOT_DIR}/agent.db
 ENV BROWSER_STATE_DIR=${ROOT_DIR}/browser
 ENV CHROMIUM_USER_DATA_DIR=${BROWSER_STATE_DIR}/chromium
 ENV BROWSER_HOME_DIR=${BROWSER_STATE_DIR}/home
@@ -199,8 +198,6 @@ RUN set -eux; \
   "${WORKSPACES_DIR}" \
   "${ROOT_DIR}/logs" \
   "${ROOT_DIR}/run" \
-  "${ROOT_DIR}/app" \
-  "${RUNTIME_DIR}" \
   "${BROWSER_HOME_DIR}" \
   "${CHROMIUM_USER_DATA_DIR}" \
   "${BROWSER_XDG_CONFIG_HOME}" \
@@ -221,14 +218,7 @@ ARG AGENT_IMAGE_VERSION=dev
 LABEL org.opencontainers.image.revision=${AGENT_IMAGE_VERSION}
 ENV AGENT_IMAGE_VERSION=${AGENT_IMAGE_VERSION}
 RUN set -eux; \
-  printf '%s\n' "${AGENT_IMAGE_VERSION}" > /etc/agent-image-version; \
-  mkdir -p /etc/profile.d; \
-  printf '%s\n' \
-  'if [ -z "${AGENT_IMAGE_VERSION:-}" ] && [ -f /etc/agent-image-version ]; then' \
-  '  export AGENT_IMAGE_VERSION="$(cat /etc/agent-image-version 2>/dev/null || true)"' \
-  'fi' \
-  > /etc/profile.d/agent-image-version.sh; \
-  chmod 0644 /etc/profile.d/agent-image-version.sh
+  printf '%s\n' "${AGENT_IMAGE_VERSION}" > /etc/agent-image-version
 
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/agent-entrypoint"]
-CMD ["/app/agent-server"]
+CMD ["/usr/local/bin/agent-server"]

@@ -19,8 +19,11 @@ if [[ -z "${AGENT_ID}" ]]; then
 fi
 
 ROOT_DIR="${ROOT_DIR:-${AGENT_HOME}/runtime}"
-RUNTIME_DIR="${ROOT_DIR}/runtime"
-DATABASE_PATH="${DATABASE_PATH:-${ROOT_DIR}/app/agent.db}"
+AGENT_GO_REPO_DIR="${AGENT_GO_REPO_DIR:-/opt/agentsandbox/agent-go}"
+AGENT_DOCKER_DIR="${AGENT_DOCKER_DIR:-${AGENT_GO_REPO_DIR}/docker}"
+AGENT_TOOLS_DIR="${AGENT_TOOLS_DIR:-${AGENT_GO_REPO_DIR}/tools}"
+AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server}"
+DATABASE_PATH="${DATABASE_PATH:-${ROOT_DIR}/agent.db}"
 
 WORKSPACES_DIR="${WORKSPACES_DIR:-${AGENT_HOME}/workspaces}"
 DEFAULT_WORKING_DIR="${DEFAULT_WORKING_DIR:-${WORKSPACES_DIR}}"
@@ -187,8 +190,14 @@ export BROWSER_XDG_CACHE_HOME
 export BROWSER_XDG_DATA_HOME
 export CHROMIUM_BIN
 export CHROMIUM_USER_DATA_DIR
+export AGENT_GO_REPO_DIR
+export AGENT_DOCKER_DIR
+export AGENT_TOOLS_DIR
+export AGENT_SERVER_BIN
 
-cd /app
+if [[ -d "${AGENT_GO_REPO_DIR}" ]]; then
+  cd "${AGENT_GO_REPO_DIR}"
+fi
 
 mkdir -p "${AGENT_HOME}" "${WORKSPACES_DIR}" "${DEFAULT_WORKING_DIR}" 2>/dev/null || true
 mkdir -p "${ROOT_DIR}" 2>/dev/null || true
@@ -196,7 +205,7 @@ mkdir -p "${ROOT_DIR}" 2>/dev/null || true
 ensure_workspace_tools_link() {
   local tools_path="${WORKSPACES_DIR}/tools"
   local effective_tools_path="${WORKSPACES_DIR}/tools"
-  local src_tools="/app/tools"
+  local src_tools="${AGENT_TOOLS_DIR}"
 
   [[ -d "${WORKSPACES_DIR}" ]] || return 0
   [[ -d "${src_tools}" ]] || return 0
@@ -228,7 +237,7 @@ ensure_workspace_tools_link() {
 
 seed_workspace_baseline_runtime() {
   local src="/opt/agent-image/workspace-baseline/sandbox"
-  local dst="${RUNTIME_DIR}/workspace-baseline/sandbox"
+  local dst="${ROOT_DIR}/workspace-baseline/sandbox"
   local seed_marker=""
 
   [[ -d "${src}" ]] || return 0
@@ -262,7 +271,6 @@ prepare_runtime_state() {
     "${WORKSPACES_DIR}" \
     "${ROOT_DIR}/logs" \
     "${ROOT_DIR}/run" \
-    "${RUNTIME_DIR}" \
     "${BROWSER_HOME_DIR}" \
     "${CHROMIUM_USER_DATA_DIR}" \
     "${BROWSER_XDG_CONFIG_HOME}" \
@@ -305,38 +313,6 @@ require_secret_seed() {
 
 require_secret_seed
 
-sync_app_to_local() {
-  local local_app_dir="${ROOT_DIR}/app"
-  local marker="${local_app_dir}/.copied-from-image-${AGENT_IMAGE_VERSION:-unknown}.ready"
-
-  mkdir -p "${local_app_dir}"
-
-  if [[ -f "${marker}" ]]; then
-    if [[ -f "${local_app_dir}/agent-server" ]]; then
-      chmod +x "${local_app_dir}/agent-server" 2>/dev/null || true
-    fi
-    cd "${local_app_dir}"
-    return 0
-  fi
-
-  rm -rf "${local_app_dir}"/* 2>/dev/null || true
-
-  # Copy app code from the image into the ephemeral local dir, excluding node_modules.
-  (cd /app && tar --exclude='./node_modules' -cf - .) | (cd "${local_app_dir}" && tar -xf -)
-
-  # Share the preinstalled node_modules from /app for speed and space.
-  if [[ -d /app/node_modules ]]; then
-    ln -sfn /app/node_modules "${local_app_dir}/node_modules"
-  fi
-  if [[ -f "${local_app_dir}/agent-server" ]]; then
-    chmod +x "${local_app_dir}/agent-server" 2>/dev/null || true
-  fi
-
-  printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ) ${AGENT_IMAGE_VERSION:-unknown}" > "${marker}" 2>/dev/null || true
-  cd "${local_app_dir}"
-}
-
-sync_app_to_local
 export SCREEN_WIDTH
 export SCREEN_HEIGHT
 export SCREEN_DEPTH
@@ -354,7 +330,6 @@ export CHROMIUM_NO_SANDBOX
 export CHROMIUM_PID_FILE
 export VNC_PASSWD_FILE
 export VNC_PASSWORD
-export RUNTIME_DIR
 export DOCKERD_ENABLED
 export DOCKERD_LOG_FILE
 export DOCKERD_DATA_ROOT
@@ -453,19 +428,19 @@ setup_runit_services() {
     return
   fi
 
-  install_runit_service "ui-stack" "/app/docker/runit/ui-stack.sh"
+  install_runit_service "ui-stack" "${AGENT_DOCKER_DIR}/runit/ui-stack.sh"
 
   if command -v openvscode-server >/dev/null 2>&1; then
-    install_runit_service "openvscode-server" "/app/docker/runit/openvscode-server.sh"
+    install_runit_service "openvscode-server" "${AGENT_DOCKER_DIR}/runit/openvscode-server.sh"
   fi
 
   if [[ "${OPENVSCODE_PROXY_ENABLED}" == "1" ]] \
-    && [[ -x "/app/agent-server" ]]; then
-    install_runit_service "openvscode-proxy" "/app/docker/runit/openvscode-proxy.sh"
+    && [[ -x "${AGENT_SERVER_BIN}" ]]; then
+    install_runit_service "openvscode-proxy" "${AGENT_DOCKER_DIR}/runit/openvscode-proxy.sh"
   fi
 
   if [[ "${DOCKERD_ENABLED}" == "1" ]] && command -v dockerd >/dev/null 2>&1; then
-    install_runit_service "dockerd" "/app/docker/runit/dockerd.sh"
+    install_runit_service "dockerd" "${AGENT_DOCKER_DIR}/runit/dockerd.sh"
   fi
 }
 

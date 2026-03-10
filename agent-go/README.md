@@ -182,10 +182,11 @@ Runtime behavior intentionally keeps the same entrypoint/runit stack used by `ag
 - optional dockerd service
 - workspace tools sync + harness runtime setup on `agent-server serve` startup (`AGENTS.md`, Codex auth seeding)
 
-The API server command remains `/app/agent-server`, which points directly at the
-tracked repo binary `agent-go/build-artifacts/agent-server`. The matching source
+The API server command remains `agent-server`, exposed at `/usr/local/bin/agent-server`
+and backed directly by the tracked repo binary
+`/opt/agentsandbox/agent-go/build-artifacts/agent-server`. The matching source
 revision is recorded in `agent-go/build-artifacts/agent-server.rev`.
-OpenVSCode proxying still uses the same command path (`/app/agent-server openvscode-proxy`).
+OpenVSCode proxying uses that same tracked binary (`agent-server openvscode-proxy`).
 
 ### Entrypoint + `AGENT_RUNTIME_MODE`
 
@@ -200,7 +201,7 @@ are installed/launched by the container entrypoint (`agent-entrypoint`).
 - In `all` mode, relevant runit services include:
   - `agent-server` (main API service, installed dynamically from the container command)
   - `openvscode-server` (`agent-go/docker/runit/openvscode-server.sh`)
-  - `openvscode-proxy` (`agent-go/docker/runit/openvscode-proxy.sh`, runs `/app/agent-server openvscode-proxy`)
+  - `openvscode-proxy` (`agent-go/docker/runit/openvscode-proxy.sh`, runs the tracked `agent-server` binary with `openvscode-proxy`)
   - `ui-stack` (Xvfb/VNC/noVNC/Chromium) (`agent-go/docker/runit/ui-stack.sh`)
 
 Service control:

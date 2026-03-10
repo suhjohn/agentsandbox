@@ -69,7 +69,8 @@ func effectiveWorkspaceToolsDir(cfg serveConfig) string {
 		strings.TrimSpace(os.Getenv("WORKSPACE_TOOLS_DIR_EFFECTIVE")),
 		strings.TrimSpace(os.Getenv("WORKSPACE_TOOLS_DIR")),
 		filepath.Join(strings.TrimSpace(cfg.WorkspacesDir), "tools"),
-		"/app/tools",
+		strings.TrimSpace(os.Getenv("AGENT_TOOLS_DIR")),
+		filepath.Join(strings.TrimSpace(os.Getenv("AGENT_GO_REPO_DIR")), "tools"),
 	}
 	for _, candidate := range candidates {
 		if strings.TrimSpace(candidate) == "" {
