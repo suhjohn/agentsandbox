@@ -461,14 +461,16 @@ function SessionMetaRow (props: {
   readonly icon: ReactNode
   readonly mono?: boolean
   readonly copyable?: boolean
+  readonly copyValue?: string
 }) {
   const [copied, setCopied] = useState(false)
+  const valueToCopy = props.copyValue ?? props.value
 
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(props.value)
+    navigator.clipboard.writeText(valueToCopy)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
-  }, [props.value])
+  }, [valueToCopy])
 
   const displayValue = useMemo(() => {
     if (props.value.length <= 28) return props.value
@@ -509,7 +511,7 @@ function SessionMetaRow (props: {
               <p className='font-mono text-xs break-all'>{props.value}</p>
               {props.copyable && (
                 <p className='text-text-tertiary text-[10px] mt-1'>
-                  Click to copy
+                  Click to copy ID: {valueToCopy}
                 </p>
               )}
             </TooltipContent>
@@ -529,6 +531,67 @@ function SessionMetaRow (props: {
             )}
           </button>
         )}
+      </div>
+    </div>
+  )
+}
+
+function SessionMetaRowWithId (props: {
+  readonly label: string
+  readonly name: string
+  readonly id: string
+  readonly icon: ReactNode
+}) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(props.id)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }, [props.id])
+
+  const truncatedId = useMemo(() => {
+    if (props.id.length <= 12) return props.id
+    return `${props.id.slice(0, 4)}…${props.id.slice(-4)}`
+  }, [props.id])
+
+  return (
+    <div className='h-7 grid grid-cols-[20px_minmax(0,1fr)] gap-2 items-center'>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className='flex items-center justify-center text-text-tertiary cursor-default'>
+            {props.icon}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side='left' sideOffset={4}>
+          {props.label}
+        </TooltipContent>
+      </Tooltip>
+
+      <div className='flex items-center gap-1 min-w-0'>
+        <span className='text-text-secondary text-xs truncate'>
+          {props.name}
+        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type='button'
+              onClick={handleCopy}
+              className='shrink-0 flex items-center gap-0.5 text-text-tertiary text-[10px] font-mono hover:text-text-secondary transition-colors'
+            >
+              <span>({truncatedId})</span>
+              {copied ? (
+                <Check className='h-2.5 w-2.5 text-green-500' />
+              ) : (
+                <Copy className='h-2.5 w-2.5' />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side='top' className='max-w-xs'>
+            <p className='font-mono text-xs break-all'>{props.id}</p>
+            <p className='text-text-tertiary text-[10px] mt-1'>Click to copy</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )
@@ -1745,29 +1808,33 @@ export function WorkspaceView () {
                   </div>
                   <TooltipProvider delayDuration={200}>
                     <div className='px-2 text-[11px] leading-4'>
-                      <SessionMetaRow
-                        label='Image'
-                        icon={<Package className='h-3.5 w-3.5' />}
-                        value={
-                          hoveredSessionDetail.session.imageId
-                            ? `${
-                                imageNameById.get(
-                                  hoveredSessionDetail.session.imageId
-                                ) ?? hoveredSessionDetail.session.imageId
-                              } (${hoveredSessionDetail.session.imageId})`
-                            : 'No image'
-                        }
-                        copyable={!!hoveredSessionDetail.session.imageId}
-                      />
-                      <SessionMetaRow
+                      {hoveredSessionDetail.session.imageId ? (
+                        <SessionMetaRowWithId
+                          label='Image'
+                          icon={<Package className='h-3.5 w-3.5' />}
+                          name={
+                            imageNameById.get(
+                              hoveredSessionDetail.session.imageId
+                            ) ?? hoveredSessionDetail.session.imageId
+                          }
+                          id={hoveredSessionDetail.session.imageId}
+                        />
+                      ) : (
+                        <SessionMetaRow
+                          label='Image'
+                          icon={<Package className='h-3.5 w-3.5' />}
+                          value='No image'
+                        />
+                      )}
+                      <SessionMetaRowWithId
                         label='Agent'
                         icon={<Bot className='h-3.5 w-3.5' />}
-                        value={`${
+                        name={
                           agentNameById.get(
                             hoveredSessionDetail.session.agentId
                           ) ?? hoveredSessionDetail.session.agentId
-                        } (${hoveredSessionDetail.session.agentId})`}
-                        copyable
+                        }
+                        id={hoveredSessionDetail.session.agentId}
                       />
                       <SessionMetaRow
                         label='Harness'
