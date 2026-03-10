@@ -343,6 +343,26 @@ export const COORDINATOR_SEMANTIC_ACTIONS = [
     description: "Resize focused pane toward bottom.",
   },
   {
+    id: "pane.type.prev",
+    version: 1,
+    description: "Switch focused pane to previous registered panel type.",
+  },
+  {
+    id: "pane.type.next",
+    version: 1,
+    description: "Switch focused pane to next registered panel type.",
+  },
+  {
+    id: "pane.agent_view.prev",
+    version: 1,
+    description: "Switch focused agent-detail pane to previous internal view.",
+  },
+  {
+    id: "pane.agent_view.next",
+    version: 1,
+    description: "Switch focused agent-detail pane to next internal view.",
+  },
+  {
     id: "window.create",
     version: 1,
     description: "Create and activate new workspace window.",

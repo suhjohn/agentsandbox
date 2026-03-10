@@ -36,6 +36,10 @@ const focusRequiredCommands = new Set<WorkspaceCommandId>([
   "pane.resize.right",
   "pane.resize.up",
   "pane.resize.down",
+  "pane.type.prev",
+  "pane.type.next",
+  "pane.agent_view.prev",
+  "pane.agent_view.next",
 ]);
 
 function unavailable(
@@ -188,4 +192,3 @@ export const workspaceKeybindingCommandActions = [
   ...commandActions,
   workspaceWindowSelectIndexAction,
 ] as const;
-

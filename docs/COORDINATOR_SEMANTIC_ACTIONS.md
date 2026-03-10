@@ -1060,6 +1060,10 @@ These command IDs are:
 - `pane.resize.right`
 - `pane.resize.up`
 - `pane.resize.down`
+- `pane.type.prev`
+- `pane.type.next`
+- `pane.agent_view.prev`
+- `pane.agent_view.next`
 - `window.create`
 - `window.close`
 - `window.rename`

@@ -191,22 +191,10 @@ const DEFAULT_BINDINGS: readonly WorkspaceKeybinding[] = [
     code: "Semicolon",
   }),
   binding({
-    id: "workspace.prefix.pane.focus.left.arrow",
-    context: "workspace.prefix",
-    commandId: "pane.focus.left",
-    code: "ArrowLeft",
-  }),
-  binding({
     id: "workspace.prefix.pane.focus.left.vim",
     context: "workspace.prefix",
     commandId: "pane.focus.left",
     code: "KeyH",
-  }),
-  binding({
-    id: "workspace.prefix.pane.focus.right.arrow",
-    context: "workspace.prefix",
-    commandId: "pane.focus.right",
-    code: "ArrowRight",
   }),
   binding({
     id: "workspace.prefix.pane.focus.up.arrow",
@@ -293,6 +281,30 @@ const DEFAULT_BINDINGS: readonly WorkspaceKeybinding[] = [
     commandId: "pane.resize.down",
     code: "ArrowDown",
     ctrl: true,
+  }),
+  binding({
+    id: "workspace.prefix.pane.type.prev",
+    context: "workspace.prefix",
+    commandId: "pane.type.prev",
+    code: "ArrowLeft",
+  }),
+  binding({
+    id: "workspace.prefix.pane.type.next",
+    context: "workspace.prefix",
+    commandId: "pane.type.next",
+    code: "ArrowRight",
+  }),
+  binding({
+    id: "workspace.prefix.pane.agent_view.prev",
+    context: "workspace.prefix",
+    commandId: "pane.agent_view.prev",
+    code: "BracketLeft",
+  }),
+  binding({
+    id: "workspace.prefix.pane.agent_view.next",
+    context: "workspace.prefix",
+    commandId: "pane.agent_view.next",
+    code: "BracketRight",
   }),
   binding({
     id: "workspace.prefix.window.create",

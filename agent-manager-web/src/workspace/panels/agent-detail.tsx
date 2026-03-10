@@ -100,6 +100,10 @@ const AGENT_DETAIL_VIEW_ITEMS: ReadonlyArray<{
   { id: 'diff', label: 'Diff' }
 ]
 
+export function listAgentDetailTabs (): readonly AgentDetailTab[] {
+  return AGENT_DETAIL_VIEW_ITEMS.map(item => item.id)
+}
+
 function getAgentDetailViewLabel (tab: AgentDetailTab): string {
   const option = AGENT_DETAIL_VIEW_ITEMS.find(item => item.id === tab)
   return option?.label ?? 'Session List'

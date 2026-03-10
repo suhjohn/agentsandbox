@@ -131,6 +131,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
 - `Cmd/Ctrl+O` is leaf-scoped: the hotkey layer inspects collapsibles inside the focused leaf only and dispatches the target `leafId`, so other workspace panes do not expand/collapse in sync.
 - Stream-cancel commands dispatch the focused `leafId`, so `Escape` / `Prefix Escape` only interrupt the active run in the currently focused pane instead of every open streaming panel.
 - Pane expand hotkey (`pane.zoom.toggle`) dispatches `agent-manager-web:workspace-pane-zoom-toggle`; `LeafView` listens and toggles fullscreen for the targeted/focused leaf.
+- Prefix `Left` / `Right` cycle the focused pane through registered panel types; Prefix `[` / `]` cycle `agent_detail` through its internal views (`session_list`, `session_detail`, `terminal`, `vscode`, `browser`, `diff`) when that panel is focused. Prefix pane-focus left/right remains available on `h` / `l`.
 
 ## Pane and Panel Details
 

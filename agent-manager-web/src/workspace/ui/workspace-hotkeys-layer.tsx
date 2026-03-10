@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { findLeafNode, listLeafIds } from '../layout'
+import { listPanelDefinitions } from '../panels/registry'
+import { listAgentDetailTabs, type AgentDetailPanelConfig } from '../panels/agent-detail'
 import { useWorkspaceSelector, useWorkspaceStore } from '../store'
 import { useWorkspaceKeybindings } from '../keybindings/use-workspace-keybindings'
 import {
@@ -102,6 +104,18 @@ function isEventTargetInsideCoordinatorDialog (
   return target.closest('[data-coordinator-dialog="true"]') !== null
 }
 
+function cycleIndex (
+  currentIndex: number,
+  length: number,
+  delta: -1 | 1
+): number {
+  if (length <= 0) return -1
+  if (currentIndex < 0 || currentIndex >= length) {
+    return delta > 0 ? 0 : length - 1
+  }
+  return (currentIndex + delta + length) % length
+}
+
 function WorkspaceHotkeysLayerImpl (
   props: WorkspaceHotkeysLayerProps & {
     readonly initialOverrides: WorkspaceKeybindingOverrides
@@ -163,6 +177,14 @@ function WorkspaceHotkeysLayerImpl (
       const state = store.getState()
       const activeWindowState = state.windowsById[state.activeWindowId] ?? null
       const focusedLeafId = activeWindowState?.focusedLeafId ?? null
+      const focusedLeaf =
+        focusedLeafId && activeWindowState
+          ? findLeafNode(activeWindowState.root, focusedLeafId)
+          : null
+      const focusedPanel =
+        focusedLeaf && activeWindowState
+          ? activeWindowState.panelsById[focusedLeaf.panelInstanceId] ?? null
+          : null
 
       switch (commandId) {
         case 'keyboard.help.open': {
@@ -275,6 +297,49 @@ function WorkspaceHotkeysLayerImpl (
             type: 'split/resize-direction',
             direction,
             amount: 0.02
+          })
+          return
+        }
+        case 'pane.type.prev':
+        case 'pane.type.next': {
+          if (!focusedPanel) return
+          const panelTypes = listPanelDefinitions().map(def => def.type)
+          if (panelTypes.length === 0) return
+          const currentIndex = panelTypes.indexOf(focusedPanel.type)
+          const nextIndex = cycleIndex(
+            currentIndex,
+            panelTypes.length,
+            commandId === 'pane.type.prev' ? -1 : 1
+          )
+          const nextType = panelTypes[nextIndex]
+          if (!nextType || nextType === focusedPanel.type) return
+          store.dispatch({
+            type: 'panel/type',
+            panelInstanceId: focusedPanel.id,
+            panelType: nextType
+          })
+          return
+        }
+        case 'pane.agent_view.prev':
+        case 'pane.agent_view.next': {
+          if (!focusedPanel || focusedPanel.type !== 'agent_detail') return
+          const config = focusedPanel.config as AgentDetailPanelConfig
+          const tabs = listAgentDetailTabs()
+          const currentIndex = tabs.indexOf(config.activeTab)
+          const nextIndex = cycleIndex(
+            currentIndex,
+            tabs.length,
+            commandId === 'pane.agent_view.prev' ? -1 : 1
+          )
+          const nextTab = tabs[nextIndex]
+          if (!nextTab || nextTab === config.activeTab) return
+          store.dispatch({
+            type: 'panel/config',
+            panelInstanceId: focusedPanel.id,
+            updater: prev => ({
+              ...(prev as AgentDetailPanelConfig),
+              activeTab: nextTab
+            })
           })
           return
         }

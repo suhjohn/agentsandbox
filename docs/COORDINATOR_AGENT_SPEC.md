@@ -113,6 +113,7 @@ Define a registry of actions (example):
 - `workspace.sessions_panel.set_filters`
 - `workspace.sessions_panel.set_group_by`
 - `workspace.sessions_panel.close`
+- Workspace command-palette command IDs from `shared/coordinator-actions-contract.ts`, including pane/view cycling commands such as `pane.type.prev`, `pane.type.next`, `pane.agent_view.prev`, and `pane.agent_view.next`
 - `settings.general.set_name`
 - `settings.general.save`
 - `settings.images.open_detail`
