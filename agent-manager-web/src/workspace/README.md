@@ -42,6 +42,7 @@ This document describes how pane and panel behavior flows through the workspace 
    - `WorkspaceHotkeysLayer` (workspace keybinding engine + overlays)
    - the pane layout (`<LayoutNodeView node={activeWindowRoot} />`)
    - an optional left-side Sessions panel (local UI state in `workspace-view.tsx`)
+   - right workspace content is a constrained column: fixed `h-10` top bar + `flex-1 min-h-0` pane region, so pane content scroll stays inside the workspace instead of page-level overflow
 3. `LayoutNodeView` is recursive:
    - `split` -> `SplitView`
    - `leaf` -> `LeafView`

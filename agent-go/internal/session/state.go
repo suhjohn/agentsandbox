@@ -16,25 +16,27 @@ type activeRun struct {
 	Cancel context.CancelFunc
 }
 
+type subscribers map[chan Event]struct{}
+
 type runStream struct {
 	SessionID string
 	Buffer    []Event
 	Done      bool
-	Sub       chan Event
+	Subs      subscribers
 	Timer     *time.Timer
 }
 
 type State struct {
 	mu          sync.Mutex
 	running     map[string]*activeRun
-	sessionSubs map[string]chan Event
+	sessionSubs map[string]subscribers
 	runStreams  map[string]*runStream
 }
 
 func New() *State {
 	return &State{
 		running:     map[string]*activeRun{},
-		sessionSubs: map[string]chan Event{},
+		sessionSubs: map[string]subscribers{},
 		runStreams:  map[string]*runStream{},
 	}
 }
@@ -83,77 +85,97 @@ func (rs *State) StopRun(sessionID string) bool {
 	return true
 }
 
-func (rs *State) ReplaceSessionSubscriber(sessionID string, ch chan Event) {
+func (rs *State) AddSessionSubscriber(sessionID string, ch chan Event) {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
-	if prev, ok := rs.sessionSubs[sessionID]; ok {
-		close(prev)
+	subs := rs.sessionSubs[sessionID]
+	if subs == nil {
+		subs = subscribers{}
+		rs.sessionSubs[sessionID] = subs
 	}
-	rs.sessionSubs[sessionID] = ch
+	subs[ch] = struct{}{}
 }
 
 func (rs *State) RemoveSessionSubscriber(sessionID string, ch chan Event) {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
-	if existing, ok := rs.sessionSubs[sessionID]; ok && existing == ch {
+	subs, ok := rs.sessionSubs[sessionID]
+	if !ok {
+		return
+	}
+	delete(subs, ch)
+	if len(subs) == 0 {
 		delete(rs.sessionSubs, sessionID)
 	}
 }
 
 func (rs *State) CloseSessionStream(sessionID string) {
 	rs.mu.Lock()
-	defer rs.mu.Unlock()
-	if ch, ok := rs.sessionSubs[sessionID]; ok {
+	subs := rs.sessionSubs[sessionID]
+	delete(rs.sessionSubs, sessionID)
+	rs.mu.Unlock()
+
+	for ch := range subs {
 		close(ch)
-		delete(rs.sessionSubs, sessionID)
 	}
 }
 
 func (rs *State) PushSessionEvent(sessionID, event string, data any) {
 	rs.mu.Lock()
-	defer rs.mu.Unlock()
-	ch, ok := rs.sessionSubs[sessionID]
+	subs, ok := rs.sessionSubs[sessionID]
 	if !ok {
+		rs.mu.Unlock()
 		return
 	}
-	select {
-	case ch <- Event{Event: event, Data: data}:
-	default:
+	evt := Event{Event: event, Data: data}
+	var stale []chan Event
+	for ch := range subs {
+		select {
+		case ch <- evt:
+		default:
+			stale = append(stale, ch)
+		}
 	}
+	for _, ch := range stale {
+		delete(subs, ch)
+		close(ch)
+	}
+	if len(subs) == 0 {
+		delete(rs.sessionSubs, sessionID)
+	}
+	rs.mu.Unlock()
 }
 
 func (rs *State) CreateRunStream(runID, sessionID string) {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
-	rs.runStreams[runID] = &runStream{SessionID: sessionID, Buffer: []Event{}}
+	rs.runStreams[runID] = &runStream{
+		SessionID: sessionID,
+		Buffer:    []Event{},
+		Subs:      subscribers{},
+	}
 }
 
-func (rs *State) OpenRunStream(runID, sessionID string) ([]Event, chan Event, bool, bool) {
+func (rs *State) AddRunSubscriber(runID, sessionID string, ch chan Event) ([]Event, bool, bool) {
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
 	run, ok := rs.runStreams[runID]
 	if !ok || run.SessionID != sessionID {
-		return nil, nil, false, false
+		return nil, false, false
+	}
+	buffer := append([]Event(nil), run.Buffer...)
+	if run.Done {
+		return buffer, true, true
 	}
 	if run.Timer != nil {
 		run.Timer.Stop()
 		run.Timer = nil
 	}
-	buffer := append([]Event(nil), run.Buffer...)
-	run.Buffer = nil
-	if run.Done {
-		delete(rs.runStreams, runID)
-		return buffer, nil, true, true
-	}
-	if run.Sub != nil {
-		close(run.Sub)
-	}
-	ch := make(chan Event, 256)
-	run.Sub = ch
-	return buffer, ch, false, true
+	run.Subs[ch] = struct{}{}
+	return buffer, false, true
 }
 
-func (rs *State) DetachRunSubscriber(runID string, ch chan Event) {
+func (rs *State) RemoveRunSubscriber(runID string, ch chan Event) {
 	if ch == nil {
 		return
 	}
@@ -163,26 +185,38 @@ func (rs *State) DetachRunSubscriber(runID string, ch chan Event) {
 	if !ok {
 		return
 	}
-	if run.Sub == ch {
-		run.Sub = nil
+	delete(run.Subs, ch)
+	if run.Done && len(run.Subs) == 0 && run.Timer == nil {
+		run.Timer = time.AfterFunc(60*time.Second, func() {
+			rs.mu.Lock()
+			defer rs.mu.Unlock()
+			delete(rs.runStreams, runID)
+		})
 	}
 }
 
 func (rs *State) PushRunEvent(runID, event string, data any) {
 	rs.mu.Lock()
-	defer rs.mu.Unlock()
 	run, ok := rs.runStreams[runID]
 	if !ok {
+		rs.mu.Unlock()
 		return
 	}
-	if run.Sub != nil {
+	evt := Event{Event: event, Data: data}
+	run.Buffer = append(run.Buffer, evt)
+	var stale []chan Event
+	for ch := range run.Subs {
 		select {
-		case run.Sub <- Event{Event: event, Data: data}:
+		case ch <- evt:
 		default:
+			stale = append(stale, ch)
 		}
-		return
 	}
-	run.Buffer = append(run.Buffer, Event{Event: event, Data: data})
+	for _, ch := range stale {
+		delete(run.Subs, ch)
+		close(ch)
+	}
+	rs.mu.Unlock()
 }
 
 func (rs *State) EndRunStream(runID string) {
@@ -193,12 +227,21 @@ func (rs *State) EndRunStream(runID string) {
 		return
 	}
 	run.Done = true
-	if run.Sub != nil {
-		ch := run.Sub
-		run.Sub = nil
-		delete(rs.runStreams, runID)
+	subs := run.Subs
+	run.Subs = subscribers{}
+	if len(subs) > 0 {
+		if run.Timer != nil {
+			run.Timer.Stop()
+		}
+		run.Timer = time.AfterFunc(60*time.Second, func() {
+			rs.mu.Lock()
+			defer rs.mu.Unlock()
+			delete(rs.runStreams, runID)
+		})
 		rs.mu.Unlock()
-		close(ch)
+		for ch := range subs {
+			close(ch)
+		}
 		return
 	}
 	run.Timer = time.AfterFunc(60*time.Second, func() {
@@ -207,4 +250,27 @@ func (rs *State) EndRunStream(runID string) {
 		delete(rs.runStreams, runID)
 	})
 	rs.mu.Unlock()
+}
+
+func (rs *State) CloseAllStreams() {
+	rs.mu.Lock()
+	sessionSubs := rs.sessionSubs
+	runStreams := rs.runStreams
+	rs.sessionSubs = map[string]subscribers{}
+	rs.runStreams = map[string]*runStream{}
+	rs.mu.Unlock()
+
+	for _, subs := range sessionSubs {
+		for ch := range subs {
+			close(ch)
+		}
+	}
+	for _, run := range runStreams {
+		if run.Timer != nil {
+			run.Timer.Stop()
+		}
+		for ch := range run.Subs {
+			close(ch)
+		}
+	}
 }

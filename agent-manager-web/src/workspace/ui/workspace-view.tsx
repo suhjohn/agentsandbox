@@ -1864,10 +1864,9 @@ export function WorkspaceView () {
             </div>
           </div>
         ) : null}
-
-        <div className='flex-1 min-h-0 min-w-0'>
+        <div className='flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden'>
           <TooltipProvider delayDuration={250}>
-            <div className='h-10 flex items-center gap-1 px-3 border-b bg-surface-1'>
+            <div className='h-10 shrink-0 flex items-center gap-1 px-3 border-b bg-surface-1'>
               <div className='flex min-w-0 items-center gap-1'>
                 {!sessionPanelOpen && (
                   <TopBarTooltip
@@ -2085,10 +2084,12 @@ export function WorkspaceView () {
               </TopBarTooltip>
             </div>
           </TooltipProvider>
-          <LayoutNodeView
-            node={activeWindowRoot}
-            paneExpandShortcut={paneExpandShortcut}
-          />
+          <div className='flex-1 min-h-0 min-w-0 overflow-hidden'>
+            <LayoutNodeView
+              node={activeWindowRoot}
+              paneExpandShortcut={paneExpandShortcut}
+            />
+          </div>
         </div>
       </div>
     </div>

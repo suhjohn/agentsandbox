@@ -145,6 +145,7 @@ func runServe(args []string) error {
 		signal.Notify(stopSignals, os.Interrupt, syscall.SIGTERM)
 		<-stopSignals
 		runCancel()
+		app.state.CloseAllStreams()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(ctx)
@@ -1107,7 +1108,7 @@ func (s *server) handleSessionStream(w http.ResponseWriter, r *http.Request) err
 	setSSEHeaders(w)
 
 	ch := make(chan sessionstate.Event, 256)
-	s.state.ReplaceSessionSubscriber(sessionID, ch)
+	s.state.AddSessionSubscriber(sessionID, ch)
 	defer s.state.RemoveSessionSubscriber(sessionID, ch)
 
 	if err := writeSSE(w, "connected", map[string]any{"sessionId": sessionID}); err != nil {
@@ -1167,11 +1168,12 @@ func (s *server) handleRunStream(w http.ResponseWriter, r *http.Request) error {
 		return fail(http.StatusNotFound, "Session not found")
 	}
 
-	buffer, ch, done, ok := s.state.OpenRunStream(runID, sessionID)
+	ch := make(chan sessionstate.Event, 256)
+	buffer, done, ok := s.state.AddRunSubscriber(runID, sessionID, ch)
 	if !ok {
 		return fail(http.StatusNotFound, "Run not found")
 	}
-	defer s.state.DetachRunSubscriber(runID, ch)
+	defer s.state.RemoveRunSubscriber(runID, ch)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
