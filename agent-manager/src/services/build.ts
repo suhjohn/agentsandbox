@@ -24,18 +24,18 @@ const SNAPSHOT_TIMEOUT_MS = 10 * 60 * 1000
 const MAX_LOG_CHARS = 12_000
 
 const AGENT_SOURCE_UPDATE_COMMAND = [
-  'if command -v agent-go-update-source >/dev/null 2>&1; then',
+  'if [[ -x "${AGENT_DOCKER_DIR:-/opt/agentsandbox/agent-go/docker}/update-agent-go-source.sh" ]]; then',
   '  echo "[agent-go] syncing source checkout..."',
-  '  agent-go-update-source',
+  '  "${AGENT_DOCKER_DIR:-/opt/agentsandbox/agent-go/docker}/update-agent-go-source.sh"',
   'fi'
 ].join('\n')
 
 const AGENT_SERVER_VERIFY_COMMAND = [
-  'if [[ ! -f /opt/agentsandbox/agent-go/build-artifacts/agent-server ]]; then',
-  '  echo "[agent-go] binary missing: /opt/agentsandbox/agent-go/build-artifacts/agent-server" >&2;',
+  'if [[ ! -x "${AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server}" ]]; then',
+  '  echo "[agent-go] binary missing: ${AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server}" >&2;',
   '  exit 1;',
   'fi',
-  'chmod +x /opt/agentsandbox/agent-go/build-artifacts/agent-server'
+  'chmod +x "${AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server}"'
 ].join('\n')
 
 export type BuildChunk = {

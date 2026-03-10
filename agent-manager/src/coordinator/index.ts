@@ -363,7 +363,7 @@ Core runtime facts inside the sandbox:
 - Agent runtime root is typically \`/home/agent/runtime\` (or \`$ROOT_DIR\` when overridden).
 - Agent SQLite DB defaults to \`/home/agent/runtime/agent.db\` (unless \`DATABASE_PATH\` is overridden).
 - Agent server stdout/stderr is typically captured to \`$AGENT_SERVER_LOG_FILE\` (default: \`$ROOT_DIR/logs/agent-server.log\`).
-- Agent image repo checkout is typically \`/opt/agentsandbox/agent-go\`; runtime wiring is in \`$AGENT_DOCKER_DIR/entrypoint.sh\` (default: \`/opt/agentsandbox/agent-go/docker/entrypoint.sh\`).
+- Agent image repo checkout is typically \`/opt/agentsandbox/agent-go\`; the runtime entrypoint is \`/opt/agentsandbox/agent-go/docker/entrypoint.sh\`.
 - Browser automation capabilities live in \`$AGENT_TOOLS_DIR/browser-tools\` (default: \`/opt/agentsandbox/agent-go/tools/browser-tools\`) and are usually exposed in the workspace at \`/home/agent/workspaces/tools/browser-tools\` (with fallbacks like \`/home/agent/_agent_tools/browser-tools\` or \`/home/agent/runtime/tools/browser-tools\`).
 
 When investigating:

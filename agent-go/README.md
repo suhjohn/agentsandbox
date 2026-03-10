@@ -182,26 +182,25 @@ Runtime behavior intentionally keeps the same entrypoint/runit stack used by `ag
 - optional dockerd service
 - workspace tools sync + harness runtime setup on `agent-server serve` startup (`AGENTS.md`, Codex auth seeding)
 
-The API server command remains `agent-server`, exposed at `/usr/local/bin/agent-server`
-and backed directly by the tracked repo binary
+The API server command now calls the tracked repo binary directly at
 `/opt/agentsandbox/agent-go/build-artifacts/agent-server`. The matching source
 revision is recorded in `agent-go/build-artifacts/agent-server.rev`.
-OpenVSCode proxying uses that same tracked binary (`agent-server openvscode-proxy`).
+OpenVSCode proxying uses that same binary (`/opt/agentsandbox/agent-go/build-artifacts/agent-server openvscode-proxy`).
 
 ### Entrypoint + `AGENT_RUNTIME_MODE`
 
 OpenVSCode/noVNC are **not** started by `agent-server serve` itself. They come up via runit services that
-are installed/launched by the container entrypoint (`agent-entrypoint`).
+are installed/launched by the container entrypoint (`/opt/agentsandbox/agent-go/docker/entrypoint.sh`).
 
-- Docker `ENTRYPOINT` is `agent-entrypoint` (`agent-go/Dockerfile`).
-- `agent-entrypoint` always installs the main `agent-server` service when the container command is
-  `agent-server ...`. In `AGENT_RUNTIME_MODE=all` (default), it also installs the UI/OpenVSCode services.
-- When the container command is `agent-server ...`, `agent-entrypoint` now installs that command
+- Docker `ENTRYPOINT` is `/opt/agentsandbox/agent-go/docker/entrypoint.sh` (`agent-go/Dockerfile`).
+- That entrypoint always installs the main `agent-server` service when the container command is
+  `/opt/agentsandbox/agent-go/build-artifacts/agent-server ...`. In `AGENT_RUNTIME_MODE=all` (default), it also installs the UI/OpenVSCode services.
+- When the container command is `/opt/agentsandbox/agent-go/build-artifacts/agent-server ...`, the entrypoint now installs that command
   as the `agent-server` runit service and keeps `runsvdir` as the foreground process.
 - In `all` mode, relevant runit services include:
   - `agent-server` (main API service, installed dynamically from the container command)
   - `openvscode-server` (`agent-go/docker/runit/openvscode-server.sh`)
-  - `openvscode-proxy` (`agent-go/docker/runit/openvscode-proxy.sh`, runs the tracked `agent-server` binary with `openvscode-proxy`)
+  - `openvscode-proxy` (`agent-go/docker/runit/openvscode-proxy.sh`, runs `/opt/agentsandbox/agent-go/build-artifacts/agent-server openvscode-proxy`)
   - `ui-stack` (Xvfb/VNC/noVNC/Chromium) (`agent-go/docker/runit/ui-stack.sh`)
 
 Service control:
@@ -215,7 +214,7 @@ Service control:
 Operational implications:
 
 - If your runtime bypasses Docker `ENTRYPOINT` (for example some Modal execution paths), OpenVSCode/noVNC
-  will not start unless you explicitly wrap your command with `agent-entrypoint`.
+  will not start unless you explicitly wrap your command with `/opt/agentsandbox/agent-go/docker/entrypoint.sh`.
 - Build/setup sandboxes intentionally run with `AGENT_RUNTIME_MODE=server` (API-only), so OpenVSCode/noVNC
   will be skipped even if the entrypoint runs.
 

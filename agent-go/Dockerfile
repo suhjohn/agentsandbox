@@ -126,11 +126,8 @@ RUN mkdir -p "${AGENT_REPO_DIR}/agent-go"
 # Layer 8: Copy entire repo (includes agent-go/docker and agent-go/tools)
 COPY . ${AGENT_REPO_DIR}
 
-# Install runtime entrypoints against the tracked repo checkout.
-RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/build-artifacts/agent-server" /usr/local/bin/agent-server \
-  && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/update-agent-go-source.sh" /usr/local/bin/agent-go-update-source \
-  && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/entrypoint.sh" /usr/local/bin/agent-entrypoint \
-  && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/docker-wrapper.sh" /usr/local/bin/docker \
+# Install the docker wrapper; runtime entrypoints are invoked directly from the repo checkout.
+RUN install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/docker-wrapper.sh" /usr/local/bin/docker \
   && mkdir -p /usr/share/novnc \
   && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/index.html \
   && cp -f "${AGENT_REPO_DIR}/agent-go/docker/novnc/index.html" /usr/share/novnc/vnc.html \
@@ -220,5 +217,5 @@ ENV AGENT_IMAGE_VERSION=${AGENT_IMAGE_VERSION}
 RUN set -eux; \
   printf '%s\n' "${AGENT_IMAGE_VERSION}" > /etc/agent-image-version
 
-ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/agent-entrypoint"]
-CMD ["/usr/local/bin/agent-server"]
+ENTRYPOINT ["dumb-init", "--", "/opt/agentsandbox/agent-go/docker/entrypoint.sh"]
+CMD ["/opt/agentsandbox/agent-go/build-artifacts/agent-server"]
