@@ -5,9 +5,12 @@ GO ?= go
 
 DOCKER ?= docker
 DOCKER_IMAGE ?= agent-go:dev
+PUSH_IMAGE ?= ghcr.io/suhjohn/agentsandbox
+PUSH_LATEST ?= 0
 BINARY_PATH ?= ./build-artifacts/agent-server
+ENV_FILE ?= .env
 
-.PHONY: help test build build-docker-binary docker-build docker-push
+.PHONY: help test build build-docker-binary docker-build docker-dev docker-push
 
 help:
 	@echo "agent-go make targets"
@@ -15,7 +18,8 @@ help:
 	@echo "  make build                   # build the tracked server binary at $(BINARY_PATH)"
 	@echo "  make build-docker-binary     # build the tracked server binary for linux/amd64 at $(BINARY_PATH)"
 	@echo "  make docker-build            # build the Docker image tagged as $(DOCKER_IMAGE)"
-	@echo "  make docker-push             # build the tracked binary, then build and push the linux/amd64 image via buildx"
+	@echo "  make docker-dev              # run the Docker image with env from $(ENV_FILE)"
+	@echo "  make docker-push             # push $(PUSH_IMAGE) with tag from GHCR_TAG or current git sha"
 
 build:
 	./scripts/dev.sh build-server --output "$(BINARY_PATH)"
@@ -29,5 +33,8 @@ test:
 docker-build:
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(DOCKER_IMAGE)" ./scripts/dev.sh docker-build
 
+docker-dev:
+	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(DOCKER_IMAGE)" ENV_FILE="$(ENV_FILE)" ./scripts/dev.sh docker-run --env-file "$(ENV_FILE)"
+
 docker-push: build-docker-binary
-	DOCKER="$(DOCKER)" GHCR_SKIP_BINARY_BUILD=1 ./scripts/dev.sh ghcr-push-amd64
+	DOCKER="$(DOCKER)" GHCR_IMAGE="$(PUSH_IMAGE)" GHCR_PUSH_LATEST="$(PUSH_LATEST)" GHCR_SKIP_BINARY_BUILD=1 PREBUILT_BINARY_PATH="$(BINARY_PATH)" ./scripts/dev.sh ghcr-push-amd64

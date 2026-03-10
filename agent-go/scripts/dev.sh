@@ -287,25 +287,56 @@ cmd_restart_server() {
 docker_run_args() {
   local env_file="$1"
   local server_only="$2"
+  local agent_port=""
+  local openvscode_port=""
+  local novnc_port=""
+  local vnc_port=""
+
+  agent_port="$(env_file_value_or_default "${env_file}" "PORT" "3131")"
+  openvscode_port="$(env_file_value_or_default "${env_file}" "OPENVSCODE_SERVER_PORT" "39393")"
+  novnc_port="$(env_file_value_or_default "${env_file}" "NOVNC_PORT" "6080")"
+  vnc_port="$(env_file_value_or_default "${env_file}" "VNC_PORT" "5900")"
 
   local args=(
     run --rm -it --name "${DOCKER_CONTAINER}"
     --env-file "${env_file}"
-    -p 3131:3131
+    -p "${agent_port}:${agent_port}"
   )
 
   if [[ "${server_only}" == "1" ]]; then
     args+=(-e AGENT_RUNTIME_MODE=server)
   else
     args+=(
-      -p 39393:39393
-      -p 6080:6080
-      -p 5900:5900
+      -p "${openvscode_port}:${openvscode_port}"
+      -p "${novnc_port}:${novnc_port}"
+      -p "${vnc_port}:${vnc_port}"
     )
   fi
 
   args+=("${DOCKER_IMAGE}")
   printf '%s\0' "${args[@]}"
+}
+
+env_file_value_or_default() {
+  local env_file="$1"
+  local key="$2"
+  local default_value="$3"
+  local value=""
+
+  value="$(
+    ENV_FILE_TO_READ="${env_file}" ENV_KEY_TO_READ="${key}" bash -c '
+      set -a
+      source "${ENV_FILE_TO_READ}" >/dev/null 2>&1 || exit 0
+      eval "printf %s \"\${${ENV_KEY_TO_READ}:-}\""
+    ' 2>/dev/null || true
+  )"
+
+  if [[ -n "${value}" ]]; then
+    printf '%s' "${value}"
+    return 0
+  fi
+
+  printf '%s' "${default_value}"
 }
 
 parse_docker_mode_args() {
@@ -348,10 +379,30 @@ cmd_docker_build() {
   "${DOCKER_BIN}" build -f "${MODULE_DIR}/Dockerfile" -t "${DOCKER_IMAGE}" "${REPO_ROOT}"
 }
 
+read_docker_mode_args() {
+  local __env_file_var="$1"
+  local __server_only_var="$2"
+  local __do_pull_var="$3"
+  local parsed_env_file=""
+  local parsed_server_only=""
+  local parsed_do_pull=""
+
+  exec 3< <(parse_docker_mode_args "${@:4}")
+  IFS= read -r parsed_env_file <&3 || true
+  IFS= read -r parsed_server_only <&3 || true
+  IFS= read -r parsed_do_pull <&3 || true
+  exec 3<&-
+
+  printf -v "${__env_file_var}" '%s' "${parsed_env_file}"
+  printf -v "${__server_only_var}" '%s' "${parsed_server_only}"
+  printf -v "${__do_pull_var}" '%s' "${parsed_do_pull}"
+}
+
 cmd_docker_run() {
-  mapfile -t parsed < <(parse_docker_mode_args "$@")
-  local env_file="${parsed[0]}"
-  local server_only="${parsed[1]}"
+  local env_file=""
+  local server_only=""
+  local do_pull=""
+  read_docker_mode_args env_file server_only do_pull "$@"
 
   local args=()
   while IFS= read -r -d '' item; do
@@ -362,10 +413,10 @@ cmd_docker_run() {
 }
 
 cmd_docker_refresh() {
-  mapfile -t parsed < <(parse_docker_mode_args "$@")
-  local env_file="${parsed[0]}"
-  local server_only="${parsed[1]}"
-  local do_pull="${parsed[2]}"
+  local env_file=""
+  local server_only=""
+  local do_pull=""
+  read_docker_mode_args env_file server_only do_pull "$@"
 
   if [[ "${do_pull}" == "1" ]]; then
     git -C "${REPO_ROOT}" pull --ff-only
@@ -388,7 +439,9 @@ cmd_docker_stop() {
 
 cmd_ghcr_push_amd64() {
   local docker_cmd=("${DOCKER_BIN}")
-  local repo_binary_path="${MODULE_DIR}/build-artifacts/agent-server"
+  local repo_binary_path="${PREBUILT_BINARY_PATH:-${MODULE_DIR}/build-artifacts/agent-server}"
+
+  repo_binary_path="$(abs_path "${repo_binary_path}")"
 
   if [[ -n "${DOCKER_CONTEXT:-}" ]]; then
     docker_cmd=("${DOCKER_BIN}" --context "${DOCKER_CONTEXT}")
@@ -425,7 +478,7 @@ cmd_ghcr_push_amd64() {
   fi
 
   local tags=("${image}:${tag}")
-  if [[ "${GHCR_PUSH_LATEST:-1}" != "0" && "${tag}" != "latest" ]]; then
+  if [[ "${GHCR_PUSH_LATEST:-0}" != "0" && "${tag}" != "latest" ]]; then
     tags+=("${image}:latest")
   fi
 
