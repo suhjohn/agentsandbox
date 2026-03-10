@@ -4,6 +4,7 @@ import type { PanelTypeId } from "../types";
 export type PanelOpenPlacement = "self" | "left" | "right" | "top" | "bottom";
 
 export interface PanelRuntime {
+  readonly leafId: string;
   readonly now: () => number;
   readonly replaceSelf: (panelType: PanelTypeId, config?: unknown) => void;
   readonly openPanel: (

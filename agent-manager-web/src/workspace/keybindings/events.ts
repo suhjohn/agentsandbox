@@ -7,6 +7,10 @@ export const WORKSPACE_PANE_ZOOM_TOGGLE_EVENT =
 export const WORKSPACE_TOGGLE_ALL_COLLAPSIBLES_EVENT = 'collapsible:toggle-all'
 export const WORKSPACE_RUN_COMMAND_EVENT = 'agent-manager-web:workspace-run-command'
 
+export interface WorkspaceCancelStreamEventDetail {
+  readonly leafId?: string
+}
+
 export interface WorkspacePaneZoomToggleEventDetail {
   readonly leafId?: string
 }

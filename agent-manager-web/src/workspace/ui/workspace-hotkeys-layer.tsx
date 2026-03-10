@@ -31,6 +31,7 @@ import {
   WORKSPACE_OPEN_COORDINATOR_EVENT,
   WORKSPACE_PANE_ZOOM_TOGGLE_EVENT,
   WORKSPACE_RUN_COMMAND_EVENT,
+  type WorkspaceCancelStreamEventDetail,
   type WorkspaceRunCommandEventDetail,
   WORKSPACE_TOGGLE_ALL_COLLAPSIBLES_EVENT
 } from '../keybindings/events'
@@ -70,6 +71,17 @@ function toggleAllCollapsibles (): void {
     new CustomEvent(WORKSPACE_TOGGLE_ALL_COLLAPSIBLES_EVENT, {
       detail: { open: nextOpen }
     })
+  )
+}
+
+function dispatchCancelStream (leafId: string | null): void {
+  window.dispatchEvent(
+    new CustomEvent<WorkspaceCancelStreamEventDetail>(
+      WORKSPACE_CANCEL_STREAM_EVENT,
+      {
+        detail: leafId ? { leafId } : {}
+      }
+    )
   )
 }
 
@@ -156,7 +168,7 @@ function WorkspaceHotkeysLayerImpl (
           setCommandPaletteOpen(false)
           setWindowSwitcherOpen(false)
           setRenameDialogState(null)
-          window.dispatchEvent(new Event(WORKSPACE_CANCEL_STREAM_EVENT))
+          dispatchCancelStream(focusedLeafId)
           return
         }
         case 'keyboard.leader.send': {
@@ -320,7 +332,7 @@ function WorkspaceHotkeysLayerImpl (
           return
         }
         case 'workspace.stream.cancel': {
-          window.dispatchEvent(new Event(WORKSPACE_CANCEL_STREAM_EVENT))
+          dispatchCancelStream(focusedLeafId)
           return
         }
         case 'settings.open.general': {

@@ -86,6 +86,10 @@ import type { PanelProps } from './types'
 import { parseBody as parseBodyUtil } from './session-message-utils'
 import { useWorkspaceStore } from '../store'
 import { listLeafIds } from '../layout'
+import {
+  WORKSPACE_CANCEL_STREAM_EVENT,
+  type WorkspaceCancelStreamEventDetail
+} from '../keybindings/events'
 import { TbTableColumn, TbTableRow } from 'react-icons/tb'
 
 export interface AgentSessionPanelConfig {
@@ -2321,14 +2325,26 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
   }, [access?.agentApiUrl, access?.agentAuthToken, sessionId])
 
   useEffect(() => {
-    const handler = () => {
+    const handler = (event: Event) => {
+      const detail = (
+        event as CustomEvent<WorkspaceCancelStreamEventDetail | undefined>
+      ).detail
+      const targetLeafId =
+        typeof detail?.leafId === 'string' ? detail.leafId : null
+      if (targetLeafId && targetLeafId !== props.runtime.leafId) return
       if (stream.isRunning !== true) return
       void stopRun()
     }
-    window.addEventListener('agent-manager-web:cancel-stream', handler)
+    window.addEventListener(
+      WORKSPACE_CANCEL_STREAM_EVENT,
+      handler as EventListener
+    )
     return () =>
-      window.removeEventListener('agent-manager-web:cancel-stream', handler)
-  }, [stopRun, stream.isRunning])
+      window.removeEventListener(
+        WORKSPACE_CANCEL_STREAM_EVENT,
+        handler as EventListener
+      )
+  }, [props.runtime.leafId, stopRun, stream.isRunning])
 
   useEffect(() => {
     streamConnectionRef.current = null

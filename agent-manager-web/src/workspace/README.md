@@ -128,6 +128,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - `Option/Alt+Shift+L` (coordinator sessions list)
   - `Cmd/Ctrl+.` (PTT)
 - `Escape` cancellation and `Cmd/Ctrl+O` collapsible toggling are routed through workspace commands rather than pane-local `onKeyDown` handlers.
+- Stream-cancel commands dispatch the focused `leafId`, so `Escape` / `Prefix Escape` only interrupt the active run in the currently focused pane instead of every open streaming panel.
 - Pane expand hotkey (`pane.zoom.toggle`) dispatches `agent-manager-web:workspace-pane-zoom-toggle`; `LeafView` listens and toggles fullscreen for the targeted/focused leaf.
 
 ## Pane and Panel Details
@@ -188,6 +189,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
 
 `createPanelRuntime` gives panel components two store-backed helpers:
 
+- `leafId` -> current pane identity for panel-scoped behaviors such as focused-pane command routing.
 - `replaceSelf(panelType, config?)` -> dispatches `panel/type` and optional `panel/config`.
 - `openPanel(panelType, config?, { placement })` -> dispatches `panel/open`.
   - placements supported: `self`, `left`, `right`, `top`, `bottom`

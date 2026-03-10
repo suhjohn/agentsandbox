@@ -226,6 +226,7 @@ function createPanelRuntime (
   panelInstanceId: string
 ) {
   return {
+    leafId,
     now: () => performance.now(),
     replaceSelf: (panelType: string, config?: unknown) => {
       store.dispatch({
