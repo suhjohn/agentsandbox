@@ -1201,28 +1201,21 @@ function findRunStartTimestamp (
   return null
 }
 
-function useElapsedSeconds (
-  isRunning: boolean,
-  startTimestamp: string | null
-): number {
-  const [tick, setTick] = useState(0)
-  const intervalRef = useRef<number | null>(null)
-
-  if (isRunning && intervalRef.current === null) {
-    intervalRef.current = window.setInterval(() => {
-      setTick(n => n + 1)
-    }, 1000)
-  } else if (!isRunning && intervalRef.current !== null) {
-    window.clearInterval(intervalRef.current)
-    intervalRef.current = null
-  }
-
-  if (!isRunning || !startTimestamp) return 0
-
+function formatElapsed (startTimestamp: string | null): string {
+  if (!startTimestamp) return '0s'
   const startMs = Date.parse(startTimestamp)
-  if (!Number.isFinite(startMs)) return 0
+  if (!Number.isFinite(startMs)) return '0s'
 
-  return Math.max(0, Math.floor((Date.now() - startMs) / 1000))
+  const totalSeconds = Math.max(0, Math.floor((Date.now() - startMs) / 1000))
+  if (totalSeconds < 60) return `${totalSeconds}s`
+
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes < 60) return `${minutes}m ${seconds}s`
+
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return `${hours}h ${remainingMinutes}m`
 }
 
 function SessionMessages (props: {
@@ -2193,8 +2186,7 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
     () => (isWorking ? findRunStartTimestamp(messages) : null),
     [isWorking, messages]
   )
-  const elapsedSeconds = useElapsedSeconds(isWorking, runStartTimestamp)
-  const workingLabel = `Working (${elapsedSeconds}s • esc to interrupt)`
+  const workingLabel = `Working (${formatElapsed(runStartTimestamp)} • esc to interrupt)`
 
   useStickyScroll(
     scrollParent,

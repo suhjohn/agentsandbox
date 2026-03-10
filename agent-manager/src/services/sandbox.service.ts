@@ -752,22 +752,13 @@ async function createAgentSandboxModal (input: {
   const sandboxEnv: Record<string, string> = {
     PORT: String(SESSION_SANDBOX_AGENT_API_PORT),
     DOCKERD_ENABLED: '1',
-    PROFILE_CHECKPOINT_ENABLED: '1',
-    PROFILE_CHECKPOINT_INTERVAL_SEC: '15',
-    PROFILE_CHECKPOINT_KEEP: '40',
-    AGENT_HOME: '/home/agent',
-    WORKSPACES_DIR: '/home/agent/workspaces',
-    DEFAULT_WORKING_DIR: '/home/agent/workspaces',
-    IMAGE_ID: input.dbImageId,
     DOCKERD_BRIDGE: 'none',
     AGENT_DOCKER_FORCE_HOST_NETWORK: '1',
     ...((process.env.PI_CODING_AGENT_DIR ?? '').trim().length > 0
       ? { PI_CODING_AGENT_DIR: (process.env.PI_CODING_AGENT_DIR ?? '').trim() }
       : {}),
     OPENVSCODE_CONNECTION_TOKEN: input.sandboxAccessToken,
-    VNC_PASSWORD: input.sandboxAccessToken,
     SECRET_SEED: env.SANDBOX_SIGNING_SECRET,
-    AGENT_RUNTIME_MODE: 'all',
     AGENT_ID: input.agentId,
     AGENT_INTERNAL_AUTH_SECRET: input.runtimeInternalSecret,
     AGENT_MANAGER_BASE_URL: agentManagerBaseUrl,
@@ -1319,9 +1310,6 @@ export async function createSetupSandbox (input: {
     sandbox = await modalClient.sandboxes.create(app, modalImage, {
       command: [...SETUP_SERVER_COMMAND],
       env: {
-        AGENT_HOME: '/home/agent',
-        WORKSPACES_DIR: '/home/agent/workspaces',
-        HOME: '/home/agent',
         AGENT_RUNTIME_MODE: 'server',
         AGENT_ID: setupSandboxAgentId(input.imageId),
         PORT: String(SETUP_TERMINAL_PORT),

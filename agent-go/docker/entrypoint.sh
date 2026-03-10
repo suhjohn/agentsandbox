@@ -18,6 +18,10 @@ if [[ -z "${AGENT_ID}" ]]; then
   exit 1
 fi
 
+# Keep these derived runtime paths in the entrypoint instead of only in the
+# Dockerfile. Dockerfile ENV provides static image defaults, but it does not
+# recompute dependent values when callers override AGENT_HOME/ROOT_DIR/etc. at
+# container start time.
 ROOT_DIR="${ROOT_DIR:-${AGENT_HOME}/runtime}"
 AGENT_GO_REPO_DIR="${AGENT_GO_REPO_DIR:-/opt/agentsandbox/agent-go}"
 AGENT_DOCKER_DIR="${AGENT_DOCKER_DIR:-${AGENT_GO_REPO_DIR}/docker}"

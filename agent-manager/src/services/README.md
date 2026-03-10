@@ -20,6 +20,7 @@ runModalImageBuild(input: {
 
 Behavior:
 - Creates a Modal build sandbox.
+- Sets a minimal setup-script environment in that sandbox: `AGENT_HOME`, `AGENT_ID`, `WORKSPACES_DIR`, `ROOT_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and `HOME`.
 - Attaches Modal secrets by name from:
   - `input.modalSecretName` (or default `openinspect-build-secret`), and
   - `input.environmentSecretNames`.
@@ -209,6 +210,8 @@ Behavior:
   - named default secret `openinspect-build-secret` (if present),
   - inline API key secret object (OpenAI/Anthropic/Google keys when configured),
   - image-bound environment secrets from `listEnvironmentSecrets(agent.imageId)`.
+- Session sandboxes only inject runtime-specific env overrides (`PORT`, Docker toggles, auth/base-URL values, and optional `PI_CODING_AGENT_DIR`) and otherwise rely on the `agent-go` image/entrypoint defaults for paths and UI token wiring.
+- Setup sandboxes likewise rely on container defaults for home/workspace paths, but explicitly force `AGENT_RUNTIME_MODE=server`.
 - When the source image has a non-empty `runScript`, sandbox startup is wrapped so that script runs once before `/opt/agentsandbox/agent-go/build-artifacts/agent-server serve`.
 - If an agent no longer has an owner (`created_by` is `NULL`), sandbox creation fails with `409 Agent owner is missing`.
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.
