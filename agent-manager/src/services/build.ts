@@ -152,7 +152,8 @@ export async function runModalImageBuild (input: {
       ROOT_DIR: SANDBOX_ROOT_DIR,
       CODEX_HOME: SANDBOX_CODEX_HOME,
       PI_CODING_AGENT_DIR: SANDBOX_PI_DIR,
-      HOME: SANDBOX_AGENT_HOME
+      HOME: SANDBOX_AGENT_HOME,
+      SECRET_SEED: env.SANDBOX_SIGNING_SECRET
     },
     ...(modalSecrets.length > 0 ? { secrets: modalSecrets } : {}),
     timeoutMs: CREATE_TIMEOUT_MS
