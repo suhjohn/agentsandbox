@@ -1,38 +1,116 @@
-# Keep build contexts small and avoid copying local secrets into images.
+# Keep Docker build context small while preserving source code.
 
-# Node / web
-**/node_modules
-**/dist
-**/build
-**/.next
-**/.turbo
-**/.cache
+# VCS metadata
+.git
+**/.git
+**/.gitmodules
+**/.gitattributes
 
-# Secrets / env
+# Secrets / env files
 **/.env
 **/.env.*
 !**/.env.example
+!**/.env.*.example
 
-# VCS
-**/.gitignore
+# Node / frontend package + build caches
+**/node_modules
+**/.pnpm-store
+**/.npm
+**/.yarn
+**/.yarn-cache
+**/.pnp.*
+**/.parcel-cache
+**/.next
+**/.nuxt
+**/.svelte-kit
+**/.astro
+**/.turbo
+**/.vite
+**/.cache
+**/dist
+**/build
+**/out
+**/.tsbuildinfo
+**/*.tsbuildinfo
+**/storybook-static
+
+# Java / Kotlin / Gradle
+**/.gradle
+**/build/
+**/out/
+**/target/
+**/*.class
+**/*.jar
+**/*.war
+**/*.ear
+
+# Go
+**/bin/
+**/*.test
+**/*.out
+**/coverage.out
+**/cover.out
+
+# Rust
+**/target
 
 # Python
 **/__pycache__
 **/*.pyc
 **/*.pyo
+**/*.pyd
 **/.pytest_cache
 **/.mypy_cache
 **/.ruff_cache
+**/.tox
+**/.nox
+**/.hypothesis
+**/.coverage
+**/.coverage.*
+**/htmlcov
 **/*.egg-info
 **/.venv
 **/venv
 
-# Local DB artifacts
+# Ruby
+**/.bundle
+**/vendor/bundle
+
+# C/C++/CMake
+**/cmake-build-*/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/compile_commands.json
+**/makedep*
+
+# Swift / Xcode
+**/DerivedData
+**/.build
+
+# .NET
+**/obj
+**/TestResults
+
+# Test outputs
+**/coverage
+**/.nyc_output
+**/playwright-report
+**/test-results
+**/allure-results
+**/allure-report
+
+# Databases / local runtime state
 **/*.db
 **/*.db-wal
 **/*.db-shm
+**/*.sqlite
+**/*.sqlite3
+**/*.pid
 
-# Misc
+# Logs / temp / editor OS noise
 **/*.log
+**/*.tmp
+**/*.temp
+**/.DS_Store
+**/Thumbs.db
 .tmp
-.DS_Store
