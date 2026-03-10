@@ -1,9 +1,9 @@
 # Agent Image Versioning & Upgrade Specification
 
 > Status update (2026-03-05):
-> The runtime now uses a source-driven launcher at `/app/agent-server` that runs
-> `go run ./cmd/agent-go ...` from the in-image repo checkout and can sync source
-> via `agent-go-update-source` (`git pull --ff-only`) before startup.
+> The runtime now uses `/app/agent-server`, which points directly at the tracked
+> `agent-go/build-artifacts/agent-server` binary. Source sync
+> via `agent-go-update-source` happens during the build flow, not on sandbox startup.
 > This document still captures the previous release-infrastructure proposal and
 > should be treated as historical design context rather than the active rollout plan.
 

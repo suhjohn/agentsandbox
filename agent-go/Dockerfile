@@ -151,7 +151,7 @@ COPY . ${AGENT_REPO_DIR}
 # Symlink docker/tools to /app for backwards compatibility
 RUN ln -sfn "${AGENT_REPO_DIR}/agent-go/docker" /app/docker \
   && ln -sfn "${AGENT_REPO_DIR}/agent-go/tools" /app/tools \
-  && ln -sfn "${AGENT_REPO_DIR}/agent-go/docker/agent-server.sh" /app/agent-server \
+  && ln -sfn "${AGENT_REPO_DIR}/agent-go/build-artifacts/agent-server" /app/agent-server \
   && ln -sfn /app/agent-server /usr/local/bin/agent-server \
   && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/update-agent-go-source.sh" /usr/local/bin/agent-go-update-source \
   && install -m 0755 "${AGENT_REPO_DIR}/agent-go/docker/entrypoint.sh" /usr/local/bin/agent-entrypoint \
@@ -183,7 +183,6 @@ ENV AGENT_ID=default
 ENV WORKSPACES_DIR=${AGENT_HOME}/workspaces
 ENV ROOT_DIR=${AGENT_HOME}/runtime
 ENV AGENT_GO_REPO_DIR=${AGENT_REPO_DIR}/agent-go
-ENV AGENT_GO_AUTO_PULL=1
 ENV AGENT_GO_PULL_REF=main
 ENV CODEX_HOME=${AGENT_HOME}/.codex
 ENV PI_CODING_AGENT_DIR=${AGENT_HOME}/.pi

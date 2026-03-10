@@ -195,10 +195,9 @@ Runtime behavior intentionally keeps the same entrypoint/runit stack used by `ag
 - optional dockerd service
 - workspace tools sync + harness runtime setup on `agent-server serve` startup (`AGENTS.md`, Codex auth seeding)
 
-The API server command remains `/app/agent-server`, but this is an executable launcher
-that syncs the in-image source checkout and then runs the tracked repo binary at
-`agent-go/build-artifacts/agent-server`. The matching source revision is recorded in
-`agent-go/build-artifacts/agent-server.rev`.
+The API server command remains `/app/agent-server`, which points directly at the
+tracked repo binary `agent-go/build-artifacts/agent-server`. The matching source
+revision is recorded in `agent-go/build-artifacts/agent-server.rev`.
 OpenVSCode proxying still uses the same command path (`/app/agent-server openvscode-proxy`).
 
 ### Entrypoint + `AGENT_RUNTIME_MODE`
