@@ -43,7 +43,7 @@ Use `./scripts/dev.sh ...` directly for everything else, including local run/res
 - SQLite persistence (sessions/messages/events outbox)
 - Manager outbox sync dispatcher
 - A harness registry that dispatches runtime execution by harness ID
-- Codex and PI harness implementations backed by CLI wrappers
+- Codex, OpenCode, and PI harness implementations backed by CLI wrappers
 
 ## Harness CLI model and thinking controls
 
@@ -70,6 +70,16 @@ The runtime exposes model/thinking controls through harness definitions in
 - Thinking level is a first-class field on `PiOptions` as `Thinking`, which emits `--thinking <level>`.
 - The PI RPC helpers also expose thinking controls through `PiRPCSetThinkingLevel(...)` and `PiRPCCycleThinkingLevel(...)`.
 - Supported thinking levels for PI sessions are: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`.
+
+### OpenCode
+
+- Wrapper types live in `agent-go/internal/harness/opencode/cli.go`.
+- Harness definition lives in `agent-go/internal/harness/opencode/definition.go`.
+- The CLI only exposes root flags for fresh non-interactive execution: `--cwd`, `--prompt`, `--output-format`, `--quiet`, plus `--debug`/`--help`/`--version`.
+- Session resume/fork, JSONL event streaming, and direct CLI model-selection flags are not supported by the archived `opencode` binary.
+- The harness sets model and reasoning indirectly through an isolated per-session XDG config written under the runtime directory, rather than by mutating the workspace.
+- Native OpenCode model IDs are supported for explicit session model selection. Provider-prefixed forms like `openai/gpt-4.1`, `github-copilot/gpt-4o`, `openrouter/gpt-4.1`, `azure/gpt-4.1`, `vertexai/gemini-2.5`, and `bedrock/claude-3.7-sonnet` are normalized to OpenCode’s native IDs when they match the archived model set.
+- Supported reasoning levels for OpenCode sessions are: `low`, `medium`, `high`.
 
 ## Standalone binary
 

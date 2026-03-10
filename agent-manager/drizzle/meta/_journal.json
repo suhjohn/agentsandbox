@@ -183,6 +183,13 @@
       "when": 1772823491123,
       "tag": "0025_red_stature",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1773100800000,
+      "tag": "0026_users_avatar",
+      "breakpoints": true
     }
   ]
 }

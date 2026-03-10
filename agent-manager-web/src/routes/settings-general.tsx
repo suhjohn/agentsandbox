@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { UserAvatar } from '@/components/user-avatar'
 import { registerSettingsGeneralRuntimeController } from '@/coordinator-actions/runtime-bridge'
 import {
   SettingsList,
@@ -105,6 +106,7 @@ function parseGlobalDiffignoreResponse (value: unknown): readonly string[] {
 export function SettingsGeneralPage () {
   const auth = useAuth()
   const queryClient = useQueryClient()
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
 
   const currentName = auth.user?.name ?? ''
   const currentRegionDisplay = regionToDisplay(
@@ -200,6 +202,30 @@ export function SettingsGeneralPage () {
     }
   })
 
+  const uploadAvatarMutation = useMutation({
+    mutationFn: async (file: File) => {
+      await auth.uploadAvatar(file)
+    },
+    onSuccess: () => {
+      toast.success('Avatar updated')
+    },
+    onError: error => {
+      toast.error(toErrorMessage(error))
+    }
+  })
+
+  const resetAvatarMutation = useMutation({
+    mutationFn: async () => {
+      await auth.resetAvatar()
+    },
+    onSuccess: () => {
+      toast.success('Avatar reset')
+    },
+    onError: error => {
+      toast.error(toErrorMessage(error))
+    }
+  })
+
   let regionError: string | null = null
   try {
     parseRegionInput(regionText)
@@ -271,6 +297,61 @@ export function SettingsGeneralPage () {
         >
           <SettingsPanel>
             <SettingsList className='rounded-none border-0'>
+              <SettingsRow
+                className='items-start flex-col sm:flex-row'
+                left={
+                  <SettingsRowLeft
+                    title='Profile image'
+                    description='Upload your own image or fall back to your initials.'
+                    leading={
+                      auth.user ? (
+                        <UserAvatar
+                          user={auth.user}
+                          className='h-12 w-12'
+                          textClassName='text-lg'
+                        />
+                      ) : null
+                    }
+                  />
+                }
+                right={
+                  <div className='w-full sm:w-[420px] space-y-2'>
+                    <input
+                      ref={avatarInputRef}
+                      type='file'
+                      accept='image/png,image/jpeg,image/webp,image/gif,image/avif'
+                      className='hidden'
+                      onChange={async e => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ''
+                        if (!file) return
+                        await uploadAvatarMutation.mutateAsync(file)
+                      }}
+                    />
+                    <div className='flex flex-wrap gap-2'>
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        disabled={uploadAvatarMutation.isPending || resetAvatarMutation.isPending}
+                        onClick={() => avatarInputRef.current?.click()}
+                      >
+                        {uploadAvatarMutation.isPending ? 'Uploading...' : 'Upload image'}
+                      </Button>
+                      <Button
+                        type='button'
+                        variant='outline'
+                        disabled={uploadAvatarMutation.isPending || resetAvatarMutation.isPending}
+                        onClick={() => resetAvatarMutation.mutate()}
+                      >
+                        {resetAvatarMutation.isPending ? 'Resetting...' : 'Reset to default'}
+                      </Button>
+                    </div>
+                    <div className='text-xs text-text-secondary'>
+                      PNG, JPEG, WebP, GIF, or AVIF up to 5 MB.
+                    </div>
+                  </div>
+                }
+              />
               <SettingsRow
                 className='items-start sm:items-center flex-col sm:flex-row'
                 left={

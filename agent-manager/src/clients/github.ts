@@ -10,6 +10,7 @@ type GithubUserResponse = {
   readonly id?: unknown;
   readonly login?: unknown;
   readonly name?: unknown;
+  readonly avatar_url?: unknown;
 };
 
 type GithubEmailResponse = {

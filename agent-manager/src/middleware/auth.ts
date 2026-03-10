@@ -24,6 +24,7 @@ export const loadUser = createMiddleware<AppEnv>(async (c, next) => {
     id: user.id,
     email: user.email,
     name: user.name,
+    avatar: user.avatar ?? null,
     defaultRegion: parseRegionText(user.defaultRegion) ?? DEFAULT_REGION,
     workspaceKeybindings: parseWorkspaceKeybindings(user.workspaceKeybindings),
   })

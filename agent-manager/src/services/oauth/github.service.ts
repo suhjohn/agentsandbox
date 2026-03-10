@@ -5,6 +5,7 @@ export type GithubProfile = {
   readonly login: string;
   readonly name: string | null;
   readonly email: string;
+  readonly avatarUrl: string | null;
 };
 
 export type OAuthStartResult = {
@@ -106,12 +107,14 @@ async function fetchGithubUser(accessToken: string): Promise<{
   readonly githubId: string;
   readonly login: string;
   readonly name: string | null;
+  readonly avatarUrl: string | null;
 }> {
   const json = await getUser(accessToken);
 
   const id = json?.id;
   const login = json?.login;
   const name = json?.name;
+  const avatarUrl = json?.avatar_url;
 
   const githubId = typeof id === "number" ? String(id) : typeof id === "string" ? id : "";
   if (!githubId) throw new Error("Invalid GitHub user id");
@@ -120,6 +123,10 @@ async function fetchGithubUser(accessToken: string): Promise<{
     githubId,
     login: expectString(login, "GitHub login"),
     name: typeof name === "string" && name.trim().length > 0 ? name : null,
+    avatarUrl:
+      typeof avatarUrl === "string" && avatarUrl.trim().length > 0
+        ? avatarUrl
+        : null,
   };
 }
 
@@ -141,6 +148,7 @@ export async function fetchGithubProfile(accessToken: string): Promise<GithubPro
     login: user.login,
     name: user.name,
     email,
+    avatarUrl: user.avatarUrl,
   };
 }
 
@@ -181,7 +189,12 @@ export async function handleGithubCallback(input: {
   readonly returnOrigin: string;
   readonly requestUrl: string;
   readonly onSuccess: (profile: GithubProfile) => Promise<{
-    readonly user: { readonly id: string; readonly name: string; readonly email: string };
+    readonly user: {
+      readonly id: string;
+      readonly name: string;
+      readonly email: string;
+      readonly avatar: string | null;
+    };
     readonly accessToken: string;
     readonly refreshToken: string;
   }>;
@@ -234,4 +247,3 @@ export async function handleGithubCallback(input: {
     return { ok: false, html, cookiesToClear };
   }
 }
-

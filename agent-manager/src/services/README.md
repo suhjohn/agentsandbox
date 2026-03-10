@@ -112,6 +112,35 @@ Behavior:
 - The secret rotates whenever a new sandbox is created for an agent.
 - Clearing or replacing the current sandbox also clears the stored runtime-internal secret for the old runtime.
 
+## auth.service.ts
+
+### `registerUser(input)` / `loginUser(input)` / `loginWithGithub(input)`
+
+Behavior:
+- `loginUser` rejects accounts whose `passwordHash` is `NULL`; GitHub-only accounts cannot use password login until a local password is set by some future flow.
+- `loginWithGithub` accepts an optional `avatarUrl` and, when avatar storage is configured, syncs the GitHub avatar into the Modal static-files volume when the user currently has no avatar or is still using a GitHub-managed avatar path.
+- New GitHub-created users are persisted with `passwordHash: null` instead of a random placeholder hash.
+
+## avatar.service.ts
+
+### `uploadGithubAvatar(input)` / `uploadCustomAvatar(input)` / `readAvatar(path)` / `deleteAvatarPath(path)`
+
+Behavior:
+- Uses the named Modal static-files volume from `MODAL_STATIC_FILES_VOLUME` (and optional `MODAL_STATIC_FILES_ENVIRONMENT`) via the local `modal volume` CLI.
+- Stores avatar files under deterministic per-user paths:
+  - `avatars/<userId>/github.<ext>`
+  - `avatars/<userId>/custom.<ext>`
+- Accepts JPEG, PNG, WebP, GIF, and AVIF avatars up to 5 MB.
+- Returns/stores only relative volume paths in Postgres; raw avatar bytes are never stored in the database.
+
+## user.service.ts
+
+### `createUser(input)` / `updateUser(id, input)`
+
+Behavior:
+- `createUser` now accepts nullable `passwordHash` and nullable `avatar`.
+- `updateUser` now accepts nullable `avatar` so avatar reset/upload flows can update the persisted storage pointer independently of profile settings.
+
 ## session.service.ts
 
 ### `createSessionBootstrap(input)`

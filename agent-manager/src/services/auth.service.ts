@@ -1,6 +1,20 @@
 import { sign, verify } from 'hono/jwt'
 import { env, getAllowedDomains } from '../env'
-import { createUser, getUserByEmail, getUserByGithubId, linkGithubIdToUser } from './user.service'
+import {
+  createUser,
+  getUserByEmail,
+  getUserByGithubId,
+  linkGithubIdToUser,
+  updateUser,
+} from './user.service'
+import {
+  buildGithubAvatarUrl,
+  isAvatarStorageConfigured,
+  isGithubAvatarPath,
+  uploadGithubAvatar,
+} from './avatar.service'
+
+type PersistedUser = NonNullable<Awaited<ReturnType<typeof getUserByEmail>>>
 
 export function isEmailDomainAllowed(email: string): boolean {
   const domain = email.split('@')[1]?.toLowerCase()
@@ -70,6 +84,9 @@ export async function loginUser(input: { email: string; password: string }) {
   if (!user) {
     throw new Error('Invalid credentials')
   }
+  if (!user.passwordHash) {
+    throw new Error('Invalid credentials')
+  }
 
   const valid = await verifyPassword(input.password, user.passwordHash)
   if (!valid) {
@@ -84,7 +101,12 @@ export async function loginUser(input: { email: string; password: string }) {
   return { user, accessToken, refreshToken }
 }
 
-export async function loginWithGithub(input: { githubId: string; email: string; name: string }) {
+export async function loginWithGithub(input: {
+  githubId: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+}) {
   if (!isEmailDomainAllowed(input.email)) {
     throw new Error('Email domain not allowed')
   }
@@ -102,15 +124,16 @@ export async function loginWithGithub(input: { githubId: string; email: string; 
       user = existingGithubId ? byEmail : await linkGithubIdToUser(byEmail.id, input.githubId)
       if (!user) throw new Error('Failed to link GitHub account')
     } else {
-      const passwordHash = await hashPassword(`${crypto.randomUUID()}-${crypto.randomUUID()}`)
       user = await createUser({
         name: input.name,
         email: input.email,
-        passwordHash,
+        passwordHash: null,
         githubId: input.githubId,
       })
     }
   }
+
+  user = await maybeSyncGithubAvatar(user, input.avatarUrl)
 
   const [accessToken, refreshToken] = await Promise.all([
     generateToken(user.id),
@@ -131,4 +154,27 @@ function parseExpiry(value: string): number {
     case 'd': return num * 24 * 60 * 60
     default: return 7 * 24 * 60 * 60
   }
+}
+
+async function maybeSyncGithubAvatar(
+  user: PersistedUser,
+  avatarUrl: string | null | undefined,
+) {
+  if (!isAvatarStorageConfigured()) return user
+
+  const shouldSync = user.avatar == null || isGithubAvatarPath(user.avatar)
+  if (!shouldSync) return user
+
+  const sourceUrl =
+    typeof avatarUrl === 'string' && avatarUrl.trim().length > 0
+      ? avatarUrl
+      : buildGithubAvatarUrl(user.githubId ?? '')
+
+  const uploadedAvatar = await uploadGithubAvatar({
+    userId: user.id,
+    avatarUrl: sourceUrl,
+  })
+
+  const updated = await updateUser(user.id, { avatar: uploadedAvatar })
+  return updated ?? user
 }

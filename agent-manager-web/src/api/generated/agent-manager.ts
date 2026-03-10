@@ -42,6 +42,8 @@ export type PostAuthRegister201User = {
   id: string;
   name: string;
   email: string;
+  /** @nullable */
+  avatar: string | null;
 };
 
 export type PostAuthRegister201 = {
@@ -63,6 +65,8 @@ export type PostAuthLogin200User = {
   id: string;
   name: string;
   email: string;
+  /** @nullable */
+  avatar: string | null;
 };
 
 export type PostAuthLogin200 = {
@@ -134,6 +138,8 @@ export type GetUsers200DataItem = {
   id: string;
   name: string;
   email: string;
+  /** @nullable */
+  avatar: string | null;
 };
 
 export type GetUsers200 = {
@@ -149,6 +155,8 @@ export type GetUsersMe200 = {
   id: string;
   email: string;
   name: string;
+  /** @nullable */
+  avatar: string | null;
   defaultRegion: string | string[];
   /** @nullable */
   workspaceKeybindings: GetUsersMe200WorkspaceKeybindings;
@@ -179,12 +187,66 @@ export type PatchUsersMe200 = {
   id: string;
   email: string;
   name: string;
+  /** @nullable */
+  avatar: string | null;
   defaultRegion: string | string[];
   /** @nullable */
   workspaceKeybindings: PatchUsersMe200WorkspaceKeybindings;
 };
 
 export type PatchUsersMe404 = {
+  error: string;
+};
+
+export type GetUsersUserIdAvatar404 = {
+  error: string;
+};
+
+/**
+ * @nullable
+ */
+export type PutUsersMeAvatar200WorkspaceKeybindings = {[key: string]: unknown} | null;
+
+export type PutUsersMeAvatar200 = {
+  id: string;
+  email: string;
+  name: string;
+  /** @nullable */
+  avatar: string | null;
+  defaultRegion: string | string[];
+  /** @nullable */
+  workspaceKeybindings: PutUsersMeAvatar200WorkspaceKeybindings;
+};
+
+export type PutUsersMeAvatar400 = {
+  error: string;
+};
+
+export type PutUsersMeAvatar500 = {
+  error: string;
+};
+
+/**
+ * @nullable
+ */
+export type DeleteUsersMeAvatar200WorkspaceKeybindings = {[key: string]: unknown} | null;
+
+export type DeleteUsersMeAvatar200 = {
+  id: string;
+  email: string;
+  name: string;
+  /** @nullable */
+  avatar: string | null;
+  defaultRegion: string | string[];
+  /** @nullable */
+  workspaceKeybindings: DeleteUsersMeAvatar200WorkspaceKeybindings;
+};
+
+export type DeleteUsersMeAvatar404 = {
+  error: string;
+};
+
+export type DeleteUsersMeAvatar500 = {
   error: string;
 };
 
@@ -3182,6 +3244,312 @@ export const usePatchUsersMe = <TError = PatchUsersMe404,
         TContext
       > => {
       return useMutation(getPatchUsersMeMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Get a user's avatar image
+ */
+export type getUsersUserIdAvatarResponse200 = {
+  data: unknown
+  status: 200
+}
+
+export type getUsersUserIdAvatarResponse404 = {
+  data: GetUsersUserIdAvatar404
+  status: 404
+}
+    
+export type getUsersUserIdAvatarResponseSuccess = (getUsersUserIdAvatarResponse200) & {
+  headers: Headers;
+};
+export type getUsersUserIdAvatarResponseError = (getUsersUserIdAvatarResponse404) & {
+  headers: Headers;
+};
+
+export type getUsersUserIdAvatarResponse = (getUsersUserIdAvatarResponseSuccess | getUsersUserIdAvatarResponseError)
+
+export const getGetUsersUserIdAvatarUrl = (userId: string,) => {
+
+
+  
+
+  return `/users/${userId}/avatar`
+}
+
+export const getUsersUserIdAvatar = async (userId: string, options?: RequestInit): Promise<getUsersUserIdAvatarResponse> => {
+  
+  return orvalFetcher<getUsersUserIdAvatarResponse>(getGetUsersUserIdAvatarUrl(userId),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getGetUsersUserIdAvatarQueryKey = (userId: string,) => {
+    return [
+    `/users/${userId}/avatar`
+    ] as const;
+    }
+
+    
+export const getGetUsersUserIdAvatarQueryOptions = <TData = Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError = GetUsersUserIdAvatar404>(userId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUsersUserIdAvatarQueryKey(userId);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUsersUserIdAvatar>>> = ({ signal }) => getUsersUserIdAvatar(userId, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(userId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetUsersUserIdAvatarQueryResult = NonNullable<Awaited<ReturnType<typeof getUsersUserIdAvatar>>>
+export type GetUsersUserIdAvatarQueryError = GetUsersUserIdAvatar404
+
+
+export function useGetUsersUserIdAvatar<TData = Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError = GetUsersUserIdAvatar404>(
+ userId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getUsersUserIdAvatar>>,
+          TError,
+          Awaited<ReturnType<typeof getUsersUserIdAvatar>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetUsersUserIdAvatar<TData = Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError = GetUsersUserIdAvatar404>(
+ userId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getUsersUserIdAvatar>>,
+          TError,
+          Awaited<ReturnType<typeof getUsersUserIdAvatar>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetUsersUserIdAvatar<TData = Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError = GetUsersUserIdAvatar404>(
+ userId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get a user's avatar image
+ */
+
+export function useGetUsersUserIdAvatar<TData = Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError = GetUsersUserIdAvatar404>(
+ userId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getUsersUserIdAvatar>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetUsersUserIdAvatarQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Upload an avatar for the current user
+ */
+export type putUsersMeAvatarResponse200 = {
+  data: PutUsersMeAvatar200
+  status: 200
+}
+
+export type putUsersMeAvatarResponse400 = {
+  data: PutUsersMeAvatar400
+  status: 400
+}
+
+export type putUsersMeAvatarResponse500 = {
+  data: PutUsersMeAvatar500
+  status: 500
+}
+    
+export type putUsersMeAvatarResponseSuccess = (putUsersMeAvatarResponse200) & {
+  headers: Headers;
+};
+export type putUsersMeAvatarResponseError = (putUsersMeAvatarResponse400 | putUsersMeAvatarResponse500) & {
+  headers: Headers;
+};
+
+export type putUsersMeAvatarResponse = (putUsersMeAvatarResponseSuccess | putUsersMeAvatarResponseError)
+
+export const getPutUsersMeAvatarUrl = () => {
+
+
+  
+
+  return `/users/me/avatar`
+}
+
+export const putUsersMeAvatar = async ( options?: RequestInit): Promise<putUsersMeAvatarResponse> => {
+  
+  return orvalFetcher<putUsersMeAvatarResponse>(getPutUsersMeAvatarUrl(),
+  {      
+    ...options,
+    method: 'PUT'
+    
+    
+  }
+);}
+
+
+
+
+export const getPutUsersMeAvatarMutationOptions = <TError = PutUsersMeAvatar400 | PutUsersMeAvatar500,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putUsersMeAvatar>>, TError,void, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof putUsersMeAvatar>>, TError,void, TContext> => {
+
+const mutationKey = ['putUsersMeAvatar'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putUsersMeAvatar>>, void> = () => {
+          
+
+          return  putUsersMeAvatar(requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutUsersMeAvatarMutationResult = NonNullable<Awaited<ReturnType<typeof putUsersMeAvatar>>>
+    
+    export type PutUsersMeAvatarMutationError = PutUsersMeAvatar400 | PutUsersMeAvatar500
+
+    /**
+ * @summary Upload an avatar for the current user
+ */
+export const usePutUsersMeAvatar = <TError = PutUsersMeAvatar400 | PutUsersMeAvatar500,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putUsersMeAvatar>>, TError,void, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putUsersMeAvatar>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPutUsersMeAvatarMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Reset the current user's avatar
+ */
+export type deleteUsersMeAvatarResponse200 = {
+  data: DeleteUsersMeAvatar200
+  status: 200
+}
+
+export type deleteUsersMeAvatarResponse404 = {
+  data: DeleteUsersMeAvatar404
+  status: 404
+}
+
+export type deleteUsersMeAvatarResponse500 = {
+  data: DeleteUsersMeAvatar500
+  status: 500
+}
+    
+export type deleteUsersMeAvatarResponseSuccess = (deleteUsersMeAvatarResponse200) & {
+  headers: Headers;
+};
+export type deleteUsersMeAvatarResponseError = (deleteUsersMeAvatarResponse404 | deleteUsersMeAvatarResponse500) & {
+  headers: Headers;
+};
+
+export type deleteUsersMeAvatarResponse = (deleteUsersMeAvatarResponseSuccess | deleteUsersMeAvatarResponseError)
+
+export const getDeleteUsersMeAvatarUrl = () => {
+
+
+  
+
+  return `/users/me/avatar`
+}
+
+export const deleteUsersMeAvatar = async ( options?: RequestInit): Promise<deleteUsersMeAvatarResponse> => {
+  
+  return orvalFetcher<deleteUsersMeAvatarResponse>(getDeleteUsersMeAvatarUrl(),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+
+export const getDeleteUsersMeAvatarMutationOptions = <TError = DeleteUsersMeAvatar404 | DeleteUsersMeAvatar500,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUsersMeAvatar>>, TError,void, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteUsersMeAvatar>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteUsersMeAvatar'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteUsersMeAvatar>>, void> = () => {
+          
+
+          return  deleteUsersMeAvatar(requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteUsersMeAvatarMutationResult = NonNullable<Awaited<ReturnType<typeof deleteUsersMeAvatar>>>
+    
+    export type DeleteUsersMeAvatarMutationError = DeleteUsersMeAvatar404 | DeleteUsersMeAvatar500
+
+    /**
+ * @summary Reset the current user's avatar
+ */
+export const useDeleteUsersMeAvatar = <TError = DeleteUsersMeAvatar404 | DeleteUsersMeAvatar500,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteUsersMeAvatar>>, TError,void, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteUsersMeAvatar>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteUsersMeAvatarMutationOptions(options), queryClient);
     }
     
 /**

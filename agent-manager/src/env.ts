@@ -35,6 +35,8 @@ const rawEnvSchema = z.object({
   JWT_EXPIRES_IN: z.string().default("7d"),
   ALLOWED_DOMAINS: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
+  MODAL_STATIC_FILES_VOLUME: z.string().optional(),
+  MODAL_STATIC_FILES_ENVIRONMENT: z.string().optional(),
 });
 
 const raw = rawEnvSchema.parse(process.env);

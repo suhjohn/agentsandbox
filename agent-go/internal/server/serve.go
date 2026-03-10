@@ -93,25 +93,28 @@ func runServe(args []string) error {
 
 	httpClient := &http.Client{Timeout: 90 * time.Second}
 	app := &server{
-		cfg:    cfg,
-		store:  store,
-		state:  sessionstate.New(),
-		http:   httpClient,
-		codex:  NewCodexCLI(),
-		pi:     NewPiCLI(),
-		runCtx: context.Background(),
+		cfg:      cfg,
+		store:    store,
+		state:    sessionstate.New(),
+		http:     httpClient,
+		codex:    NewCodexCLI(),
+		opencode: NewOpencodeCLI(),
+		pi:       NewPiCLI(),
+		runCtx:   context.Background(),
 	}
 	runCtx, runCancel := context.WithCancel(context.Background())
 	app.runCtx = runCtx
 	app.codex.Dir = cfg.DefaultWorkingDir
+	app.opencode.Dir = cfg.DefaultWorkingDir
 	app.pi.Dir = cfg.DefaultWorkingDir
 	if strings.TrimSpace(cfg.OpenAIAPIKey) != "" {
 		app.codex.Env = append(app.codex.Env, "OPENAI_API_KEY="+strings.TrimSpace(cfg.OpenAIAPIKey))
+		app.opencode.Env = append(app.opencode.Env, "OPENAI_API_KEY="+strings.TrimSpace(cfg.OpenAIAPIKey))
 	}
 	if strings.TrimSpace(cfg.PIDir) != "" {
 		app.pi.Env = append(app.pi.Env, "PI_CODING_AGENT_DIR="+strings.TrimSpace(cfg.PIDir))
 	}
-	app.harnesses, err = harnessall.Build(app.codex, app.pi, harnessall.Config{
+	app.harnesses, err = harnessall.Build(app.codex, app.pi, app.opencode, harnessall.Config{
 		DefaultWorkingDir: cfg.DefaultWorkingDir,
 		RuntimeDir:        cfg.RuntimeDir,
 	})
@@ -390,6 +393,7 @@ type server struct {
 	state     *sessionstate.State
 	http      *http.Client
 	codex     *CodexCLI
+	opencode  *OpencodeCLI
 	pi        *PiCLI
 	harnesses *harnessregistry.Registry
 	outbox    *eventOutbox
@@ -472,7 +476,7 @@ func (s *server) ensureHarnesses() error {
 	if s.harnesses != nil {
 		return nil
 	}
-	harnesses, err := harnessall.Build(s.codex, s.pi, harnessall.Config{
+	harnesses, err := harnessall.Build(s.codex, s.pi, s.opencode, harnessall.Config{
 		DefaultWorkingDir: s.cfg.DefaultWorkingDir,
 		RuntimeDir:        s.cfg.RuntimeDir,
 	})

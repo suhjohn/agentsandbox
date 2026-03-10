@@ -21,7 +21,12 @@ const loginSchema = z.object({
 })
 
 const authResponseSchema = z.object({
-  user: z.object({ id: z.string(), name: z.string(), email: z.string().email() }),
+  user: z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.string().email(),
+    avatar: z.string().nullable(),
+  }),
   accessToken: z.string(),
 })
 
@@ -66,7 +71,12 @@ registerRoute(
       c.header('Set-Cookie', buildRefreshTokenCookie(result.refreshToken))
 
       return c.json({
-        user: { id: result.user.id, name: result.user.name, email: result.user.email },
+        user: {
+          id: result.user.id,
+          name: result.user.name,
+          email: result.user.email,
+          avatar: result.user.avatar ?? null,
+        },
         accessToken: result.accessToken,
       }, 201)
     } catch (e) {
@@ -100,7 +110,12 @@ registerRoute(
       c.header('Set-Cookie', buildRefreshTokenCookie(result.refreshToken))
 
       return c.json({
-        user: { id: result.user.id, name: result.user.name, email: result.user.email },
+        user: {
+          id: result.user.id,
+          name: result.user.name,
+          email: result.user.email,
+          avatar: result.user.avatar ?? null,
+        },
         accessToken: result.accessToken,
       })
     } catch {
@@ -276,7 +291,12 @@ registerRoute(
       onSuccess: async (profile) => {
         const email = profile.email
         const name = profile.name ?? profile.login
-        const auth = await loginWithGithub({ githubId: profile.githubId, email, name })
+        const auth = await loginWithGithub({
+          githubId: profile.githubId,
+          email,
+          name,
+          avatarUrl: profile.avatarUrl,
+        })
         issuedGithubRefreshToken = auth.refreshToken
         return auth
       },

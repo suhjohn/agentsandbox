@@ -2,6 +2,7 @@ package server
 
 import (
 	codexh "agent-go/internal/harness/codex"
+	opencodeh "agent-go/internal/harness/opencode"
 	pih "agent-go/internal/harness/pi"
 )
 
@@ -18,6 +19,12 @@ type CodexExecOptions = codexh.CodexExecOptions
 type CodexResumeOptions = codexh.CodexResumeOptions
 
 var NewCodexCLI = codexh.NewCodexCLI
+
+type OpencodeCLI = opencodeh.OpencodeCLI
+
+type OpencodeOptions = opencodeh.OpencodeOptions
+
+var NewOpencodeCLI = opencodeh.NewOpencodeCLI
 
 type PiCLI = pih.PiCLI
 

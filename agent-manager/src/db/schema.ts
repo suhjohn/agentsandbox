@@ -23,8 +23,9 @@ export const users = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
     email: text("email").notNull(),
-    passwordHash: text("password_hash").notNull(),
+    passwordHash: text("password_hash"),
     githubId: text("github_id"),
+    avatar: text("avatar"),
     defaultRegion: text("default_region").notNull().default("us-west-2"),
     workspaceKeybindings: jsonb("workspace_keybindings")
       .$type<Record<string, unknown> | null>(),

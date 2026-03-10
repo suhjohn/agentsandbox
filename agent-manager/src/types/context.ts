@@ -4,6 +4,7 @@ export type AuthUser = {
   readonly id: string
   readonly email: string
   readonly name: string
+  readonly avatar: string | null
   readonly defaultRegion: string | readonly string[]
   readonly workspaceKeybindings: Record<string, unknown> | null
 }

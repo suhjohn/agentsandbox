@@ -5,16 +5,25 @@ import { and, asc, ilike, or, sql } from "drizzle-orm";
 import type { AppEnv } from "../types/context";
 import { db } from "../db";
 import { agents, users } from "../db/schema";
-import { updateUser } from "../services/user.service";
+import { getUserById, updateUser } from "../services/user.service";
 import { registerRoute } from "../openapi/registry";
 import { DEFAULT_REGION, parseRegionText } from "../utils/region";
 import { parseWorkspaceKeybindings } from "../utils/workspace-keybindings";
+import {
+  buildGithubAvatarUrl,
+  deleteAvatarPath,
+  isAvatarStorageConfigured,
+  readAvatar,
+  uploadCustomAvatar,
+  uploadGithubAvatar,
+} from "../services/avatar.service";
 
 const app = new Hono<AppEnv>();
 const BASE = "/users";
 
 const workspaceKeybindingsSchema = z.record(z.string(), z.unknown());
 const workspaceKeybindingsResponseSchema = workspaceKeybindingsSchema.nullable();
+const avatarSchema = z.string().nullable();
 
 const updateUserSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -25,6 +34,18 @@ const listUserSchema = z.object({
   id: z.string(),
   name: z.string(),
   email: z.string().email(),
+  avatar: avatarSchema,
+});
+const meResponseSchema = z.object({
+  id: z.string(),
+  email: z.string().email(),
+  name: z.string(),
+  avatar: avatarSchema,
+  defaultRegion: z.union([z.string(), z.array(z.string())]),
+  workspaceKeybindings: workspaceKeybindingsResponseSchema,
+});
+const userAvatarParamsSchema = z.object({
+  userId: z.string().uuid(),
 });
 
 const booleanQueryParam = z.enum(["true", "false"]).transform(v => v === "true");
@@ -80,6 +101,7 @@ registerRoute(
         id: users.id,
         name: users.name,
         email: users.email,
+        avatar: users.avatar,
       })
       .from(users)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -99,11 +121,7 @@ registerRoute(
     security: [{ bearerAuth: [] }],
     responses: {
       200: z.object({
-        id: z.string(),
-        email: z.string().email(),
-        name: z.string(),
-        defaultRegion: z.union([z.string(), z.array(z.string())]),
-        workspaceKeybindings: workspaceKeybindingsResponseSchema,
+        ...meResponseSchema.shape,
       }),
     },
   },
@@ -125,11 +143,7 @@ registerRoute(
     request: { json: updateUserSchema },
     responses: {
       200: z.object({
-        id: z.string(),
-        email: z.string().email(),
-        name: z.string(),
-        defaultRegion: z.union([z.string(), z.array(z.string())]),
-        workspaceKeybindings: workspaceKeybindingsResponseSchema,
+        ...meResponseSchema.shape,
       }),
       404: z.object({ error: z.string() }),
     },
@@ -157,9 +171,180 @@ registerRoute(
       id: updated.id,
       name: updated.name,
       email: updated.email,
+      avatar: updated.avatar ?? null,
       defaultRegion,
       workspaceKeybindings: parseWorkspaceKeybindings(updated.workspaceKeybindings),
     });
+  },
+);
+
+registerRoute(
+  app,
+  {
+    method: "get",
+    path: `${BASE}/:userId/avatar`,
+    summary: "Get a user's avatar image",
+    tags: ["users"],
+    security: [{ bearerAuth: [] }],
+    request: { params: userAvatarParamsSchema },
+    responses: {
+      200: z.any(),
+      404: z.object({ error: z.string() }),
+    },
+  },
+  "/:userId/avatar",
+  zValidator("param", userAvatarParamsSchema),
+  async (c) => {
+    const params = c.req.valid("param" as never) as z.infer<
+      typeof userAvatarParamsSchema
+    >;
+    const targetUser = await getUserById(params.userId);
+    if (!targetUser?.avatar) {
+      return c.json({ error: "Avatar not found" }, 404);
+    }
+
+    try {
+      const avatar = await readAvatar(targetUser.avatar);
+      return new Response(avatar.bytes, {
+        headers: {
+          "Content-Type": avatar.contentType,
+          "Cache-Control": "private, max-age=300",
+        },
+      });
+    } catch {
+      return c.json({ error: "Avatar not found" }, 404);
+    }
+  },
+);
+
+registerRoute(
+  app,
+  {
+    method: "put",
+    path: `${BASE}/me/avatar`,
+    summary: "Upload an avatar for the current user",
+    tags: ["users"],
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: meResponseSchema,
+      400: z.object({ error: z.string() }),
+      500: z.object({ error: z.string() }),
+    },
+  },
+  "/me/avatar",
+  async (c) => {
+    if (!isAvatarStorageConfigured()) {
+      return c.json({ error: "Avatar storage is not configured" }, 500);
+    }
+
+    const user = c.get("user");
+    const body = await c.req.parseBody();
+    const maybeFile = body.file;
+    const file =
+      maybeFile instanceof File
+        ? maybeFile
+        : Array.isArray(maybeFile) && maybeFile[0] instanceof File
+          ? maybeFile[0]
+          : null;
+
+    if (!(file instanceof File)) {
+      return c.json({ error: "Avatar image is required" }, 400);
+    }
+
+    try {
+      const existing = await getUserById(user.id);
+      if (!existing) {
+        return c.json({ error: "User not found" }, 404);
+      }
+
+      const avatarPath = await uploadCustomAvatar({
+        userId: user.id,
+        file,
+      });
+
+      if (existing.avatar && existing.avatar !== avatarPath) {
+        await deleteAvatarPath(existing.avatar);
+      }
+
+      const updated = await updateUser(user.id, { avatar: avatarPath });
+      if (!updated) {
+        return c.json({ error: "User not found" }, 404);
+      }
+
+      const defaultRegion = parseRegionText(updated.defaultRegion) ?? DEFAULT_REGION;
+      return c.json({
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
+        avatar: updated.avatar ?? null,
+        defaultRegion,
+        workspaceKeybindings: parseWorkspaceKeybindings(updated.workspaceKeybindings),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Avatar upload failed";
+      return c.json({ error: message }, 400);
+    }
+  },
+);
+
+registerRoute(
+  app,
+  {
+    method: "delete",
+    path: `${BASE}/me/avatar`,
+    summary: "Reset the current user's avatar",
+    tags: ["users"],
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: meResponseSchema,
+      404: z.object({ error: z.string() }),
+      500: z.object({ error: z.string() }),
+    },
+  },
+  "/me/avatar",
+  async (c) => {
+    const user = c.get("user");
+    const existing = await getUserById(user.id);
+    if (!existing) {
+      return c.json({ error: "User not found" }, 404);
+    }
+
+    let nextAvatar: string | null = null;
+    try {
+      if (
+        existing.githubId &&
+        isAvatarStorageConfigured()
+      ) {
+        nextAvatar = await uploadGithubAvatar({
+          userId: existing.id,
+          avatarUrl: buildGithubAvatarUrl(existing.githubId),
+        });
+      }
+
+      if (existing.avatar && existing.avatar !== nextAvatar) {
+        await deleteAvatarPath(existing.avatar);
+      }
+
+      const updated = await updateUser(user.id, { avatar: nextAvatar });
+      if (!updated) {
+        return c.json({ error: "User not found" }, 404);
+      }
+
+      const defaultRegion = parseRegionText(updated.defaultRegion) ?? DEFAULT_REGION;
+      return c.json({
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
+        avatar: updated.avatar ?? null,
+        defaultRegion,
+        workspaceKeybindings: parseWorkspaceKeybindings(updated.workspaceKeybindings),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Avatar reset failed";
+      return c.json({ error: message }, 500);
+    }
   },
 );
 

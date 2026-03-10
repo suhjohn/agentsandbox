@@ -90,6 +90,7 @@ export const sessionAuth = createMiddleware<AppEnv>(async (c, next) => {
       id: 'runtime-internal',
       email: 'runtime-internal@local',
       name: 'Runtime Internal',
+      avatar: null,
       defaultRegion: 'us-west-2',
       workspaceKeybindings: null
     })

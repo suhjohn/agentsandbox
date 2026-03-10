@@ -72,12 +72,19 @@
                         "email": {
                           "type": "string",
                           "format": "email"
+                        },
+                        "avatar": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
                         "id",
                         "name",
-                        "email"
+                        "email",
+                        "avatar"
                       ]
                     },
                     "accessToken": {
@@ -162,12 +169,19 @@
                         "email": {
                           "type": "string",
                           "format": "email"
+                        },
+                        "avatar": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
                         "id",
                         "name",
-                        "email"
+                        "email",
+                        "avatar"
                       ]
                     },
                     "accessToken": {
@@ -463,12 +477,19 @@
                           "email": {
                             "type": "string",
                             "format": "email"
+                          },
+                          "avatar": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
                           "id",
                           "name",
-                          "email"
+                          "email",
+                          "avatar"
                         ]
                       }
                     }
@@ -512,6 +533,12 @@
                     "name": {
                       "type": "string"
                     },
+                    "avatar": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "defaultRegion": {
                       "anyOf": [
                         {
@@ -537,6 +564,7 @@
                     "id",
                     "email",
                     "name",
+                    "avatar",
                     "defaultRegion",
                     "workspaceKeybindings"
                   ]
@@ -613,6 +641,12 @@
                     "name": {
                       "type": "string"
                     },
+                    "avatar": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "defaultRegion": {
                       "anyOf": [
                         {
@@ -638,6 +672,7 @@
                     "id",
                     "email",
                     "name",
+                    "avatar",
                     "defaultRegion",
                     "workspaceKeybindings"
                   ]
@@ -647,6 +682,270 @@
           },
           "404": {
             "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{userId}/avatar": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get a user's avatar image",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/me/avatar": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Upload an avatar for the current user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "avatar": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "defaultRegion": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    "workspaceKeybindings": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "email",
+                    "name",
+                    "avatar",
+                    "defaultRegion",
+                    "workspaceKeybindings"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "400 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Reset the current user's avatar",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "avatar": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "defaultRegion": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    "workspaceKeybindings": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "email",
+                    "name",
+                    "avatar",
+                    "defaultRegion",
+                    "workspaceKeybindings"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "500 response",
             "content": {
               "application/json": {
                 "schema": {

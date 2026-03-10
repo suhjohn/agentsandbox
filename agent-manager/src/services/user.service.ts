@@ -19,12 +19,19 @@ export async function getUserByGithubId(githubId: string) {
   return result[0] ?? null
 }
 
-export async function createUser(input: { name: string; email: string; passwordHash: string; githubId?: string | null }) {
+export async function createUser(input: {
+  name: string
+  email: string
+  passwordHash?: string | null
+  githubId?: string | null
+  avatar?: string | null
+}) {
   const result = await db.insert(users).values({
     name: input.name,
     email: input.email.toLowerCase(),
-    passwordHash: input.passwordHash,
+    passwordHash: input.passwordHash ?? null,
     githubId: input.githubId ?? null,
+    avatar: input.avatar ?? null,
   }).returning()
   return result[0]
 }
@@ -40,6 +47,7 @@ export async function linkGithubIdToUser(userId: string, githubId: string) {
 export async function updateUser(id: string, input: {
   name?: string
   email?: string
+  avatar?: string | null
   defaultRegion?: Region
   workspaceKeybindings?: Record<string, unknown> | null
 }) {
@@ -48,6 +56,7 @@ export async function updateUser(id: string, input: {
     .set({
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.email !== undefined ? { email: input.email } : {}),
+      ...(input.avatar !== undefined ? { avatar: input.avatar } : {}),
       ...(serializedDefaultRegion != null ? { defaultRegion: serializedDefaultRegion } : {}),
       ...(input.workspaceKeybindings !== undefined
         ? { workspaceKeybindings: input.workspaceKeybindings }
