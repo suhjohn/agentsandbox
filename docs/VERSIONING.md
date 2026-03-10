@@ -62,7 +62,7 @@ agents
 │  REGISTRY IMAGE (ghcr.io/suhjohn/agent:latest)                              │
 │  • agent-go binary, runit services, Chromium, noVNC, OpenVSCode, tools      │
 │  • Used when variant.baseImageId is null                                    │
-│  • Effective ref is AGENT_BASE_IMAGE_REF (fallback: ghcr.io/suhjohn/agent:latest) │
+│  • Effective ref is AGENT_BASE_IMAGE_REF (fallback: ghcr.io/suhjohn/agentsandbox:latest) │
 │  • Build may resolve tag → digest                                           │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
@@ -110,32 +110,32 @@ agents
 
 ### Current Files
 
-| File | Purpose |
-|------|---------|
-| `agent-manager/src/db/schema.ts` | Data model definitions |
-| `agent-manager/src/services/image.service.ts` | Image/variant CRUD, build orchestration |
-| `agent-manager/src/services/build.ts` | Modal sandbox build execution |
-| `agent-manager/src/services/sandbox.service.ts` | Sandbox creation, setup shell, snapshots |
-| `agent-go/cmd/agent-go/main.go` | CLI entry point (`serve`, `openvscode-proxy`) |
-| `agent-go/internal/server/serve.go` | HTTP server routes (includes `/health`) |
-| `agent-go/internal/openapi/openapi.json` | OpenAPI contract served by `/openapi.json` |
-| `agent-go/Dockerfile` | Base runtime image build (writes `/etc/agent-image-version`) |
-| `agent-go/docker/entrypoint.sh` | Runtime env setup (exports `AGENT_IMAGE_VERSION`, starts services) |
-| `agent-go/scripts/dev.sh` | Unified local workflow script for agent-go build, restart, Docker, and publish flows |
+| File                                            | Purpose                                                                              |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `agent-manager/src/db/schema.ts`                | Data model definitions                                                               |
+| `agent-manager/src/services/image.service.ts`   | Image/variant CRUD, build orchestration                                              |
+| `agent-manager/src/services/build.ts`           | Modal sandbox build execution                                                        |
+| `agent-manager/src/services/sandbox.service.ts` | Sandbox creation, setup shell, snapshots                                             |
+| `agent-go/cmd/agent-go/main.go`                 | CLI entry point (`serve`, `openvscode-proxy`)                                        |
+| `agent-go/internal/server/serve.go`             | HTTP server routes (includes `/health`)                                              |
+| `agent-go/internal/openapi/openapi.json`        | OpenAPI contract served by `/openapi.json`                                           |
+| `agent-go/Dockerfile`                           | Base runtime image build (writes `/etc/agent-image-version`)                         |
+| `agent-go/docker/entrypoint.sh`                 | Runtime env setup (exports `AGENT_IMAGE_VERSION`, starts services)                   |
+| `agent-go/scripts/dev.sh`                       | Unified local workflow script for agent-go build, restart, Docker, and publish flows |
 
 ### Current Limitations
 
 1. **No version tracking** - agent-go binary has no embedded version (image builds do write `/etc/agent-image-version` via `AGENT_IMAGE_VERSION`, but that is not the agent-go binary version)
 2. **No upgrade mechanism** - No way to update agent-go without rebuilding image
-3. **Pinned baseImageId problem** - If user did "Activate Shell", their baseImageId is a Modal im-* snapshot that contains old agent-go. Clicking "Build" still uses old base.
+3. **Pinned baseImageId problem** - If user did "Activate Shell", their baseImageId is a Modal im-\* snapshot that contains old agent-go. Clicking "Build" still uses old base.
 
 ### Current Upgrade Path (Manual)
 
-| User Scenario | To Get New Agent-Go |
-|---------------|---------------------|
-| Uses default base | Click "Build" (picks up new registry image) |
+| User Scenario                              | To Get New Agent-Go                         |
+| ------------------------------------------ | ------------------------------------------- |
+| Uses default base                          | Click "Build" (picks up new registry image) |
 | Used "Activate Shell" (pinned baseImageId) | ❌ Must re-do interactive setup on new base |
-| Running sandbox | ❌ Must recreate from new headImageId |
+| Running sandbox                            | ❌ Must recreate from new headImageId       |
 
 **The "re-do Activate Shell" requirement is the anti-pattern we want to eliminate.**
 
@@ -162,6 +162,7 @@ agent-go/
 ```
 
 **agent-go/internal/version/version.go:**
+
 ```go
 package version
 
@@ -173,6 +174,7 @@ var (
 ```
 
 **Build with ldflags:**
+
 ```bash
 VERSION="1.2.3"
 GIT_COMMIT=$(git rev-parse --short HEAD)
@@ -187,6 +189,7 @@ go build -ldflags="$LDFLAGS" -o agent-server ./cmd/agent-go
 ```
 
 **New CLI commands:**
+
 ```bash
 $ agent-server version
 1.2.3 (abc1234) built 2025-01-15T10:30:00Z
@@ -196,6 +199,7 @@ $ agent-server --version
 ```
 
 **Health endpoint includes version:**
+
 ```json
 GET /health
 {
@@ -228,6 +232,7 @@ https://releases.example.com/agent/
 ### Upgrade Scripts
 
 **Root upgrade.sh (entry point):**
+
 ```bash
 #!/bin/bash
 set -e
@@ -237,6 +242,7 @@ exec bash <(curl -fsSL "$RELEASES_URL/$LATEST/upgrade.sh")
 ```
 
 **common/lib.sh (shared functions):**
+
 ```bash
 #!/bin/bash
 
@@ -297,6 +303,7 @@ version_lt() {
 ```
 
 **Version-specific 1.2.3/upgrade.sh:**
+
 ```bash
 #!/bin/bash
 set -e
@@ -354,16 +361,17 @@ echo "[upgrade] Starting user setup script..."
 `.trim();
 
 // In runModalImageBuild():
-const effectiveSetupScript = UPGRADE_PREAMBLE + '\n\n' + (input.setupScript || '');
+const effectiveSetupScript =
+  UPGRADE_PREAMBLE + "\n\n" + (input.setupScript || "");
 ```
 
 ### New Upgrade Paths
 
-| User Scenario | To Get New Agent-Go |
-|---------------|---------------------|
-| Uses default base | Click "Build" ✅ |
+| User Scenario                              | To Get New Agent-Go                      |
+| ------------------------------------------ | ---------------------------------------- |
+| Uses default base                          | Click "Build" ✅                         |
 | Used "Activate Shell" (pinned baseImageId) | Click "Build" ✅ (upgrade.sh runs first) |
-| Running sandbox | Run `curl upgrade.sh \| bash` ✅ |
+| Running sandbox                            | Run `curl upgrade.sh \| bash` ✅         |
 
 **All scenarios now work without re-doing interactive setup.**
 
@@ -371,20 +379,21 @@ const effectiveSetupScript = UPGRADE_PREAMBLE + '\n\n' + (input.setupScript || '
 
 ## Comparison
 
-| Aspect | AS-IS | TO-BE |
-|--------|-------|-------|
-| Version in binary | ❌ None | ✅ Embedded via ldflags |
-| Version command | ❌ None | ✅ `agent-server version` |
-| Version in /health | ❌ None | ✅ Included |
-| Upgrade pinned base | ❌ Re-do Activate Shell | ✅ Automatic via upgrade.sh |
-| Upgrade running sandbox | ❌ Recreate | ✅ In-place via upgrade.sh |
-| Platform components | ❌ Stuck on build-time version | ✅ Upgradeable via upgrade.sh |
+| Aspect                  | AS-IS                          | TO-BE                         |
+| ----------------------- | ------------------------------ | ----------------------------- |
+| Version in binary       | ❌ None                        | ✅ Embedded via ldflags       |
+| Version command         | ❌ None                        | ✅ `agent-server version`     |
+| Version in /health      | ❌ None                        | ✅ Included                   |
+| Upgrade pinned base     | ❌ Re-do Activate Shell        | ✅ Automatic via upgrade.sh   |
+| Upgrade running sandbox | ❌ Recreate                    | ✅ In-place via upgrade.sh    |
+| Platform components     | ❌ Stuck on build-time version | ✅ Upgradeable via upgrade.sh |
 
 ---
 
 ## Implementation Checklist
 
 ### Phase 1: Agent-Go Versioning
+
 - [ ] Create `agent-go/internal/version/version.go`
 - [ ] Add `version` command to CLI
 - [ ] Update build script with ldflags
@@ -392,6 +401,7 @@ const effectiveSetupScript = UPGRADE_PREAMBLE + '\n\n' + (input.setupScript || '
 - [ ] Write `/etc/agent-image-version` in Dockerfile
 
 ### Phase 2: Release Infrastructure
+
 - [ ] Set up releases CDN (S3/R2/GCS)
 - [ ] Create `common/lib.sh`
 - [ ] Create root `upgrade.sh`
@@ -399,13 +409,16 @@ const effectiveSetupScript = UPGRADE_PREAMBLE + '\n\n' + (input.setupScript || '
 - [ ] Set up CI to build and upload on tag
 
 ### Phase 3: Build Integration
+
 - [ ] Add upgrade preamble to `build.ts`
 - [ ] Test builds with pinned baseImageId get upgraded
 
 ### Phase 4: Sandbox Upgrade API
+
 - [ ] Add `POST /api/sandboxes/:id/upgrade` endpoint
 - [ ] Execute upgrade.sh inside running sandbox
 
 ### Phase 5: Automation (Future)
+
 - [ ] Periodic rebuild cronjob
 - [ ] "Update available" UI badge

@@ -14,6 +14,9 @@ const rawEnvSchema = z.object({
   // For local, it'll be a Tailscale Funnel URL.
   SERVER_PUBLIC_URL: z.string().url().optional(),
   AGENT_MANAGER_API_KEY: z.string().min(1),
+  AGENT_BASE_IMAGE_REF: z
+    .string()
+    .default('ghcr.io/suhjohn/agentsandbox:latest'),
   // Comma-separated origins allowed to embed the proxied VS Code UI.
   // Example: "http://localhost:5174,https://manager.example.com"
   VSCODE_PROXY_FRAME_ANCESTORS: z.string().optional(),

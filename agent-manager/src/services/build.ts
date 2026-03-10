@@ -1,3 +1,4 @@
+import { env } from '@/env'
 import { ModalClient, type Secret, type Sandbox } from 'modal'
 
 const modalClient = new ModalClient()
@@ -14,7 +15,7 @@ const SANDBOX_XDG_CACHE_HOME = `${SANDBOX_ROOT_DIR}/xdg/cache`
 const SANDBOX_XDG_DATA_HOME = `${SANDBOX_ROOT_DIR}/xdg/data`
 
 const BUILD_APP_NAME = 'image-builder'
-const DEFAULT_BASE_IMAGE_REF = 'ghcr.io/suhjohn/agent:latest'
+const DEFAULT_BASE_IMAGE_REF = 'ghcr.io/suhjohn/agentsandbox:latest'
 const DEFAULT_MODAL_SECRET_NAME = 'openinspect-build-secret'
 
 const CREATE_TIMEOUT_MS = 5 * 60 * 1000
@@ -106,14 +107,7 @@ export async function runModalImageBuild (input: {
       baseImageKey = baseImageRef
     }
   } else {
-    let baseImageRef = (
-      process.env.AGENT_BASE_IMAGE_REF ?? DEFAULT_BASE_IMAGE_REF
-    ).trim()
-    if (!baseImageRef) {
-      throw new Error(
-        'Missing AGENT_BASE_IMAGE_REF. Set it to a public GHCR image reference.'
-      )
-    }
+    let baseImageRef = env.AGENT_BASE_IMAGE_REF.trim()
     try {
       const resolved = await resolveGhcrDigest(baseImageRef)
       if (resolved && resolved !== baseImageRef) {
@@ -274,9 +268,9 @@ export async function runModalImageBuild (input: {
           throw new Error(
             `Failed to write secret file binding (path=${JSON.stringify(
               binding.path
-            )} resolved=${JSON.stringify(targetEnvPath)} secret=${JSON.stringify(
-              secret
-            )}): ${message}`
+            )} resolved=${JSON.stringify(
+              targetEnvPath
+            )} secret=${JSON.stringify(secret)}): ${message}`
           )
         }
         logStep(
@@ -619,11 +613,7 @@ async function writeDotenvFile (
     `  exit 1`,
     `fi`
   ].join('\n')
-  const preflight = await execText(sandbox, [
-    'bash',
-    '-lc',
-    preflightScript
-  ])
+  const preflight = await execText(sandbox, ['bash', '-lc', preflightScript])
   if (preflight.exitCode !== 0) {
     const stderr = preflight.stderr.trim()
     throw new Error(

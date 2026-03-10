@@ -2735,8 +2735,8 @@ export function SettingsImageDetailPage () {
                             detail: 'Default'
                           },
                           {
-                            value: 'ghcr.io/suhjohn/agent:latest',
-                            label: 'ghcr.io/suhjohn/agent:latest',
+                            value: 'ghcr.io/suhjohn/agentsandbox:latest',
+                            label: 'ghcr.io/suhjohn/agentsandbox:latest',
                             detail: 'Registry'
                           }
                         ]

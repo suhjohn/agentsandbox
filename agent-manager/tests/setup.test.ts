@@ -5,7 +5,9 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { db } from '../src/db'
 
 const basePath = process.cwd()
-const envFile = existsSync(resolve(basePath, '.env.test')) ? '.env.test' : '.env'
+const envFile = existsSync(resolve(basePath, '.env.test'))
+  ? '.env.test'
+  : '.env'
 
 if (!existsSync(resolve(basePath, envFile))) {
   throw new Error(`Environment file not found: ${envFile}`)
@@ -18,7 +20,7 @@ const forceOverrideInTestEnv = new Set([
   'AGENT_SANDBOX_COMMAND_JSON'
 ])
 const pinnedIntegrationEnv = {
-  AGENT_BASE_IMAGE_REF: 'ghcr.io/suhjohn/agent:latest',
+  AGENT_BASE_IMAGE_REF: 'ghcr.io/suhjohn/agentsandbox:latest',
   SANDBOX_USE_PYTHON: '1',
   AGENT_SANDBOX_COMMAND_JSON: '["bun","run","src/index.ts"]'
 } as const
@@ -56,7 +58,9 @@ if (databaseUrl) {
     url.pathname = '/postgres'
     const sql = postgres(url.toString(), { max: 1 })
     try {
-      const rows = await sql<{ datname: string }[]>`SELECT datname FROM pg_database WHERE datname = ${dbName}`
+      const rows = await sql<
+        { datname: string }[]
+      >`SELECT datname FROM pg_database WHERE datname = ${dbName}`
       if (rows.length === 0) {
         const escaped = `"${dbName.replace(/"/g, '""')}"`
         await sql.unsafe(`CREATE DATABASE ${escaped}`)

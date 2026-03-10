@@ -400,9 +400,9 @@ cmd_ghcr_push_amd64() {
   local image="${GHCR_IMAGE:-}"
   if [[ -z "${image}" ]]; then
     if [[ -n "${GITHUB_USERNAME:-}" ]]; then
-      image="ghcr.io/${GITHUB_USERNAME}/agent"
+      image="ghcr.io/${GITHUB_USERNAME}/agentsandbox"
     else
-      image="ghcr.io/suhjohn/agent"
+      image="ghcr.io/suhjohn/agentsandbox"
     fi
   fi
   image="${image%/}"

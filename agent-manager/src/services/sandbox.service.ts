@@ -194,7 +194,8 @@ const SETUP_SANDBOX_POST_CREATE_HEALTH_RETRY_MS = envInt(
 function parseSandboxStartCommand (): readonly string[] {
   const name = 'AGENT_SANDBOX_COMMAND_JSON'
   const raw = process.env[name]?.trim()
-  if (!raw) return ['/opt/agentsandbox/agent-go/build-artifacts/agent-server', 'serve']
+  if (!raw)
+    return ['/opt/agentsandbox/agent-go/build-artifacts/agent-server', 'serve']
 
   try {
     const parsed = JSON.parse(raw) as unknown
@@ -221,7 +222,10 @@ const SANDBOX_START_COMMAND = parseSandboxStartCommand()
 const DEFAULT_SANDBOX_AGENT_TOKEN_TTL_SECONDS = 5 * 60
 
 const SETUP_APP_NAME = 'image-builder'
-const SETUP_SERVER_COMMAND = ['/opt/agentsandbox/agent-go/build-artifacts/agent-server', 'serve'] as const
+const SETUP_SERVER_COMMAND = [
+  '/opt/agentsandbox/agent-go/build-artifacts/agent-server',
+  'serve'
+] as const
 const SETUP_TERMINAL_PORT = 8080
 const SETUP_TIMEOUT_MS = 60 * 60 * 1000
 const SETUP_IDLE_TIMEOUT_MS = 60 * 60 * 1000
@@ -1234,9 +1238,7 @@ export async function createSetupSandbox (input: {
       ? await resolveBaseImageRefForRegistry(normalizedBaseImageSource)
       : null
 
-  const defaultBaseImageRef =
-    (process.env.AGENT_BASE_IMAGE_REF ?? '').trim() ||
-    'ghcr.io/suhjohn/agent:latest'
+  const defaultBaseImageRef = env.AGENT_BASE_IMAGE_REF.trim()
   const baseImageRef = explicitBaseImageRef
     ? explicitBaseImageRef
     : explicitBaseImageId
