@@ -295,6 +295,26 @@ function formatAsJson (value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
+function ToolSummaryRow (props: {
+  readonly status: string
+  readonly title: string
+  readonly detail?: string
+}) {
+  return (
+    <div className='flex items-start gap-2 w-full'>
+      <div className='flex-shrink-0 pt-0.5'>
+        <StatusIndicator status={props.status} />
+      </div>
+      <div className='min-w-0 flex-1 text-left font-mono leading-5 line-clamp-2 text-text-primary'>
+        <span className='font-bold'>{props.title}</span>
+        {props.detail ? (
+          <span className='ml-3 text-text-tertiary'>{props.detail}</span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function ToolCallBlock (props: {
   readonly item: McpToolCallItem
   readonly eventType: string
@@ -324,14 +344,12 @@ function ToolCallBlock (props: {
       data-collapsible-toggle-all='true'
       data-collapsible-open={isOpen ? 'true' : 'false'}
     >
-      <CollapsibleTrigger className='flex items-center gap-2 w-full py-1 border-none cursor-pointer'>
-        <StatusIndicator status={status} />
-        <span className='font-mono text-text-primary truncate'>
-          <span className='font-bold'>{props.item.tool}</span>
-          {truncatedArgs ? (
-            <span className='text-text-tertiary ml-3'>{truncatedArgs}</span>
-          ) : null}
-        </span>
+      <CollapsibleTrigger className='w-full py-1 border-none cursor-pointer'>
+        <ToolSummaryRow
+          status={status}
+          title={props.item.tool}
+          detail={truncatedArgs || undefined}
+        />
       </CollapsibleTrigger>
       <CollapsibleContent className='ml-4 mt-1 px-3 py-2 bg-surface-3 text-xs'>
         {argsJson.length > 0 ? (
@@ -448,6 +466,7 @@ function WebSearchBlock (props: {
   readonly item: WebSearchItem
   readonly eventType: string
 }) {
+  const [isOpen, setIsOpen] = useCollapsibleToggleAll()
   const statusLabel =
     props.eventType === 'item.started'
       ? 'started'
@@ -455,13 +474,29 @@ function WebSearchBlock (props: {
       ? 'updated'
       : 'completed'
   return (
-    <CollapsibleBlock
-      title={props.item.query}
-      badge='web_search'
-      status={statusLabel}
+    <Collapsible
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      className='w-full text-sm'
+      data-collapsible-toggle-all='true'
+      data-collapsible-open={isOpen ? 'true' : 'false'}
     >
-      <div className='text-xs text-text-secondary'>{props.item.query}</div>
-    </CollapsibleBlock>
+      <CollapsibleTrigger className='w-full py-1 border-none cursor-pointer'>
+        <ToolSummaryRow
+          status={statusLabel}
+          title='web search'
+          detail={props.item.query}
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className='ml-4 mt-1 px-3 py-2 bg-surface-3 text-xs'>
+        <div className='text-[11px] uppercase tracking-wide text-text-tertiary'>
+          Request
+        </div>
+        <div className='pt-1 text-xs text-text-secondary whitespace-pre-wrap break-words'>
+          {props.item.query}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 

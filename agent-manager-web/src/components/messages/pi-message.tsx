@@ -439,7 +439,7 @@ function formatArgsFlat (args: unknown, prefix = ''): string[] {
   return prefix ? [`${prefix}: ${String(args)}`] : [String(args)]
 }
 
-function truncateArgs (args: unknown, maxLen = 60): string {
+function truncateArgs (args: unknown, maxLen = 180): string {
   if (!args) return ''
   const lines = formatArgsFlat(args)
   // If only one key, show just the value
@@ -471,7 +471,7 @@ function PiToolExecutionBlock (props: {
     >
       <CollapsibleTrigger className='flex items-center gap-2 w-full py-1 border-none cursor-pointer'>
         <StatusIndicator status={status} />
-        <span className='font-mono text-green-400 truncate'>
+        <span className='w-full font-mono text-green-400 truncate'>
           {props.toolName}
         </span>
       </CollapsibleTrigger>
@@ -527,14 +527,16 @@ function PiToolCallBlock (props: {
       data-collapsible-toggle-all='true'
       data-collapsible-open={isOpen ? 'true' : 'false'}
     >
-      <CollapsibleTrigger className='flex items-center gap-2 w-full py-1 border-none cursor-pointer'>
-        <StatusIndicator status={props.status} />
-        <span className='font-mono text-text-primary truncate'>
+      <CollapsibleTrigger className='flex items-start gap-2 w-full py-1 border-none cursor-pointer'>
+        <div className='flex-shrink-0 pt-0.5'>
+          <StatusIndicator status={props.status} />
+        </div>
+        <div className='min-w-0 flex-1 text-left font-mono leading-5 line-clamp-2 text-text-primary'>
           <span className='font-bold'>{props.toolName}</span>
           {truncatedArgsText ? (
-            <span className='text-text-tertiary ml-3'>{truncatedArgsText}</span>
+            <span className='ml-3 text-text-tertiary'>{truncatedArgsText}</span>
           ) : null}
-        </span>
+        </div>
       </CollapsibleTrigger>
       <CollapsibleContent className='ml-4 mt-1 px-3 py-2 bg-surface-3 text-xs'>
         {argsJson.length > 0 ? (
@@ -697,7 +699,11 @@ export function PiMessages (props: {
         continue
       }
       // Skip message_end with role === 'user' if we already have a user_input for this turn
-      if (role === 'user' && message.turnId && turnsWithUserInput.has(message.turnId)) {
+      if (
+        role === 'user' &&
+        message.turnId &&
+        turnsWithUserInput.has(message.turnId)
+      ) {
         continue
       }
     }

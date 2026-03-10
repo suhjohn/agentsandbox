@@ -159,6 +159,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - empty `Default model` / `Default thinking` selections are forwarded as explicit empty values so the runtime can materialize configured defaults onto the session record instead of silently keeping a previous override
   - dragging files onto the composer uploads them to the runtime `POST /files/upload` endpoint, saves them under `~/uploaded`, and appends `@~/uploaded/<filename>` references into the draft text
   - tool icons for `Terminal`, `Browser`, `VSCode`, and `Diff` default to opening that tool in a side pane on click; hovering an icon opens a custom fixed-position hover card with `Open`, `Open to side`, `Open to bottom`, `Open to window side`, and `Open to window bottom`, and the card flips above the icon when needed instead of forcing panel scroll
+  - `Escape` / `Prefix Escape` stream cancellation is pane-scoped: only the focused `agent-session` pane with a matching `leafId` should stop, even if other session panes are streaming in parallel
   - session detail scroll snaps to the latest message once when a session first loads in a pane, and a local send also forces one jump to bottom; otherwise it only sticky-scrolls while the user remains near the bottom
 - Split resize handles are overlay controls (hover-visible; always visible while dragging) so they do not reserve permanent layout width/height between panes.
 - `split/resize-direction` adjusts the nearest eligible ancestor split for the focused leaf (tmux-style directional resize) using a small ratio step.
