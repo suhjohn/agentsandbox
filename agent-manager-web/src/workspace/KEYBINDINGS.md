@@ -32,7 +32,7 @@ This spec defines a tmux-inspired keybinding system for the workspace UI, center
 2. **Do not steal browser/OS chords** (ex: `Ctrl/Cmd+W`, `Ctrl/Cmd+L`, `Ctrl/Cmd+R`, `Ctrl/Cmd+T`, `Ctrl/Cmd+Tab`).
 3. **Terminal panel is special**: default behavior should prioritize the terminal’s own key handling (nested tmux), while still allowing workspace commands via leader when focus is on pane chrome (or an optional setting to capture inside terminal).
 4. **Prefix mode has a timeout** (default ~1s) and shows a subtle HUD: `tmux: (waiting…)` + optional hints.
-5. Unknown prefix sequences should show a lightweight toast: `Unbound: C-b <key>`.
+5. Unknown prefix sequences should show a lightweight toast: `Unbound: Ctrl+b <key>`.
 
 ## Existing Global Shortcut Compatibility (Non-Negotiable)
 
@@ -59,7 +59,7 @@ Rules for this spec:
 Represent keys using **physical codes** (`KeyboardEvent.code`) for matching, plus a display string for the UI:
 
 - Match on: `{ ctrl, meta, alt, shift, code }`
-- Display as: `C-b`, `M-1`, `Up`, `"` / `%` (best-effort based on layout)
+- Display as: `Ctrl+b`, `Alt+1`, `Up`, `"` / `%` (best-effort based on layout)
 
 ### Key tables (contexts)
 
@@ -73,13 +73,13 @@ We emulate tmux “tables” as contexts:
 
 ## Default Leader
 
-- **Leader**: `C-b` (Ctrl+b)
-- **Send leader**: `C-b C-b` (only relevant when a focused panel can accept raw input; for xterm we may leave this to the terminal by default)
+- **Leader**: `Ctrl+b`
+- **Send leader**: `Ctrl+b Ctrl+b` (only relevant when a focused panel can accept raw input; for xterm we may leave this to the terminal by default)
 
 ## Command Palette + Keybindings UI
 
-- `C-b :` opens the **command palette** (tmux command-prompt equivalent).
-- `C-b ?` opens the **Keybindings** overlay (searchable; shows effective bindings).
+- `Ctrl+b :` opens the **command palette** (tmux command-prompt equivalent).
+- `Ctrl+b ?` opens the **Keybindings** overlay (searchable; shows effective bindings).
 
 Both UIs use the **same command registry** so the palette, help overlay, and keybinding editor never drift.
 
@@ -87,15 +87,15 @@ Both UIs use the **same command registry** so the palette, help overlay, and key
 
 # Commands (User-Facing Spec)
 
-Notation: `Prefix` means `C-b` (Ctrl+b) followed by the next key.
+Notation: `Prefix` means `Ctrl+b` followed by the next key.
 
 ## Help / Meta
 
 | Keys | Command ID | What It Does |
 |---|---|---|
 | `Prefix ?` | `keyboard.help.open` | Opens a searchable “Keyboard Shortcuts” overlay. |
-| `Prefix :` / `Prefix Cmd-k` / `Prefix C-k` | `keyboard.palette.open` | Opens the command palette (type to search commands). |
-| `Prefix C-b` | `keyboard.leader.send` | Sends a literal `C-b` to the focused panel when applicable (terminal nested tmux support depends on panel integration). |
+| `Prefix :` / `Prefix Cmd+k` / `Prefix Ctrl+k` | `keyboard.palette.open` | Opens the command palette (type to search commands). |
+| `Prefix Ctrl+b` | `keyboard.leader.send` | Sends a literal `Ctrl+b` to the focused panel when applicable (terminal nested tmux support depends on panel integration). |
 | `Escape` | `keyboard.mode.cancel` | Cancels prefix/chooser modes and closes lightweight overlays. |
 
 ## Panes (Workspace leaves)
@@ -117,17 +117,17 @@ Notation: `Prefix` means `C-b` (Ctrl+b) followed by the next key.
 | `Prefix q` | `pane.number_mode.open` | Shows pane numbers overlay; next digit focuses that pane. |
 | `Prefix {` | `pane.swap.prev` | Swaps focused pane with previous pane in traversal order. |
 | `Prefix }` | `pane.swap.next` | Swaps focused pane with next pane in traversal order. |
-| `Prefix C-o` | `pane.rotate` | Rotates panes (moves panels through panes in traversal order). |
+| `Prefix Ctrl+o` | `pane.rotate` | Rotates panes (moves panels through panes in traversal order). |
 | `Prefix !` | `pane.break_to_window` | Moves the focused pane into a new workspace window. |
 
 ### Pane resizing (repeatable)
 
 | Keys | Command ID | What It Does |
 |---|---|---|
-| `Prefix C-Left` | `pane.resize.left` | Shrinks/expands focused pane toward left (step). |
-| `Prefix C-Right` | `pane.resize.right` | Shrinks/expands toward right (step). |
-| `Prefix C-Up` | `pane.resize.up` | Shrinks/expands toward up (step). |
-| `Prefix C-Down` | `pane.resize.down` | Shrinks/expands toward down (step). |
+| `Prefix Ctrl+Left` | `pane.resize.left` | Shrinks/expands focused pane toward left (step). |
+| `Prefix Ctrl+Right` | `pane.resize.right` | Shrinks/expands toward right (step). |
+| `Prefix Ctrl+Up` | `pane.resize.up` | Shrinks/expands toward up (step). |
+| `Prefix Ctrl+Down` | `pane.resize.down` | Shrinks/expands toward down (step). |
 
 Notes:
 

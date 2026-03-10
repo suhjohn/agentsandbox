@@ -273,16 +273,16 @@ function codeToDisplayKey(code: string, shift: boolean): string {
 
 export function formatKeyChord(chord: WorkspaceKeyChord): string {
   const modifierParts: string[] = [];
-  if (chord.ctrl) modifierParts.push("C");
-  if (chord.alt) modifierParts.push("M");
+  if (chord.ctrl) modifierParts.push("Ctrl");
+  if (chord.alt) modifierParts.push("Alt");
   if (chord.meta) modifierParts.push("Cmd");
 
   const keyLabel = codeToDisplayKey(chord.code, chord.shift);
   const includeShiftModifier = chord.shift && !isShiftEmbeddedCode(chord.code);
-  if (includeShiftModifier) modifierParts.push("S");
+  if (includeShiftModifier) modifierParts.push("Shift");
 
   modifierParts.push(keyLabel);
-  return modifierParts.join("-");
+  return modifierParts.join("+");
 }
 
 export function formatKeySequence(sequence: WorkspaceKeySequence): string {

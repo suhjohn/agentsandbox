@@ -1982,7 +1982,7 @@ export function WorkspaceView () {
         ) : null}
         <div className='flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden'>
           <TooltipProvider delayDuration={250}>
-            <div className='h-10 shrink-0 flex items-center gap-1 px-3 border-b bg-surface-1'>
+            <div className='h-10 shrink-0 flex items-center gap-1 px-2 border-b bg-surface-1'>
               <div className='flex min-w-0 items-center gap-1'>
                 {!sessionPanelOpen && (
                   <TopBarTooltip

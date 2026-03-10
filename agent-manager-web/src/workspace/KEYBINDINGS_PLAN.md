@@ -6,7 +6,7 @@ This plan implements the tmux-style keyboard spec defined in `KEYBINDINGS.md`, i
 
 - Ship a `Ctrl+b` prefix system with safe browser/input behavior.
 - Support practical tmux-like commands for panes, windows, and layouts.
-- Make all commands discoverable (`C-b ?`, `C-b :`) and user-modifiable.
+- Make all commands discoverable (`Ctrl+b ?`, `Ctrl+b :`) and user-modifiable.
 - Consolidate scattered keyboard logic into one registry/engine.
 - Persist keybinding overrides in user settings (`PATCH /users/me`) backed by nullable JSONB in `users.workspace_keybindings` (`null` means defaults/no overrides).
 - Preserve existing global shortcuts (`Option/Alt+Space`, `Cmd/Ctrl+.`) without regression.
@@ -51,7 +51,7 @@ Implementation constraints:
   - `layout.equalize`, `layout.cycle`
 - Add pane resize commands:
   - `pane.resize.{left,right,up,down}` with repeat handling.
-- Add pane number mode (`C-b q`) to focus by number.
+- Add pane number mode (`Ctrl+b q`) to focus by number.
 
 ## Phase 3: Advanced Pane Ops + UX Completion
 
