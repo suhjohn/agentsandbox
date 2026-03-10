@@ -118,7 +118,7 @@ Behavior:
 
 Behavior:
 - `loginUser` rejects accounts whose `passwordHash` is `NULL`; GitHub-only accounts cannot use password login until a local password is set by some future flow.
-- `loginWithGithub` accepts an optional `avatarUrl` and, when avatar storage is configured, syncs the GitHub avatar into the Modal static-files volume when the user currently has no avatar or is still using a GitHub-managed avatar path.
+- `loginWithGithub` accepts an optional `avatarUrl` and syncs the GitHub avatar into configured static-file storage when the user currently has no avatar or is still using a GitHub-managed avatar path.
 - New GitHub-created users are persisted with `passwordHash: null` instead of a random placeholder hash.
 
 ## avatar.service.ts
@@ -126,12 +126,14 @@ Behavior:
 ### `uploadGithubAvatar(input)` / `uploadCustomAvatar(input)` / `readAvatar(path)` / `deleteAvatarPath(path)`
 
 Behavior:
-- Uses the named Modal static-files volume from `MODAL_STATIC_FILES_VOLUME` (and optional `MODAL_STATIC_FILES_ENVIRONMENT`) via the local `modal volume` CLI.
+- Uses S3-compatible object storage when `STATIC_FILES_S3_BUCKET` is configured.
+- Falls back to the local filesystem under `STATIC_FILES_LOCAL_DIR` when S3 is not configured, so avatar upload/download works in local development without extra infrastructure.
 - Stores avatar files under deterministic per-user paths:
-  - `avatars/<userId>/github.<ext>`
-  - `avatars/<userId>/custom.<ext>`
+  - `avatars/<userId>/github-<timestamp>.<ext>`
+  - `avatars/<userId>/custom-<timestamp>.<ext>`
+- Uses versioned filenames so browser/disk caches do not keep serving a stale avatar after upload/reset.
 - Accepts JPEG, PNG, WebP, GIF, and AVIF avatars up to 5 MB.
-- Returns/stores only relative volume paths in Postgres; raw avatar bytes are never stored in the database.
+- Returns/stores only relative object keys / filesystem-relative paths in Postgres; raw avatar bytes are never stored in the database.
 
 ## user.service.ts
 

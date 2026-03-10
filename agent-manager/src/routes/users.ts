@@ -12,7 +12,6 @@ import { parseWorkspaceKeybindings } from "../utils/workspace-keybindings";
 import {
   buildGithubAvatarUrl,
   deleteAvatarPath,
-  isAvatarStorageConfigured,
   readAvatar,
   uploadCustomAvatar,
   uploadGithubAvatar,
@@ -208,7 +207,8 @@ registerRoute(
       return new Response(avatar.bytes, {
         headers: {
           "Content-Type": avatar.contentType,
-          "Cache-Control": "private, max-age=300",
+          "Cache-Control": "private, max-age=31536000, immutable",
+          Vary: "Authorization",
         },
       });
     } catch {
@@ -233,10 +233,6 @@ registerRoute(
   },
   "/me/avatar",
   async (c) => {
-    if (!isAvatarStorageConfigured()) {
-      return c.json({ error: "Avatar storage is not configured" }, 500);
-    }
-
     const user = c.get("user");
     const body = await c.req.parseBody();
     const maybeFile = body.file;
@@ -312,10 +308,7 @@ registerRoute(
 
     let nextAvatar: string | null = null;
     try {
-      if (
-        existing.githubId &&
-        isAvatarStorageConfigured()
-      ) {
+      if (existing.githubId) {
         nextAvatar = await uploadGithubAvatar({
           userId: existing.id,
           avatarUrl: buildGithubAvatarUrl(existing.githubId),

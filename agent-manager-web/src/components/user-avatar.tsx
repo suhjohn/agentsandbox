@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
+import { fetchUserAvatarDataUrl, userAvatarQueryKey } from "@/lib/avatar";
 
 type AvatarUser = {
   readonly id: string;
@@ -14,52 +16,17 @@ export function UserAvatar(props: {
   readonly textClassName?: string;
 }) {
   const auth = useAuth();
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    let nextObjectUrl: string | null = null;
-    let currentObjectUrl: string | null = null;
-
-    async function run() {
-      if (!props.user.avatar) {
-        setImageUrl(null);
-        return;
-      }
-
-      try {
-        const response = await auth.fetchAuthed(`/users/${props.user.id}/avatar`);
-        if (!response.ok) {
-          throw new Error("Avatar fetch failed");
-        }
-        const blob = await response.blob();
-        nextObjectUrl = URL.createObjectURL(blob);
-        if (!cancelled) {
-          currentObjectUrl = nextObjectUrl;
-          setImageUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return nextObjectUrl;
-          });
-          nextObjectUrl = null;
-        }
-      } catch {
-        if (!cancelled) {
-          setImageUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return null;
-          });
-        }
-      }
-    }
-
-    void run();
-
-    return () => {
-      cancelled = true;
-      if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl);
-      if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
-    };
-  }, [auth, props.user.avatar, props.user.id]);
+  const avatarQuery = useQuery({
+    queryKey: userAvatarQueryKey(props.user),
+    enabled: Boolean(props.user.avatar),
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: () =>
+      fetchUserAvatarDataUrl({
+        fetchAuthed: auth.fetchAuthed,
+        user: props.user,
+      }),
+  });
 
   const initial = useMemo(() => {
     const trimmed = props.user.name.trim();
@@ -77,10 +44,10 @@ export function UserAvatar(props: {
     return `hsl(${hue} 54% 48%)`;
   }, [props.user.id, props.user.name]);
 
-  if (imageUrl) {
+  if (avatarQuery.data) {
     return (
       <img
-        src={imageUrl}
+        src={avatarQuery.data}
         alt={props.user.name}
         className={cn("rounded-full object-cover", props.className)}
       />

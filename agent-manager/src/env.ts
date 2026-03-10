@@ -35,8 +35,16 @@ const rawEnvSchema = z.object({
   JWT_EXPIRES_IN: z.string().default("7d"),
   ALLOWED_DOMAINS: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
-  MODAL_STATIC_FILES_VOLUME: z.string().optional(),
-  MODAL_STATIC_FILES_ENVIRONMENT: z.string().optional(),
+  STATIC_FILES_S3_ENDPOINT: z.string().url().optional(),
+  STATIC_FILES_S3_REGION: z.string().default("us-east-1"),
+  STATIC_FILES_S3_BUCKET: z.string().optional(),
+  STATIC_FILES_S3_ACCESS_KEY_ID: z.string().optional(),
+  STATIC_FILES_S3_SECRET_ACCESS_KEY: z.string().optional(),
+  STATIC_FILES_S3_FORCE_PATH_STYLE: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  STATIC_FILES_LOCAL_DIR: z.string().default(".data/static-files"),
 });
 
 const raw = rawEnvSchema.parse(process.env);

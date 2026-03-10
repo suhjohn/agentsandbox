@@ -9,7 +9,6 @@ import {
 } from './user.service'
 import {
   buildGithubAvatarUrl,
-  isAvatarStorageConfigured,
   isGithubAvatarPath,
   uploadGithubAvatar,
 } from './avatar.service'
@@ -160,8 +159,6 @@ async function maybeSyncGithubAvatar(
   user: PersistedUser,
   avatarUrl: string | null | undefined,
 ) {
-  if (!isAvatarStorageConfigured()) return user
-
   const shouldSync = user.avatar == null || isGithubAvatarPath(user.avatar)
   if (!shouldSync) return user
 
