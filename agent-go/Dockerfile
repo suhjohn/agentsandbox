@@ -103,16 +103,17 @@ RUN set -eux; \
   curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${arch}.tar.gz" | tar -C /usr/local -xz; \
   /usr/local/go/bin/go version
 
-# Layer 6: Node.js + npm packages (changes when updating codex/pi versions)
+# Layer 6: Node.js + npm packages (changes when updating codex/pi/opencode versions)
 RUN set -eux; \
   export DEBIAN_FRONTEND=noninteractive; \
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
   apt-get install -y --no-install-recommends nodejs; \
   node --version; \
-  npm i -g @openai/codex@latest @mariozechner/pi-coding-agent@latest; \
+  npm i -g @openai/codex@latest @mariozechner/pi-coding-agent@latest opencode-ai@latest; \
   npm cache clean --force; \
   command -v codex >/dev/null; \
   command -v pi >/dev/null; \
+  command -v opencode >/dev/null; \
   rm -rf /var/lib/apt/lists/*
 
 # Layer 7: OpenVSCode Server (version-pinned, large download)

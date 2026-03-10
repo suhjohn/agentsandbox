@@ -1703,7 +1703,9 @@ export function WorkspaceView () {
                                         {groupLabel}
                                       </span>
                                     )}
-                                    <span>{group.sessions.length}</span>
+                                    <span className='shrink-0 text-[10px] uppercase tracking-wide'>
+                                      {group.sessions.length}
+                                    </span>
                                   </div>
                                   <div className='divide-y divide-border/60'>
                                     {(

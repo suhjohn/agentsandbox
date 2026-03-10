@@ -526,5 +526,38 @@ export function SpinningCube ({ className }: BrailleDepthGlyphProps) {
 }
 
 export function BrailleDepthGlyph ({ className }: BrailleDepthGlyphProps) {
-  return <SpinningCube className={className} />
+  const [started, setStarted] = useState(false)
+  const [target] = useState(() => {
+    const randomDir = () => (Math.random() > 0.5 ? 1 : -1)
+    const randomTurns = () => (Math.floor(Math.random() * 2) + 1) * 360
+    return {
+      x: randomDir() * randomTurns(),
+      y: randomDir() * randomTurns(),
+      z: randomDir() * randomTurns()
+    }
+  })
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setStarted(true)
+    }, 50)
+    return () => clearTimeout(timeout)
+  }, [])
+
+  const rotation = started ? target : { x: 0, y: 0, z: 0 }
+
+  return (
+    <div className={cn('perspective-[200px]', className)}>
+      <img
+        src='/src/assets/cube-rotating.svg'
+        alt=''
+        className='h-full w-full transition-transform duration-[4000ms] ease-out'
+        style={{
+          transformStyle: 'preserve-3d',
+          transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg) rotateZ(${rotation.z}deg)`
+        }}
+        aria-hidden='true'
+      />
+    </div>
+  )
 }

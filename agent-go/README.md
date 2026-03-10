@@ -51,7 +51,7 @@ The runtime exposes model/thinking controls through harness definitions in
 `agent-go/internal/harness/*`.
 
 - Shared harness contract and registry live in `agent-go/internal/harness/registry/`.
-- The server resolves harness IDs through the registry instead of branching directly on `codex` vs `pi`.
+- The server resolves harness IDs through the registry instead of hard-coding a small set of harness names.
 - `agent-manager` and `agent-manager-web` should treat `harness` as a string contract and let the runtime validate the actual value.
 
 ### Codex
@@ -75,11 +75,12 @@ The runtime exposes model/thinking controls through harness definitions in
 
 - Wrapper types live in `agent-go/internal/harness/opencode/cli.go`.
 - Harness definition lives in `agent-go/internal/harness/opencode/definition.go`.
-- The CLI only exposes root flags for fresh non-interactive execution: `--cwd`, `--prompt`, `--output-format`, `--quiet`, plus `--debug`/`--help`/`--version`.
-- Session resume/fork, JSONL event streaming, and direct CLI model-selection flags are not supported by the archived `opencode` binary.
-- The harness sets model and reasoning indirectly through an isolated per-session XDG config written under the runtime directory, rather than by mutating the workspace.
-- Native OpenCode model IDs are supported for explicit session model selection. Provider-prefixed forms like `openai/gpt-4.1`, `github-copilot/gpt-4o`, `openrouter/gpt-4.1`, `azure/gpt-4.1`, `vertexai/gemini-2.5`, and `bedrock/claude-3.7-sonnet` are normalized to OpenCode’s native IDs when they match the archived model set.
-- Supported reasoning levels for OpenCode sessions are: `low`, `medium`, `high`.
+- The current `anomalyco/opencode` CLI is driven through the `run` subcommand, not root-level prompt flags.
+- The harness executes `opencode run --format json ...` and consumes JSONL events such as `text`, `reasoning`, `tool_use`, and `error`.
+- Session continuation is supported through the OpenCode session ID returned in the streamed events and replayed back through `--session <id>`.
+- Model selection is passed directly through `--model <provider/model>`, using the shared model catalog for validation and normalization.
+- Thinking/reasoning is passed through `--variant <value>`. The runtime validates a simple token format and does not hard-code a short enum because upstream variants are provider-specific.
+- Runtime state is isolated per agent session with XDG directories rooted under the runtime dir, while the managed runtime instructions file is written to `runtime/opencode/AGENTS.md` and exposed through `OPENCODE_CONFIG_DIR`.
 
 ## Standalone binary
 
@@ -111,6 +112,8 @@ In the container runtime, the entrypoint now runs the main agent API under `runi
 so this helper will restart that `agent-server` service in place when available.
 
 ## Docker image (source-driven server launcher)
+
+The image installs all three CLI harness binaries during build: `codex`, `pi`, and `opencode`.
 
 Build with the repository root as context:
 
