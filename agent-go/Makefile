@@ -30,4 +30,4 @@ docker-build:
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(DOCKER_IMAGE)" ./scripts/dev.sh docker-build
 
 docker-push: build-docker-binary
-	DOCKER="$(DOCKER)" ./scripts/dev.sh ghcr-push-amd64
+	DOCKER="$(DOCKER)" GHCR_SKIP_BINARY_BUILD=1 ./scripts/dev.sh ghcr-push-amd64

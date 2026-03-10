@@ -435,7 +435,11 @@ cmd_ghcr_push_amd64() {
     die "Set both GHCR_TOKEN and GITHUB_USERNAME, or neither if already logged in."
   fi
 
-  build_server_binary "${repo_binary_path}" "linux" "amd64" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
+  if [[ "${GHCR_SKIP_BINARY_BUILD:-0}" != "1" ]]; then
+    build_server_binary "${repo_binary_path}" "linux" "amd64" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
+  elif [[ ! -x "${repo_binary_path}" ]]; then
+    die "missing prebuilt binary: ${repo_binary_path}"
+  fi
   write_git_rev_file "${repo_binary_path}"
 
   local tag_args=()
