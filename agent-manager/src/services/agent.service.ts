@@ -17,6 +17,12 @@ import {
   createHash,
   randomBytes,
 } from "node:crypto";
+import {
+  adjectives,
+  animals,
+  colors,
+  uniqueNamesGenerator,
+} from "unique-names-generator";
 import { db } from "../db";
 import { agents, images, sessions, users } from "../db/schema";
 import type { AgentStatus } from "../db/enums";
@@ -32,7 +38,11 @@ function generateOpaqueSecret(): string {
 const MAX_CREATE_AGENT_ATTEMPTS = 8;
 
 function buildDefaultAgentName(agentId: string): string {
-  return `ag-${agentId.slice(0, 16)}`;
+  return uniqueNamesGenerator({
+    dictionaries: [adjectives, colors, animals],
+    separator: "-",
+    seed: agentId,
+  }).replace(/\s+/g, "-");
 }
 
 function isUniqueAgentNameViolation(err: unknown): boolean {

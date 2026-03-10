@@ -89,7 +89,7 @@ createAgent(input: {
 
 Behavior:
 - Generates the agent `id` in application code as a UUIDv7 before inserting.
-- Derives the default agent `name` from that generated ID as `ag-<first 16 chars of uuid>`.
+- Derives the default agent `name` from that generated ID by seeding `unique-names-generator` with built-in adjective, color, and animal dictionaries, then normalizing spaces to `-`.
 - Retries creation when either the generated `id` or derived `name` collides with an existing row.
 - Persists a browser-facing sandbox access token separately from the runtime-internal secret used for manager/runtime traffic.
 
