@@ -1422,7 +1422,16 @@ export function WorkspaceView () {
               {sessionPanelOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
             </Button>
           </TopBarTooltip>
-          <p className='text-sm font-semibold text-text-secondary'>wmux</p>
+          <div className='flex items-center'>
+            <img
+              src='/src/assets/cube-rotating.svg'
+              alt='Cube'
+              className='h-6 w-6'
+            />
+            <p className='text-xs font-semibold text-text-secondary'>
+              AgentSandbox
+            </p>
+          </div>
           <div className='ml-2 flex min-w-0 items-center gap-1'>
             <div className='flex min-w-0 max-w-[32rem] items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'>
               {windows.map(window => (

@@ -5,27 +5,30 @@ import (
 	"testing"
 )
 
-func TestOpencodeArgs(t *testing.T) {
+func TestOpencodeRunArgs(t *testing.T) {
 	cli := NewOpencodeCLI()
-	args := cli.Args(OpencodeOptions{
-		Help:         true,
-		Version:      true,
-		Debug:        true,
-		CWD:          "/repo",
-		Prompt:       "fix tests",
-		OutputFormat: "json",
-		Quiet:        true,
+	args := cli.Args(OpencodeRunOptions{
+		Session:  "session-123",
+		Model:    "openai/gpt-4.1",
+		Format:   "json",
+		Files:    []string{"diagram.png"},
+		Dir:      "/repo",
+		Variant:  "high",
+		Thinking: true,
+		Messages: []string{"fix tests"},
 	})
 
 	joined := strings.Join(args, " ")
 	checks := []string{
-		"--help",
-		"--version",
-		"--debug",
-		"--cwd /repo",
-		"--prompt fix tests",
-		"--output-format json",
-		"--quiet",
+		"run",
+		"--session session-123",
+		"--model openai/gpt-4.1",
+		"--format json",
+		"--file diagram.png",
+		"--dir /repo",
+		"--variant high",
+		"--thinking",
+		"fix tests",
 	}
 	for _, want := range checks {
 		if !strings.Contains(joined, want) {

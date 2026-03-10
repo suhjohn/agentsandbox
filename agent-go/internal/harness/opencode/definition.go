@@ -2,16 +2,16 @@ package opencode
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
-	"agent-go/internal/apierr"
 	"agent-go/internal/harness/registry"
+	"agent-go/internal/modelcatalog"
 )
+
+var opencodeVariantPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 type Harness struct {
 	CLI *OpencodeCLI
@@ -24,25 +24,34 @@ func NewHarness(cli *OpencodeCLI) *Harness {
 func (h *Harness) ID() string { return "opencode" }
 
 func (h *Harness) NormalizeModelSelection(rawModel, rawEffort *string) (*string, *string, error) {
-	return normalizeModelSelection(rawModel, rawEffort, true)
+	return registry.NormalizeModelSelection(rawModel, rawEffort, h.resolveModelPattern, isValidVariant)
 }
 
 func (h *Harness) ResolveDefaults(defaultModel, defaultEffort string) (*string, *string, error) {
 	var rawModel *string
 	if trimmed := strings.TrimSpace(defaultModel); trimmed != "" {
+		if !strings.Contains(trimmed, "/") {
+			trimmed = "openai/" + trimmed
+		}
 		rawModel = registry.StringPtr(trimmed)
 	}
 	var rawEffort *string
 	if trimmed := strings.TrimSpace(defaultEffort); trimmed != "" {
 		rawEffort = registry.StringPtr(trimmed)
 	}
-	return normalizeModelSelection(rawModel, rawEffort, false)
+	return h.NormalizeModelSelection(rawModel, rawEffort)
 }
 
 func (h *Harness) PrepareStartRun(req registry.StartRunRequest) (registry.StartRunPreparation, error) {
-	return registry.StartRunPreparation{
+	out := registry.StartRunPreparation{
 		ResponseFields: map[string]any{},
-	}, nil
+	}
+	if req.Session.ExternalSessionID != nil {
+		if sessionID := strings.TrimSpace(*req.Session.ExternalSessionID); sessionID != "" {
+			out.ResponseFields["sessionId"] = sessionID
+		}
+	}
+	return out, nil
 }
 
 func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (registry.RunResult, error) {
@@ -50,39 +59,69 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 		return registry.RunResult{}, errors.New("opencode CLI is not configured")
 	}
 
-	prompt := registry.PromptFromInputs(req.Input)
-	sessionRoot := sessionRuntimeDir(req.RuntimeDir, req.Session.ID)
-	configPath := filepath.Join(sessionRoot, "xdg", "opencode", ".opencode.json")
-	dataDir := filepath.Join(sessionRoot, "data")
-	if err := ensureSessionConfig(configPath, dataDir, runtimeContextPath(req.RuntimeDir), req.Session.Model, req.Session.ModelReasoningEffort); err != nil {
-		return registry.RunResult{}, err
+	prompt, files := splitInputs(req.Input)
+	if prompt == "" && len(files) == 0 {
+		return registry.RunResult{}, nil
 	}
 
+	sessionRoot := sessionRuntimeDir(req.RuntimeDir, req.Session.ID)
 	cli := *h.CLI
-	cli.Env = append(append([]string(nil), h.CLI.Env...), "XDG_CONFIG_HOME="+filepath.Join(sessionRoot, "xdg"))
+	cli.Env = append(append([]string(nil), h.CLI.Env...),
+		"OPENCODE_CONFIG_DIR="+runtimeConfigDir(req.RuntimeDir),
+		"OPENCODE_DISABLE_AUTOUPDATE=true",
+		"XDG_CONFIG_HOME="+filepath.Join(sessionRoot, "xdg", "config"),
+		"XDG_DATA_HOME="+filepath.Join(sessionRoot, "xdg", "data"),
+		"XDG_STATE_HOME="+filepath.Join(sessionRoot, "xdg", "state"),
+		"XDG_CACHE_HOME="+filepath.Join(sessionRoot, "xdg", "cache"),
+	)
 
-	res, err := cli.Run(ctx, cli.Args(OpencodeOptions{
-		CWD:          strings.TrimSpace(req.DefaultWorkingDir),
-		Prompt:       prompt,
-		OutputFormat: "json",
-		Quiet:        true,
-	}), nil)
+	opts := OpencodeRunOptions{
+		Format:   "json",
+		Dir:      strings.TrimSpace(req.DefaultWorkingDir),
+		Thinking: true,
+		Messages: []string{prompt},
+		Files:    files,
+	}
+	if req.Session.ExternalSessionID != nil {
+		opts.Session = strings.TrimSpace(*req.Session.ExternalSessionID)
+	}
+	if req.Session.Model != nil {
+		opts.Model = strings.TrimSpace(*req.Session.Model)
+	}
+	if req.Session.ModelReasoningEffort != nil {
+		opts.Variant = strings.TrimSpace(*req.Session.ModelReasoningEffort)
+	}
+
+	var textBuilder strings.Builder
+	seenSessionID := ""
+
+	_, err := cli.RunJSONL(ctx, cli.Args(opts), nil, func(evt OpencodeJSONLEvent) {
+		if sessionID := eventSessionID(evt.Value); sessionID != "" {
+			seenSessionID = sessionID
+			if req.PersistExternalSessionID != nil {
+				req.PersistExternalSessionID(sessionID)
+			}
+		}
+		if req.EmitEvent != nil {
+			if compact, ok := compactEventForStream(evt.Value); ok {
+				req.EmitEvent(compact)
+			}
+		}
+		if text := textFromEvent(evt.Value); text != "" {
+			if textBuilder.Len() > 0 {
+				textBuilder.WriteString("\n\n")
+			}
+			textBuilder.WriteString(text)
+		}
+	})
 	if err != nil {
 		return registry.RunResult{}, err
 	}
 
-	text := parseResponseText(res.Stdout)
-	if req.EmitEvent != nil && text != "" {
-		req.EmitEvent(map[string]any{
-			"type": "message_end",
-			"message": map[string]any{
-				"role":    "assistant",
-				"content": text,
-			},
-		})
-	}
-
-	return registry.RunResult{Text: text}, nil
+	return registry.RunResult{
+		ExternalSessionID: strings.TrimSpace(seenSessionID),
+		Text:              strings.TrimSpace(textBuilder.String()),
+	}, nil
 }
 
 func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
@@ -92,70 +131,21 @@ func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
 	}
 	_, err := registry.EnsureManagedContextFile(registry.ManagedFileSpec{
 		Harness: h.ID(),
-		Path:    runtimeContextPath(runtimeDir),
+		Path:    filepath.Join(runtimeConfigDir(runtimeDir), "AGENTS.md"),
 		Version: 1,
-		Content: renderOpenCodeContext(ctx.RuntimeContext),
+		Content: renderAgentsContent(ctx.RuntimeContext),
 	})
 	return err
 }
 
-type configFile struct {
-	Data         configData             `json:"data"`
-	ContextPaths []string               `json:"contextPaths,omitempty"`
-	Agents       map[string]configAgent `json:"agents,omitempty"`
-}
-
-type configData struct {
-	Directory string `json:"directory"`
-}
-
-type configAgent struct {
-	Model           string `json:"model,omitempty"`
-	ReasoningEffort string `json:"reasoningEffort,omitempty"`
-}
-
-func ensureSessionConfig(path, dataDir, contextPath string, model, effort *string) error {
-	cfg := configFile{
-		Data: configData{
-			Directory: strings.TrimSpace(dataDir),
-		},
-		ContextPaths: appendContextPath(contextPath),
-	}
-	if modelValue, effortValue := strings.TrimSpace(ptrValue(model)), strings.TrimSpace(ptrValue(effort)); modelValue != "" || effortValue != "" {
-		cfg.Agents = make(map[string]configAgent, len(opencodeAgentNames))
-		for _, name := range opencodeAgentNames {
-			cfg.Agents[name] = configAgent{
-				Model:           modelValue,
-				ReasoningEffort: effortValue,
-			}
-		}
-	}
-
-	raw, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	raw = append(raw, '\n')
-	return writeFileAtomically(path, raw, 0o600)
-}
-
-func appendContextPath(path string) []string {
-	out := make([]string, 0, len(defaultContextPaths)+1)
-	if trimmed := strings.TrimSpace(path); trimmed != "" {
-		out = append(out, trimmed)
-	}
-	out = append(out, defaultContextPaths...)
-	return out
-}
-
-func renderOpenCodeContext(ctx registry.RuntimeContext) string {
+func renderAgentsContent(ctx registry.RuntimeContext) string {
 	var content strings.Builder
 	content.WriteString("# Environment\n")
 	content.WriteString("- You are OpenCode running inside a sandbox container.\n")
 	content.WriteString("- Runtime state root: " + strings.TrimSpace(ctx.RootDir) + "\n")
 	content.WriteString("- Home/workspace root: " + strings.TrimSpace(ctx.AgentHome) + "\n")
 	content.WriteString("- Agent identity: AGENT_ID=" + strings.TrimSpace(ctx.AgentID) + "\n")
-	content.WriteString("- Runtime directory: " + strings.TrimSpace(ctx.RuntimeDir) + "\n")
+	content.WriteString("- OpenCode runtime config dir: " + runtimeConfigDir(ctx.RuntimeDir) + "\n")
 	if workingDir := strings.TrimSpace(ctx.DefaultWorkingDir); workingDir != "" {
 		content.WriteString("- Default working directory: " + workingDir + "\n")
 	}
@@ -172,7 +162,6 @@ func renderOpenCodeContext(ctx registry.RuntimeContext) string {
 		content.WriteString("- Browser profile directory: " + profileDir + ".\n")
 	}
 	content.WriteString("- Prefer reusing the existing browser rather than launching a new one.\n")
-	content.WriteString("- Non-interactive runs do not support CLI-level session resume or event streaming; each prompt should be treated as a fresh run.\n")
 	content.WriteString("\n# Tools (Workspace)\n")
 	if toolsDir := strings.TrimSpace(ctx.ToolsDir); toolsDir != "" {
 		content.WriteString("- Tools are synced from /app/tools into: " + toolsDir + "\n")
@@ -191,176 +180,150 @@ func renderOpenCodeContext(ctx registry.RuntimeContext) string {
 	return content.String()
 }
 
-func normalizeModelSelection(rawModel, rawEffort *string, strict bool) (*string, *string, error) {
-	model, inlineEffort, modelProvided, err := normalizeModelInput(rawModel)
-	if err != nil {
-		if strict {
-			return nil, nil, err
-		}
-		model = nil
-		inlineEffort = nil
-		modelProvided = false
-	}
-
-	explicitProvided, explicitEffort, err := normalizeEffortInput(rawEffort)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	effort, err := mergeEfforts(inlineEffort, explicitProvided, explicitEffort)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !modelProvided {
-		return nil, effort, nil
-	}
-	return model, effort, nil
+func (h *Harness) resolveModelPattern(pattern string) (string, *string, error) {
+	return registry.ResolveCatalogModelPattern(pattern, modelcatalog.All(), h.ID(), func(def modelcatalog.ModelDef) string {
+		return def.Provider + "/" + def.ID
+	}, isValidVariant)
 }
 
-func normalizeModelInput(rawModel *string) (*string, *string, bool, error) {
-	if rawModel == nil {
-		return nil, nil, false, nil
-	}
-	trimmed := strings.TrimSpace(*rawModel)
-	if trimmed == "" {
-		return nil, nil, false, nil
-	}
+func isValidVariant(value string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(value))
+	return trimmed != "" && opencodeVariantPattern.MatchString(trimmed)
+}
 
-	modelPart := trimmed
-	var inlineEffort *string
-	if idx := strings.LastIndex(trimmed, ":"); idx > 0 {
-		suffix := strings.ToLower(strings.TrimSpace(trimmed[idx+1:]))
-		if isValidReasoningEffort(suffix) {
-			modelPart = strings.TrimSpace(trimmed[:idx])
-			inlineEffort = registry.StringPtr(suffix)
+func splitInputs(input []registry.Input) (string, []string) {
+	textParts := make([]string, 0, len(input))
+	files := make([]string, 0, len(input))
+	for _, item := range input {
+		switch item.Type {
+		case "text":
+			if text := strings.TrimSpace(item.Text); text != "" {
+				textParts = append(textParts, text)
+			}
+		case "local_image":
+			if file := strings.TrimSpace(item.Path); file != "" {
+				files = append(files, file)
+			}
 		}
 	}
-
-	canonical, ok := canonicalizeModel(modelPart)
-	if !ok {
-		return nil, nil, false, apierr.Fail(400, fmt.Sprintf("Unknown model %q for harness opencode", trimmed))
-	}
-	return registry.StringPtr(canonical), inlineEffort, true, nil
+	return strings.TrimSpace(strings.Join(textParts, "\n")), files
 }
 
-func normalizeEffortInput(rawEffort *string) (bool, *string, error) {
-	if rawEffort == nil {
-		return false, nil, nil
+func compactEventForStream(value map[string]any) (map[string]any, bool) {
+	if len(value) == 0 {
+		return nil, false
 	}
-	trimmed := strings.ToLower(strings.TrimSpace(*rawEffort))
-	if trimmed == "" {
-		return true, nil, nil
-	}
-	if !isValidReasoningEffort(trimmed) {
-		return false, nil, apierr.Fail(400, "Invalid modelReasoningEffort")
-	}
-	return true, registry.StringPtr(trimmed), nil
-}
 
-func mergeEfforts(inline *string, explicitProvided bool, explicit *string) (*string, error) {
-	if inline == nil && !explicitProvided {
-		return nil, nil
-	}
-	if inline != nil && explicitProvided {
-		if explicit == nil || !strings.EqualFold(strings.TrimSpace(*inline), strings.TrimSpace(*explicit)) {
-			return nil, apierr.Fail(400, "Conflicting modelReasoningEffort")
+	switch strings.TrimSpace(registry.FirstNonEmptyString(value["type"])) {
+	case "text", "reasoning":
+		part := compactTextPart(value["part"])
+		if part == nil {
+			return nil, false
 		}
-		return explicit, nil
-	}
-	if explicitProvided {
-		return explicit, nil
-	}
-	return inline, nil
-}
-
-func canonicalizeModel(raw string) (string, bool) {
-	trimmed := strings.ToLower(strings.TrimSpace(raw))
-	if trimmed == "" {
-		return "", false
-	}
-	if _, ok := supportedModels[trimmed]; ok {
-		return trimmed, true
-	}
-
-	slash := strings.Index(trimmed, "/")
-	if slash < 0 {
-		return "", false
-	}
-	provider := strings.TrimSpace(trimmed[:slash])
-	id := strings.TrimSpace(trimmed[slash+1:])
-	if provider == "" || id == "" {
-		return "", false
-	}
-
-	var candidate string
-	switch provider {
-	case "openai", "anthropic", "google", "groq", "xai":
-		candidate = id
-	case "github-copilot", "copilot":
-		candidate = "copilot." + id
-	case "openrouter":
-		candidate = "openrouter." + id
-	case "azure":
-		candidate = "azure." + id
-	case "vertexai", "vertex-ai":
-		candidate = "vertexai." + id
-	case "bedrock":
-		candidate = "bedrock." + id
+		return map[string]any{
+			"type": strings.TrimSpace(registry.FirstNonEmptyString(value["type"])),
+			"part": part,
+		}, true
+	case "tool_use":
+		part := compactToolPart(value["part"])
+		if part == nil {
+			return nil, false
+		}
+		return map[string]any{
+			"type": "tool_use",
+			"part": part,
+		}, true
+	case "error":
+		message := strings.TrimSpace(firstErrorMessage(value["error"]))
+		if message == "" {
+			message = "Unknown error"
+		}
+		return map[string]any{
+			"type":    "error",
+			"message": message,
+		}, true
 	default:
-		return "", false
+		return nil, false
 	}
-
-	if _, ok := supportedModels[candidate]; !ok {
-		return "", false
-	}
-	return candidate, true
 }
 
-func parseResponseText(stdout string) string {
-	trimmed := strings.TrimSpace(stdout)
-	if trimmed == "" {
+func compactTextPart(raw any) map[string]any {
+	part, _ := raw.(map[string]any)
+	text := strings.TrimSpace(registry.FirstNonEmptyString(part["text"]))
+	if text == "" {
+		return nil
+	}
+	out := map[string]any{"text": text}
+	if id := strings.TrimSpace(registry.FirstNonEmptyString(part["id"])); id != "" {
+		out["id"] = id
+	}
+	return out
+}
+
+func compactToolPart(raw any) map[string]any {
+	part, _ := raw.(map[string]any)
+	if len(part) == 0 {
+		return nil
+	}
+	tool := strings.TrimSpace(registry.FirstNonEmptyString(part["tool"]))
+	if tool == "" {
+		return nil
+	}
+
+	state, _ := part["state"].(map[string]any)
+	out := map[string]any{"tool": tool}
+	if id := strings.TrimSpace(registry.FirstNonEmptyString(part["id"])); id != "" {
+		out["id"] = id
+	}
+	if status := strings.TrimSpace(registry.FirstNonEmptyString(state["status"])); status != "" {
+		out["status"] = status
+	}
+	if input, ok := state["input"]; ok {
+		out["input"] = input
+	}
+	if output, ok := state["output"]; ok {
+		out["output"] = output
+	}
+	if metadata, ok := state["metadata"]; ok {
+		out["metadata"] = metadata
+	}
+	if errMsg := strings.TrimSpace(firstErrorMessage(state["error"])); errMsg != "" {
+		out["error"] = errMsg
+	}
+	return out
+}
+
+func eventSessionID(value map[string]any) string {
+	return strings.TrimSpace(registry.FirstNonEmptyString(value["sessionID"]))
+}
+
+func textFromEvent(value map[string]any) string {
+	if strings.TrimSpace(registry.FirstNonEmptyString(value["type"])) != "text" {
 		return ""
 	}
-	var payload struct {
-		Response string `json:"response"`
-	}
-	if err := json.Unmarshal([]byte(trimmed), &payload); err == nil {
-		return strings.TrimSpace(payload.Response)
-	}
-	return trimmed
+	part, _ := value["part"].(map[string]any)
+	return strings.TrimSpace(registry.FirstNonEmptyString(part["text"]))
 }
 
-func writeFileAtomically(path string, content []byte, perm os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+func firstErrorMessage(value any) string {
+	switch t := value.(type) {
+	case string:
+		return strings.TrimSpace(t)
+	case map[string]any:
+		if msg := strings.TrimSpace(registry.FirstNonEmptyString(t["message"])); msg != "" {
+			return msg
+		}
+		if data, ok := t["data"].(map[string]any); ok {
+			if msg := strings.TrimSpace(registry.FirstNonEmptyString(data["message"])); msg != "" {
+				return msg
+			}
+		}
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	if _, err := tmp.Write(content); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	if err := os.Chmod(tmpPath, perm); err != nil {
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		_ = os.Remove(tmpPath)
-		return err
-	}
-	return nil
+	return ""
 }
 
-func runtimeContextPath(runtimeDir string) string {
-	return filepath.Join(strings.TrimSpace(runtimeDir), "opencode", "OpenCode.md")
+func runtimeConfigDir(runtimeDir string) string {
+	return filepath.Join(strings.TrimSpace(runtimeDir), "opencode")
 }
 
 func sessionRuntimeDir(runtimeDir, sessionID string) string {
@@ -369,119 +332,4 @@ func sessionRuntimeDir(runtimeDir, sessionID string) string {
 		sessionID = "adhoc"
 	}
 	return filepath.Join(strings.TrimSpace(runtimeDir), "opencode", "sessions", sessionID)
-}
-
-func ptrValue(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return strings.TrimSpace(*value)
-}
-
-func isValidReasoningEffort(value string) bool {
-	switch value {
-	case "low", "medium", "high":
-		return true
-	default:
-		return false
-	}
-}
-
-var opencodeAgentNames = []string{"coder", "summarizer", "task", "title"}
-
-var defaultContextPaths = []string{
-	".github/copilot-instructions.md",
-	".cursorrules",
-	".cursor/rules/",
-	"CLAUDE.md",
-	"CLAUDE.local.md",
-	"opencode.md",
-	"opencode.local.md",
-	"OpenCode.md",
-	"OpenCode.local.md",
-	"OPENCODE.md",
-	"OPENCODE.local.md",
-}
-
-var supportedModels = map[string]struct{}{
-	"azure.gpt-4.1":                     {},
-	"azure.gpt-4.1-mini":                {},
-	"azure.gpt-4.1-nano":                {},
-	"azure.gpt-4.5-preview":             {},
-	"azure.gpt-4o":                      {},
-	"azure.gpt-4o-mini":                 {},
-	"azure.o1":                          {},
-	"azure.o1-mini":                     {},
-	"azure.o3":                          {},
-	"azure.o3-mini":                     {},
-	"azure.o4-mini":                     {},
-	"bedrock.claude-3.7-sonnet":         {},
-	"claude-3-haiku":                    {},
-	"claude-3-opus":                     {},
-	"claude-3.5-haiku":                  {},
-	"claude-3.5-sonnet":                 {},
-	"claude-3.7-sonnet":                 {},
-	"claude-4-opus":                     {},
-	"claude-4-sonnet":                   {},
-	"copilot.claude-3.5-sonnet":         {},
-	"copilot.claude-3.7-sonnet":         {},
-	"copilot.claude-3.7-sonnet-thought": {},
-	"copilot.claude-sonnet-4":           {},
-	"copilot.gemini-2.0-flash":          {},
-	"copilot.gemini-2.5-pro":            {},
-	"copilot.gpt-3.5-turbo":             {},
-	"copilot.gpt-4":                     {},
-	"copilot.gpt-4.1":                   {},
-	"copilot.gpt-4o":                    {},
-	"copilot.gpt-4o-mini":               {},
-	"copilot.o1":                        {},
-	"copilot.o3-mini":                   {},
-	"copilot.o4-mini":                   {},
-	"deepseek-r1-distill-llama-70b":     {},
-	"gemini-2.0-flash":                  {},
-	"gemini-2.0-flash-lite":             {},
-	"gemini-2.5":                        {},
-	"gemini-2.5-flash":                  {},
-	"gpt-4.1":                           {},
-	"gpt-4.1-mini":                      {},
-	"gpt-4.1-nano":                      {},
-	"gpt-4.5-preview":                   {},
-	"gpt-4o":                            {},
-	"gpt-4o-mini":                       {},
-	"grok-3-beta":                       {},
-	"grok-3-fast-beta":                  {},
-	"grok-3-mini-beta":                  {},
-	"grok-3-mini-fast-beta":             {},
-	"llama-3.3-70b-versatile":           {},
-	"meta-llama/llama-4-maverick-17b-128e-instruct": {},
-	"meta-llama/llama-4-scout-17b-16e-instruct":     {},
-	"o1":                           {},
-	"o1-mini":                      {},
-	"o1-pro":                       {},
-	"o3":                           {},
-	"o3-mini":                      {},
-	"o4-mini":                      {},
-	"openrouter.claude-3-haiku":    {},
-	"openrouter.claude-3-opus":     {},
-	"openrouter.claude-3.5-haiku":  {},
-	"openrouter.claude-3.5-sonnet": {},
-	"openrouter.claude-3.7-sonnet": {},
-	"openrouter.deepseek-r1-free":  {},
-	"openrouter.gemini-2.5":        {},
-	"openrouter.gemini-2.5-flash":  {},
-	"openrouter.gpt-4.1":           {},
-	"openrouter.gpt-4.1-mini":      {},
-	"openrouter.gpt-4.1-nano":      {},
-	"openrouter.gpt-4.5-preview":   {},
-	"openrouter.gpt-4o":            {},
-	"openrouter.gpt-4o-mini":       {},
-	"openrouter.o1":                {},
-	"openrouter.o1-mini":           {},
-	"openrouter.o1-pro":            {},
-	"openrouter.o3":                {},
-	"openrouter.o3-mini":           {},
-	"openrouter.o4-mini":           {},
-	"qwen-qwq":                     {},
-	"vertexai.gemini-2.5":          {},
-	"vertexai.gemini-2.5-flash":    {},
 }

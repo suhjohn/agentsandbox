@@ -350,7 +350,7 @@ function SplitViewImpl (props: { readonly node: SplitNode }) {
     <div
       ref={containerRef}
       className={cn(
-        'relative h-full w-full grid min-h-0 min-w-0 group',
+        'relative h-full w-full grid min-h-0 min-w-0 group gap-px bg-border',
         isRow ? 'grid-cols-[1fr_1fr]' : 'grid-rows-[1fr_1fr]'
       )}
       style={

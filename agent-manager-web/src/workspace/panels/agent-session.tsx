@@ -1260,24 +1260,23 @@ function SessionMessages (props: {
     }
   })
 
-  const senderById = useMemo<Readonly<Record<string, HarnessMessageSender>>>(
-    () => {
-      const resolved = new Map(
-        (sendersQuery.data ?? []).map(sender => [sender.id, sender] as const)
-      )
-      return Object.fromEntries(
-        senderIds.map(id => [
+  const senderById = useMemo<
+    Readonly<Record<string, HarnessMessageSender>>
+  >(() => {
+    const resolved = new Map(
+      (sendersQuery.data ?? []).map(sender => [sender.id, sender] as const)
+    )
+    return Object.fromEntries(
+      senderIds.map(id => [
+        id,
+        resolved.get(id) ?? {
           id,
-          resolved.get(id) ?? {
-            id,
-            name: `User ${id.slice(0, 8)}`,
-            avatar: null
-          }
-        ])
-      )
-    },
-    [senderIds, sendersQuery.data]
-  )
+          name: `User ${id.slice(0, 8)}`,
+          avatar: null
+        }
+      ])
+    )
+  }, [senderIds, sendersQuery.data])
 
   return <MessageView messages={props.messages} senderById={senderById} />
 }
@@ -1926,7 +1925,7 @@ function SessionComposer (props: {
         <Textarea
           data-agent-session-composer-input='true'
           ref={props.inputRef}
-          rows={2}
+          minRows={1}
           maxRows={15}
           value={draft}
           onChange={e => setDraft(e.target.value)}
@@ -1941,7 +1940,7 @@ function SessionComposer (props: {
           className='resize-none bg-transparent border-0 rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 px-4 py-3 text-sm'
         />
       </div>
-      <div className='bg-surface-1 px-3 flex items-center gap-3 pb-2'>
+      <div className='bg-surface-1 px-3 flex items-center gap-3 pb-1'>
         <div className='flex items-center gap-3'>
           <p className='text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary'>
             {props.harness.label}

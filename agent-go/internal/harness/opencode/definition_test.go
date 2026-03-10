@@ -12,49 +12,49 @@ import (
 func TestNormalizeModelSelection(t *testing.T) {
 	h := NewHarness(nil)
 
-	model, effort, err := h.NormalizeModelSelection(registry.StringPtr("github-copilot/gpt-4o"), registry.StringPtr("high"))
+	model, effort, err := h.NormalizeModelSelection(registry.StringPtr("openai/gpt-4.1"), registry.StringPtr("high"))
 	if err != nil {
 		t.Fatalf("NormalizeModelSelection returned error: %v", err)
 	}
-	if got := ptrValue(model); got != "copilot.gpt-4o" {
-		t.Fatalf("expected copilot.gpt-4o, got %q", got)
+	if got := ptrValue(model); got != "openai/gpt-4.1" {
+		t.Fatalf("expected openai/gpt-4.1, got %q", got)
 	}
 	if got := ptrValue(effort); got != "high" {
-		t.Fatalf("expected high effort, got %q", got)
+		t.Fatalf("expected high variant, got %q", got)
 	}
 
-	model, effort, err = h.NormalizeModelSelection(registry.StringPtr("gpt-4.1:medium"), nil)
+	model, effort, err = h.NormalizeModelSelection(registry.StringPtr("openai/gpt-4.1:medium"), nil)
 	if err != nil {
 		t.Fatalf("NormalizeModelSelection inline effort returned error: %v", err)
 	}
-	if got := ptrValue(model); got != "gpt-4.1" {
-		t.Fatalf("expected gpt-4.1, got %q", got)
+	if got := ptrValue(model); got != "openai/gpt-4.1" {
+		t.Fatalf("expected openai/gpt-4.1, got %q", got)
 	}
 	if got := ptrValue(effort); got != "medium" {
-		t.Fatalf("expected medium effort, got %q", got)
+		t.Fatalf("expected medium variant, got %q", got)
 	}
 
-	if _, _, err := h.NormalizeModelSelection(registry.StringPtr("gpt-5.2"), nil); err == nil {
+	if _, _, err := h.NormalizeModelSelection(registry.StringPtr("openai/not-a-real-model"), nil); err == nil {
 		t.Fatalf("expected unsupported model error")
 	}
 }
 
-func TestResolveDefaultsIgnoresUnsupportedModel(t *testing.T) {
+func TestResolveDefaultsPrefixesOpenAIModelIDs(t *testing.T) {
 	h := NewHarness(nil)
 
-	model, effort, err := h.ResolveDefaults("gpt-5.2", "high")
+	model, effort, err := h.ResolveDefaults("gpt-4.1", "high")
 	if err != nil {
 		t.Fatalf("ResolveDefaults returned error: %v", err)
 	}
-	if model != nil {
-		t.Fatalf("expected nil model for unsupported default, got %q", ptrValue(model))
+	if got := ptrValue(model); got != "openai/gpt-4.1" {
+		t.Fatalf("expected openai/gpt-4.1, got %q", got)
 	}
 	if got := ptrValue(effort); got != "high" {
-		t.Fatalf("expected high effort, got %q", got)
+		t.Fatalf("expected high variant, got %q", got)
 	}
 }
 
-func TestSetupRuntimeSeedsManagedOpenCodeContext(t *testing.T) {
+func TestSetupRuntimeSeedsManagedAgentsFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	runtimeDir := filepath.Join(tmpDir, "runtime")
 
@@ -80,9 +80,9 @@ func TestSetupRuntimeSeedsManagedOpenCodeContext(t *testing.T) {
 		t.Fatalf("SetupRuntime: %v", err)
 	}
 
-	contextRaw, err := os.ReadFile(filepath.Join(runtimeDir, "opencode", "OpenCode.md"))
+	contextRaw, err := os.ReadFile(filepath.Join(runtimeDir, "opencode", "AGENTS.md"))
 	if err != nil {
-		t.Fatalf("ReadFile OpenCode.md: %v", err)
+		t.Fatalf("ReadFile AGENTS.md: %v", err)
 	}
 	contextText := string(contextRaw)
 	if !strings.Contains(contextText, "agent-go:managed kind=agents-md harness=opencode version=1") {
@@ -93,29 +93,48 @@ func TestSetupRuntimeSeedsManagedOpenCodeContext(t *testing.T) {
 	}
 }
 
-func TestEnsureSessionConfigWritesRuntimeScopedConfig(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "xdg", "opencode", ".opencode.json")
-	dataDir := filepath.Join(tmpDir, "data")
-	contextPath := filepath.Join(tmpDir, "runtime", "opencode", "OpenCode.md")
-
-	if err := ensureSessionConfig(configPath, dataDir, contextPath, registry.StringPtr("gpt-4.1"), registry.StringPtr("high")); err != nil {
-		t.Fatalf("ensureSessionConfig: %v", err)
+func TestCompactEventForStream(t *testing.T) {
+	toolEvent, ok := compactEventForStream(map[string]any{
+		"type":      "tool_use",
+		"sessionID": "session-123",
+		"part": map[string]any{
+			"id":   "tool-1",
+			"tool": "read",
+			"state": map[string]any{
+				"status": "completed",
+				"input": map[string]any{
+					"filePath": "/tmp/file.txt",
+				},
+				"output": "done",
+			},
+		},
+	})
+	if !ok {
+		t.Fatalf("expected tool event to compact")
+	}
+	if got := registry.FirstNonEmptyString(toolEvent["type"]); got != "tool_use" {
+		t.Fatalf("expected tool_use type, got %q", got)
 	}
 
-	raw, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("ReadFile config: %v", err)
+	textEvent, ok := compactEventForStream(map[string]any{
+		"type": "text",
+		"part": map[string]any{
+			"id":   "part-1",
+			"text": "final answer",
+		},
+	})
+	if !ok {
+		t.Fatalf("expected text event to compact")
 	}
-	text := string(raw)
-	for _, want := range []string{
-		`"directory": "` + dataDir + `"`,
-		`"` + contextPath + `"`,
-		`"model": "gpt-4.1"`,
-		`"reasoningEffort": "high"`,
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("expected %q in config: %s", want, text)
-		}
+	part, _ := textEvent["part"].(map[string]any)
+	if got := registry.FirstNonEmptyString(part["text"]); got != "final answer" {
+		t.Fatalf("expected text payload, got %q", got)
 	}
+}
+
+func ptrValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
 }
