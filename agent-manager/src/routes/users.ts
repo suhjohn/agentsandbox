@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { and, asc, ilike, or, sql } from "drizzle-orm";
+import { and, asc, ilike, inArray, or, sql } from "drizzle-orm";
 import type { AppEnv } from "../types/context";
 import { db } from "../db";
 import { agents, users } from "../db/schema";
@@ -48,8 +48,18 @@ const userAvatarParamsSchema = z.object({
 });
 
 const booleanQueryParam = z.enum(["true", "false"]).transform(v => v === "true");
+const userIdsQueryParam = z
+  .string()
+  .transform((value) =>
+    value
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0),
+  )
+  .pipe(z.array(z.string().uuid()).min(1).max(100));
 
 const listUsersQuerySchema = z.object({
+  ids: userIdsQueryParam.optional(),
   q: z.string().min(1).optional(),
   hasAgents: booleanQueryParam.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -76,6 +86,25 @@ registerRoute(
     const query = c.req.valid("query" as never) as z.infer<
       typeof listUsersQuerySchema
     >;
+
+    if (query.ids) {
+      const rows = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          avatar: users.avatar,
+        })
+        .from(users)
+        .where(inArray(users.id, query.ids));
+
+      const byId = new Map(rows.map((row) => [row.id, row] as const));
+      return c.json({
+        data: query.ids
+          .map((id) => byId.get(id))
+          .filter((row): row is (typeof rows)[number] => row !== undefined),
+      });
+    }
 
     const conditions = [];
 

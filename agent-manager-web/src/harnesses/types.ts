@@ -9,8 +9,15 @@ export type CatalogModel = {
   readonly provider: string
 }
 
+export type HarnessMessageSender = {
+  readonly id: string
+  readonly name: string
+  readonly avatar?: string | null
+}
+
 export type HarnessMessageProps = {
   readonly messages: readonly GetSessionId200MessagesItem[]
+  readonly senderById?: Readonly<Record<string, HarnessMessageSender>>
 }
 
 export type HarnessDefinition = {

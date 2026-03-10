@@ -78,8 +78,10 @@ import {
 import type {
   CatalogModel,
   HarnessDefinition,
+  HarnessMessageSender,
   ThinkingLevel
 } from '@/harnesses/types'
+import { useAuth } from '@/lib/auth'
 import type { PanelProps } from './types'
 import { parseBody as parseBodyUtil } from './session-message-utils'
 import { useWorkspaceStore } from '../store'
@@ -118,6 +120,7 @@ const OPTIMISTIC_ECHO_CLOCK_SKEW_MS = 30_000
 const STICKY_SCROLL_BOTTOM_THRESHOLD_PX = 300
 const SESSION_STATUS_PROCESSING = 'processing'
 const SESSION_STATUS_INITIAL = 'initial'
+const SESSION_SENDER_QUERY_STALE_TIME_MS = 60_000
 const AGENT_UPLOAD_ENDPOINT = '/files/upload'
 type SelectedThinkingLevel = string
 type SessionToolTab = 'terminal' | 'browser' | 'vscode' | 'diff'
@@ -133,6 +136,7 @@ type SessionStreamConfig = {
   readonly sessionId: string
   readonly agentApiUrl: string
   readonly agentAuthToken: string
+  readonly currentUserId: string | null
 }
 
 type SessionStreamConnection = {
@@ -435,7 +439,10 @@ function ensureSessionStreamRunning (connection: SessionStreamConnection): void 
                 agentId: connection.config.agentId,
                 sessionId: connection.config.sessionId,
                 turnId: null,
-                createdBy: null,
+                createdBy: inferStreamMessageCreatedBy(
+                  payload,
+                  connection.config.currentUserId
+                ),
                 embeddings: null,
                 createdAt: new Date().toISOString(),
                 body: payload
@@ -608,6 +615,31 @@ function toErrorMessage (value: unknown): string {
   return 'Something went wrong.'
 }
 
+function isHarnessMessageSender (value: unknown): value is HarnessMessageSender {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.id === 'string' &&
+    typeof record.name === 'string' &&
+    (record.avatar === null ||
+      typeof record.avatar === 'undefined' ||
+      typeof record.avatar === 'string')
+  )
+}
+
+function parseMessageSendersResponse (
+  value: unknown
+): readonly HarnessMessageSender[] {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Unexpected /users response')
+  }
+  const data = (value as { data?: unknown }).data
+  if (!Array.isArray(data) || !data.every(isHarnessMessageSender)) {
+    throw new Error('Unexpected /users response')
+  }
+  return data
+}
+
 function isRecord (value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -740,6 +772,27 @@ function isLastMessageBodyCandidate (body: unknown): boolean {
   return false
 }
 
+function inferStreamMessageCreatedBy (
+  payload: unknown,
+  currentUserId: string | null
+): string | null {
+  const parsed = parseBody(payload)
+  if (!isRecord(parsed)) return null
+
+  if (parsed.type === 'user_input') {
+    return currentUserId
+  }
+
+  if (parsed.type === 'message_end') {
+    const message = parsed.message
+    if (isRecord(message) && message.role === 'user') {
+      return currentUserId
+    }
+  }
+
+  return null
+}
+
 function findLatestLastMessageBodyCandidate (
   messages: readonly GetSessionId200MessagesItem[]
 ): GetSessionId200MessagesItem | null {
@@ -841,6 +894,7 @@ function createOptimisticUserMessage (args: {
   readonly agentId: string
   readonly sessionId: string
   readonly text: string
+  readonly createdBy: string | null
 }): GetSessionId200MessagesItem {
   const nowIso = new Date().toISOString()
   const idSuffix = `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
@@ -856,7 +910,7 @@ function createOptimisticUserMessage (args: {
     agentId: args.agentId,
     sessionId: args.sessionId,
     turnId: null,
-    createdBy: null,
+    createdBy: args.createdBy,
     embeddings: null,
     createdAt: nowIso,
     body
@@ -1171,8 +1225,61 @@ function SessionMessages (props: {
   readonly messages: readonly GetSessionId200MessagesItem[]
   readonly harness: HarnessDefinition
 }) {
+  const auth = useAuth()
   const MessageView = props.harness.MessageView
-  return <MessageView messages={props.messages} />
+  const senderIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          props.messages
+            .map(message =>
+              typeof message.createdBy === 'string'
+                ? message.createdBy.trim()
+                : ''
+            )
+            .filter(id => id.length > 0)
+        )
+      ).sort(),
+    [props.messages]
+  )
+
+  const sendersQuery = useQuery({
+    queryKey: ['users', 'by-ids', senderIds],
+    enabled: senderIds.length > 0,
+    staleTime: SESSION_SENDER_QUERY_STALE_TIME_MS,
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        ids: senderIds.join(',')
+      })
+      const response = await auth.fetchAuthed(`/users?${params.toString()}`)
+      if (!response.ok) {
+        throw new Error('Failed to load message senders')
+      }
+      const value = (await response.json()) as unknown
+      return parseMessageSendersResponse(value)
+    }
+  })
+
+  const senderById = useMemo<Readonly<Record<string, HarnessMessageSender>>>(
+    () => {
+      const resolved = new Map(
+        (sendersQuery.data ?? []).map(sender => [sender.id, sender] as const)
+      )
+      return Object.fromEntries(
+        senderIds.map(id => [
+          id,
+          resolved.get(id) ?? {
+            id,
+            name: `User ${id.slice(0, 8)}`,
+            avatar: null
+          }
+        ])
+      )
+    },
+    [senderIds, sendersQuery.data]
+  )
+
+  return <MessageView messages={props.messages} senderById={senderById} />
 }
 
 function useScrollParent (ref: React.RefObject<HTMLElement | null>) {
@@ -1329,6 +1436,7 @@ function SessionComposer (props: {
   readonly onSendScrollRequest: () => void
   readonly inputRef: { current: HTMLTextAreaElement | null }
 }) {
+  const auth = useAuth()
   const queryClient = useQueryClient()
   const workspaceStore = useWorkspaceStore()
 
@@ -1715,7 +1823,8 @@ function SessionComposer (props: {
       const optimisticMessage = createOptimisticUserMessage({
         agentId: props.agentId,
         sessionId: nextSessionId,
-        text
+        text,
+        createdBy: auth.user?.id ?? null
       })
       applySessionPatchToWorkspaceCaches(queryClient, nextSessionId, {
         status: SESSION_STATUS_PROCESSING,
@@ -1913,6 +2022,7 @@ function SessionComposer (props: {
 }
 
 export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
+  const auth = useAuth()
   const queryClient = useQueryClient()
   const agentId =
     typeof props.config.agentId === 'string' ? props.config.agentId.trim() : ''
@@ -2236,7 +2346,8 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
       agentId,
       sessionId,
       agentApiUrl: access.agentApiUrl,
-      agentAuthToken: access.agentAuthToken
+      agentAuthToken: access.agentAuthToken,
+      currentUserId: auth.user?.id ?? null
     })
     streamConnectionRef.current = connection
 

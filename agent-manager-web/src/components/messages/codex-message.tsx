@@ -11,12 +11,14 @@ import type {
   WebSearchItem
 } from '@openai/codex-sdk'
 import { Check, ChevronRight, Circle, X } from 'lucide-react'
+import type { HarnessMessageSender } from '@/harnesses/types'
 import { getCssVarAsNumber } from '@/utils/css-vars'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible'
+import { MessageSenderHeader } from '@/components/messages/message-sender-header'
 import { MessageTextBlock } from '@/components/messages/message-text-block'
 import { StatusIndicator } from '@/components/messages/status-indicator'
 
@@ -580,6 +582,7 @@ function parseCodexBody (raw: unknown): CodexMessageBody | null {
 
 export function CodexMessages (props: {
   readonly messages: readonly GetSessionId200MessagesItem[]
+  readonly senderById?: Readonly<Record<string, HarnessMessageSender>>
 }) {
   const displayMessages = buildDisplayMessages(props.messages)
   return (
@@ -590,6 +593,7 @@ export function CodexMessages (props: {
           message={message}
           body={body}
           isFirst={index === 0}
+          sender={getMessageSender(message, props.senderById)}
         />
       ))}
     </>
@@ -660,6 +664,7 @@ export function CodexMessage (props: {
   readonly message: GetSessionId200MessagesItem
   readonly body: ThreadEvent | CodexUserInputEvent | LegacyCodexEvent
   readonly isFirst?: boolean
+  readonly sender?: HarnessMessageSender
 }) {
   const body = props.body
   const eventType = body.type
@@ -668,12 +673,11 @@ export function CodexMessage (props: {
     const text = formatUserInput(body.input)
     if (!text) return null
     return (
-      <div
-        className={`${
-          props.isFirst ? '' : 'mt-8'
-        } w-full bg-surface-4 px-3 py-2 text-sm whitespace-pre-wrap break-words`}
-      >
-        {text}
+      <div className={props.isFirst ? '' : 'mt-8'}>
+        {props.sender ? <MessageSenderHeader sender={props.sender} /> : null}
+        <div className='w-full bg-surface-4 px-3 py-2 text-sm whitespace-pre-wrap break-words'>
+          {text}
+        </div>
       </div>
     )
   }
@@ -716,4 +720,14 @@ export function CodexMessage (props: {
   }
 
   return null
+}
+
+function getMessageSender (
+  message: GetSessionId200MessagesItem,
+  senderById: Readonly<Record<string, HarnessMessageSender>> | undefined
+): HarnessMessageSender | undefined {
+  if (typeof message.createdBy !== 'string' || message.createdBy.length === 0) {
+    return undefined
+  }
+  return senderById?.[message.createdBy]
 }

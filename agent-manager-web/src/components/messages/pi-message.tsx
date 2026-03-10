@@ -3,11 +3,13 @@ import type { GetSessionId200MessagesItem } from '@/api/generated/agent'
 import type { AgentSessionEvent } from '@mariozechner/pi-coding-agent'
 import type { UserInput } from '@openai/codex-sdk'
 import type { ChatMessage } from '@/types/chat'
+import type { HarnessMessageSender } from '@/harnesses/types'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible'
+import { MessageSenderHeader } from '@/components/messages/message-sender-header'
 import { MessageTextBlock } from '@/components/messages/message-text-block'
 import { StatusIndicator } from '@/components/messages/status-indicator'
 
@@ -639,6 +641,7 @@ function parsePiBody (raw: unknown): PiMessageBody | null {
 
 export function PiMessages (props: {
   readonly messages: readonly GetSessionId200MessagesItem[]
+  readonly senderById?: Readonly<Record<string, HarnessMessageSender>>
 }) {
   // First pass: build map of toolCallId → tool execution result
   const toolResultsByCallId = new Map<string, ToolExecutionInfo>()
@@ -662,6 +665,16 @@ export function PiMessages (props: {
     readonly body: PiMessageBody
   }> = []
   const indexByKey = new Map<string, number>()
+  const turnsWithUserInput = new Set<string>()
+
+  // First, identify turns that have user_input events
+  for (const message of props.messages) {
+    const body = parsePiBody(message.body)
+    if (!body) continue
+    if (isPiUserInputEvent(body) && message.turnId) {
+      turnsWithUserInput.add(message.turnId)
+    }
+  }
 
   for (const message of props.messages) {
     const body = parsePiBody(message.body)
@@ -679,7 +692,12 @@ export function PiMessages (props: {
     // Skip message_end with role === 'toolResult' (shown via tool_execution_end)
     if (body.type === 'message_end') {
       const bodyMessage = getMessage(body)
-      if (getRole(bodyMessage) === 'toolResult') {
+      const role = getRole(bodyMessage)
+      if (role === 'toolResult') {
+        continue
+      }
+      // Skip message_end with role === 'user' if we already have a user_input for this turn
+      if (role === 'user' && message.turnId && turnsWithUserInput.has(message.turnId)) {
         continue
       }
     }
@@ -712,6 +730,7 @@ export function PiMessages (props: {
             message={message}
             body={body}
             isFirst={index === 0}
+            sender={getMessageSender(message, props.senderById)}
             toolResultsByCallId={toolResultsByCallId}
           />
         )
@@ -724,6 +743,7 @@ export function PiMessage (props: {
   readonly message: GetSessionId200MessagesItem
   readonly body: PiMessageBody
   readonly isFirst?: boolean
+  readonly sender?: HarnessMessageSender
   readonly toolResultsByCallId?: Map<string, ToolExecutionInfo>
 }) {
   const event = props.body
@@ -731,12 +751,11 @@ export function PiMessage (props: {
     const text = formatUserInput(event.input)
     if (!text) return null
     return (
-      <div
-        className={`${
-          props.isFirst ? '' : 'mt-8'
-        } w-full bg-surface-4 px-3 py-2 text-sm whitespace-pre-wrap break-words`}
-      >
-        {text}
+      <div className={props.isFirst ? '' : 'mt-8'}>
+        {props.sender ? <MessageSenderHeader sender={props.sender} /> : null}
+        <div className='w-full bg-surface-4 px-3 py-2 text-sm whitespace-pre-wrap break-words'>
+          {text}
+        </div>
       </div>
     )
   }
@@ -760,14 +779,14 @@ export function PiMessage (props: {
 
     if (role === 'user') {
       const text = extractPiMessageText(message)
+      console.log(props)
       if (!text || text.trim().length === 0) return null
       return (
-        <div
-          className={`${
-            props.isFirst ? '' : 'mt-8'
-          } w-full bg-surface-3 px-3 py-2 text-sm whitespace-pre-wrap break-words`}
-        >
-          {text}
+        <div className={props.isFirst ? '' : 'mt-8'}>
+          {props.sender ? <MessageSenderHeader sender={props.sender} /> : null}
+          <div className='w-full bg-surface-3 px-3 py-2 text-sm whitespace-pre-wrap break-words'>
+            {text}
+          </div>
         </div>
       )
     }
@@ -840,4 +859,14 @@ export function PiMessage (props: {
   if (eventType === 'message_update') return null
 
   return null
+}
+
+function getMessageSender (
+  message: GetSessionId200MessagesItem,
+  senderById: Readonly<Record<string, HarnessMessageSender>> | undefined
+): HarnessMessageSender | undefined {
+  if (typeof message.createdBy !== 'string' || message.createdBy.length === 0) {
+    return undefined
+  }
+  return senderById?.[message.createdBy]
 }

@@ -114,6 +114,7 @@ export type GetAuthGithubCallback501 = {
 };
 
 export type GetUsersParams = {
+ids?: string;
 /**
  * @minLength 1
  */

@@ -424,6 +424,14 @@
         "parameters": [
           {
             "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ids",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string",
               "minLength": 1
             },
