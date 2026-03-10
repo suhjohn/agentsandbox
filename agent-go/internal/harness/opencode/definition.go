@@ -3,6 +3,7 @@ package opencode
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -13,7 +14,7 @@ import (
 
 var opencodeVariantPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
-const opencodePermissionAllowAll = `{"*":"allow"}`
+const opencodeRunConfigAllowAll = "{\n  \"permission\": \"allow\"\n}\n"
 
 type Harness struct {
 	CLI *OpencodeCLI
@@ -67,6 +68,9 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 	}
 
 	cli := *h.CLI
+	if err := ensureRuntimeConfigFile(req.RuntimeDir); err != nil {
+		return registry.RunResult{}, err
+	}
 	cli.Env = opencodeRunEnv(h.CLI.Env, req.RuntimeDir, req.Session.ID)
 
 	opts := OpencodeRunOptions{
@@ -129,7 +133,10 @@ func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
 		Version: 1,
 		Content: renderAgentsContent(ctx.RuntimeContext),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return ensureRuntimeConfigFile(ctx.RuntimeContext.RuntimeDir)
 }
 
 func renderAgentsContent(ctx registry.RuntimeContext) string {
@@ -339,11 +346,23 @@ func resolveOpencodeConfigDir(env []string, runtimeDir string) string {
 	return runtimeConfigDir(runtimeDir)
 }
 
+func runtimeConfigFilePath(runtimeDir string) string {
+	return filepath.Join(runtimeConfigDir(runtimeDir), "config.json")
+}
+
+func ensureRuntimeConfigFile(runtimeDir string) error {
+	path := runtimeConfigFilePath(runtimeDir)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(opencodeRunConfigAllowAll), 0o644)
+}
+
 func opencodeRunEnv(baseEnv []string, runtimeDir, sessionID string) []string {
 	sessionRoot := sessionRuntimeDir(runtimeDir, sessionID)
 	env := append([]string(nil), baseEnv...)
+	env = setEnvValue(env, "OPENCODE_CONFIG", runtimeConfigFilePath(runtimeDir))
 	env = setEnvValue(env, "OPENCODE_CONFIG_DIR", resolveOpencodeConfigDir(baseEnv, runtimeDir))
-	env = setEnvValue(env, "OPENCODE_PERMISSION", opencodePermissionAllowAll)
 	env = setEnvValue(env, "OPENCODE_DISABLE_AUTOUPDATE", "true")
 	env = setEnvValue(env, "XDG_CONFIG_HOME", filepath.Join(sessionRoot, "xdg", "config"))
 	env = setEnvValue(env, "XDG_DATA_HOME", filepath.Join(sessionRoot, "xdg", "data"))

@@ -91,6 +91,14 @@ func TestSetupRuntimeSeedsManagedAgentsFile(t *testing.T) {
 	if !strings.Contains(contextText, "You are OpenCode running inside a sandbox container.") {
 		t.Fatalf("expected OpenCode-specific content, got %q", contextText)
 	}
+
+	configRaw, err := os.ReadFile(filepath.Join(runtimeDir, "opencode", "config.json"))
+	if err != nil {
+		t.Fatalf("ReadFile config.json: %v", err)
+	}
+	if got := string(configRaw); got != opencodeRunConfigAllowAll {
+		t.Fatalf("unexpected config.json contents: %q", got)
+	}
 }
 
 func TestCompactEventForStream(t *testing.T) {
@@ -136,14 +144,14 @@ func TestOpencodeRunEnvForcesAllowAllPermissions(t *testing.T) {
 	runtimeDir := filepath.Join(t.TempDir(), "runtime")
 	env := opencodeRunEnv([]string{
 		"OPENCODE_CONFIG_DIR=/custom/opencode",
-		`OPENCODE_PERMISSION={"read":"deny"}`,
+		"OPENCODE_CONFIG=/tmp/ignored.json",
 	}, runtimeDir, "session-123")
 
 	if got := envValue(env, "OPENCODE_CONFIG_DIR"); got != "/custom/opencode" {
 		t.Fatalf("expected custom config dir, got %q", got)
 	}
-	if got := envValue(env, "OPENCODE_PERMISSION"); got != opencodePermissionAllowAll {
-		t.Fatalf("expected allow-all permission config, got %q", got)
+	if got := envValue(env, "OPENCODE_CONFIG"); got != filepath.Join(runtimeDir, "opencode", "config.json") {
+		t.Fatalf("expected managed OPENCODE_CONFIG, got %q", got)
 	}
 	if got := envValue(env, "XDG_CONFIG_HOME"); got != filepath.Join(runtimeDir, "opencode", "sessions", "session-123", "xdg", "config") {
 		t.Fatalf("unexpected XDG_CONFIG_HOME: %q", got)

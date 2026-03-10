@@ -81,7 +81,7 @@ The runtime exposes model/thinking controls through harness definitions in
 - Model selection is passed directly through `--model <provider/model>`, using the shared model catalog for validation and normalization.
 - Thinking/reasoning is passed through `--variant <value>`. The runtime validates a simple token format and does not hard-code a short enum because upstream variants are provider-specific.
 - Runtime state is isolated per agent session with XDG directories rooted under the runtime dir, while the managed runtime instructions file is written to `${OPENCODE_CONFIG_DIR}/AGENTS.md`.
-- The harness forces OpenCode's permission config to `{"*":"allow"}` via `OPENCODE_PERMISSION` so non-interactive `opencode run` sessions do not fail on tool permission prompts.
+- The harness writes a managed OpenCode config at `${RUNTIME_DIR}/opencode/config.json` with `{"permission":"allow"}` and exports `OPENCODE_CONFIG` to force allow-all permissions for non-interactive `opencode run` sessions.
 
 ## Standalone binary
 

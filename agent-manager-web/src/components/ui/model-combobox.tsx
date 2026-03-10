@@ -131,7 +131,7 @@ export function ModelCombobox ({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className='w-[300px] p-0'
+        className='w-[300px] p-0 bg-surface-1/95 backdrop-blur-sm'
         align='start'
         onOpenAutoFocus={event => {
           event.preventDefault()
