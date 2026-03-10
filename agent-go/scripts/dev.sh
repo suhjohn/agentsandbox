@@ -42,6 +42,38 @@ abs_path() {
   printf '%s/%s\n' "${dir}" "$(basename -- "${path}")"
 }
 
+normalize_goarch() {
+  case "$1" in
+    amd64|x86_64)
+      printf 'amd64\n'
+      ;;
+    arm64|aarch64)
+      printf 'arm64\n'
+      ;;
+    armv7l|armhf|arm)
+      printf 'arm\n'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+docker_server_goarch() {
+  local raw_arch=""
+  raw_arch="$("${DOCKER_BIN}" info --format '{{.Architecture}}' 2>/dev/null || true)"
+  [[ -n "${raw_arch}" ]] || die "unable to determine Docker daemon architecture"
+  normalize_goarch "${raw_arch}" || die "unsupported Docker daemon architecture: ${raw_arch}"
+}
+
+prepare_repo_binary_for_docker() {
+  local repo_binary_path="${MODULE_DIR}/build-artifacts/agent-server"
+  local goarch_value=""
+  goarch_value="$(docker_server_goarch)"
+  build_server_binary "${repo_binary_path}" "linux" "${goarch_value}" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
+  write_git_rev_file "${repo_binary_path}"
+}
+
 build_server_binary() {
   local output_path="$1"
   local goos_value="$2"
@@ -312,6 +344,7 @@ parse_docker_mode_args() {
 }
 
 cmd_docker_build() {
+  prepare_repo_binary_for_docker
   "${DOCKER_BIN}" build -f "${MODULE_DIR}/Dockerfile" -t "${DOCKER_IMAGE}" "${REPO_ROOT}"
 }
 
