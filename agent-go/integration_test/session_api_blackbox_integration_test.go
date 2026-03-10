@@ -1,9 +1,12 @@
 package agentgo
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -319,6 +322,171 @@ func TestSessionAPIBlackbox_ImageInputPersistsAndWritesFile(t *testing.T) {
 	if len(data) < 8 || string(data[:8]) != "\x89PNG\r\n\x1a\n" {
 		t.Fatalf("persisted image does not look like a PNG: %q", persistedPath)
 	}
+}
+
+func TestSessionAPIBlackbox_UploadedImagePathReferencePersistsAsTextInput(t *testing.T) {
+	srv := startAgentGoServer(t)
+	defer stopAgentGoServer(t, srv)
+
+	root := repoRoot(t)
+	imagePath := filepath.Join(root, "agent-go", "static", "test_image.png")
+
+	cases := []struct {
+		name   string
+		prompt string
+	}{
+		{
+			name:   "bare path reference",
+			prompt: "@~/uploaded/test_image.png",
+		},
+		{
+			name:   "path reference with trailing text",
+			prompt: "@~/uploaded/test_image.png what is in this image",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sessionID := newSessionID()
+			auth := sandboxAuthHeader(t, sessionID, "integration-user", srv.secretSeed, srv.agentID)
+
+			createRes := httpJSON(t, http.MethodPost, srv.baseURL+"/session", auth, map[string]any{
+				"id":      sessionID,
+				"harness": "pi",
+			})
+			createRes.Body.Close()
+			if createRes.StatusCode != http.StatusCreated {
+				t.Fatalf("expected create 201, got %d", createRes.StatusCode)
+			}
+
+			displayPath := uploadFileForBlackboxTest(t, srv.baseURL, auth, imagePath)
+			wantPrompt := strings.Replace(tc.prompt, "~/uploaded/test_image.png", displayPath, 1)
+
+			runRes := httpJSON(t, http.MethodPost, srv.baseURL+"/session/"+sessionID+"/message", auth, map[string]any{
+				"input": []map[string]any{
+					{"type": "text", "text": wantPrompt},
+				},
+			})
+			defer runRes.Body.Close()
+			if runRes.StatusCode != http.StatusOK {
+				t.Fatalf("expected run 200, got %d", runRes.StatusCode)
+			}
+
+			items := latestPersistedUserInputItems(t, srv.dbPath, sessionID)
+			if len(items) != 1 {
+				t.Fatalf("expected exactly 1 persisted input item, got %#v", items)
+			}
+			if typ, _ := items[0]["type"].(string); typ != "text" {
+				t.Fatalf("expected persisted input type text, got %#v", items[0])
+			}
+			if text, _ := items[0]["text"].(string); text != wantPrompt {
+				t.Fatalf("expected persisted text %q, got %#v", wantPrompt, items[0]["text"])
+			}
+			if _, ok := items[0]["path"]; ok {
+				t.Fatalf("text input should not persist a path field: %#v", items[0])
+			}
+		})
+	}
+}
+
+func uploadFileForBlackboxTest(t *testing.T, baseURL string, auth map[string]string, srcPath string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(srcPath)
+	if err != nil {
+		t.Fatalf("read upload source %q: %v", srcPath, err)
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", filepath.Base(srcPath))
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write(content); err != nil {
+		t.Fatalf("write upload content: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/files/upload", &body)
+	if err != nil {
+		t.Fatalf("create upload request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	for key, value := range auth {
+		req.Header.Set(key, value)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("upload file: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		payload, _ := io.ReadAll(res.Body)
+		t.Fatalf("expected upload 201, got %d: %s", res.StatusCode, strings.TrimSpace(string(payload)))
+	}
+
+	payload := decodeJSON[map[string]any](t, res.Body)
+	displayPath := strings.TrimSpace(fmt.Sprintf("%v", payload["displayPath"]))
+	if displayPath == "" {
+		t.Fatalf("expected upload displayPath, got %#v", payload)
+	}
+	return displayPath
+}
+
+func latestPersistedUserInputItems(t *testing.T, dbPath, sessionID string) []map[string]any {
+	t.Helper()
+
+	var items []map[string]any
+	waitFor(t, 5*time.Second, func() error {
+		db := sqliteOpenReadOnly(t, dbPath)
+		defer db.Close()
+
+		rows, err := db.Query(`SELECT body FROM messages WHERE session_id = ? ORDER BY created_at ASC`, sessionID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		var lastBody string
+		for rows.Next() {
+			var body string
+			if err := rows.Scan(&body); err != nil {
+				return err
+			}
+			if strings.Contains(body, `"type":"user_input"`) {
+				lastBody = body
+			}
+		}
+		if strings.TrimSpace(lastBody) == "" {
+			return fmt.Errorf("missing persisted user_input message")
+		}
+
+		var decoded map[string]any
+		if err := json.Unmarshal([]byte(lastBody), &decoded); err != nil {
+			return fmt.Errorf("decode user_input body: %w", err)
+		}
+		rawInput, _ := decoded["input"].([]any)
+		if len(rawInput) == 0 {
+			return fmt.Errorf("persisted user_input missing input payload: %s", lastBody)
+		}
+
+		next := make([]map[string]any, 0, len(rawInput))
+		for _, item := range rawInput {
+			m, _ := item.(map[string]any)
+			if m == nil {
+				return fmt.Errorf("persisted user_input contains non-object input item: %s", lastBody)
+			}
+			next = append(next, m)
+		}
+		items = next
+		return nil
+	})
+
+	return items
 }
 
 func TestSessionAPIBlackbox_MessageRunPersistsFields(t *testing.T) {

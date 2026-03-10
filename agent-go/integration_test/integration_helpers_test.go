@@ -164,6 +164,7 @@ func startAgentGoServer(t *testing.T) runningServer {
 		"DATABASE_PATH="+dbPath,
 		"SECRET_SEED="+secretSeed,
 		"AGENT_ID="+agentID,
+		"AGENT_HOME="+tmpDir,
 		"DEFAULT_MODEL=gpt-5.2",
 		"DEFAULT_REASONING_EFFORT=high",
 		"CODEX_EXECUTABLE_PATH="+fakeCodexPath,

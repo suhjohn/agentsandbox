@@ -26,6 +26,7 @@ RUN set -eux; \
   ca-certificates \
   curl \
   dumb-init \
+  fd-find \
   fonts-dejavu-core \
   fonts-liberation \
   git \
@@ -44,6 +45,7 @@ RUN set -eux; \
   novnc \
   x11vnc \
   xvfb; \
+  ln -sfn /usr/bin/fdfind /usr/local/bin/fd; \
   mkdir -p /home/agent/workspaces /tmp/.X11-unix /etc/apt/keyrings; \
   chmod 0777 /home/agent/workspaces; \
   chmod 1777 /tmp/.X11-unix; \
