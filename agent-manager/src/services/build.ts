@@ -15,7 +15,6 @@ const SANDBOX_XDG_CACHE_HOME = `${SANDBOX_ROOT_DIR}/xdg/cache`
 const SANDBOX_XDG_DATA_HOME = `${SANDBOX_ROOT_DIR}/xdg/data`
 
 const BUILD_APP_NAME = 'image-builder'
-const DEFAULT_BASE_IMAGE_REF = 'ghcr.io/suhjohn/agentsandbox:latest'
 const DEFAULT_MODAL_SECRET_NAME = 'openinspect-build-secret'
 
 const CREATE_TIMEOUT_MS = 5 * 60 * 1000

@@ -24,6 +24,7 @@ import {
 import { withLock } from './lock.service'
 import { getRedisClient } from './redis.service'
 import { tryResolveTailscaleFunnelPublicBaseUrl } from '../clients/tailscale'
+import { log } from '../log'
 
 export type SandboxRegion = string | readonly string[]
 
@@ -262,6 +263,46 @@ function normalizeNullableText (
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function describeUnknownError (err: unknown): string {
+  if (err instanceof Error) {
+    const message = err.message.trim()
+    if (message.length > 0) return message
+
+    const details = err as Error & {
+      readonly code?: unknown
+      readonly detail?: unknown
+      readonly cause?: unknown
+    }
+    const parts = [err.name.trim()].filter(Boolean)
+    if (typeof details.code === 'string' && details.code.trim().length > 0) {
+      parts.push(`code=${details.code.trim()}`)
+    }
+    if (
+      typeof details.detail === 'string' &&
+      details.detail.trim().length > 0
+    ) {
+      parts.push(details.detail.trim())
+    }
+    if (parts.length > 0) return parts.join(' ')
+    return 'Unknown error'
+  }
+
+  if (typeof err === 'string') {
+    const trimmed = err.trim()
+    return trimmed.length > 0 ? trimmed : 'Unknown error'
+  }
+
+  try {
+    const serialized = JSON.stringify(err)
+    if (serialized && serialized !== '{}') return serialized
+  } catch {
+    /* ignore */
+  }
+
+  const fallback = String(err ?? '')
+  return fallback.trim().length > 0 ? fallback.trim() : 'Unknown error'
 }
 
 function shellQuote (value: string): string {
@@ -1273,27 +1314,43 @@ export async function createSetupSandbox (input: {
     Math.ceil(SETUP_SANDBOX_POST_CREATE_HEALTH_RETRY_MS / 1000)
   )
 
-  const sandbox = await modalClient.sandboxes.create(app, modalImage, {
-    command: [...SETUP_SERVER_COMMAND],
-    env: {
-      AGENT_HOME: '/home/agent',
-      WORKSPACES_DIR: '/home/agent/workspaces',
-      HOME: '/home/agent',
-      AGENT_RUNTIME_MODE: 'server',
-      AGENT_ID: setupSandboxAgentId(input.imageId),
-      PORT: String(SETUP_TERMINAL_PORT),
-      SECRET_SEED: env.SANDBOX_SIGNING_SECRET,
-      AGENT_MANAGER_BASE_URL: agentManagerBaseUrl,
-      AGENT_MANAGER_API_KEY: env.AGENT_MANAGER_API_KEY,
-      AGENT_ALLOWED_ORIGINS: buildAllowedOrigins(agentManagerBaseUrl),
-      TERM: 'xterm-256color'
-    },
-    ...(namedSecret ? { secrets: [namedSecret] } : {}),
-    encryptedPorts: [SETUP_TERMINAL_PORT],
-    timeoutMs: SETUP_TIMEOUT_MS,
-    idleTimeoutMs: SETUP_IDLE_TIMEOUT_MS,
-    ...(regions ? { regions } : {})
-  })
+  let sandbox: Sandbox
+  try {
+    sandbox = await modalClient.sandboxes.create(app, modalImage, {
+      command: [...SETUP_SERVER_COMMAND],
+      env: {
+        AGENT_HOME: '/home/agent',
+        WORKSPACES_DIR: '/home/agent/workspaces',
+        HOME: '/home/agent',
+        AGENT_RUNTIME_MODE: 'server',
+        AGENT_ID: setupSandboxAgentId(input.imageId),
+        PORT: String(SETUP_TERMINAL_PORT),
+        SECRET_SEED: env.SANDBOX_SIGNING_SECRET,
+        AGENT_MANAGER_BASE_URL: agentManagerBaseUrl,
+        AGENT_MANAGER_API_KEY: env.AGENT_MANAGER_API_KEY,
+        AGENT_ALLOWED_ORIGINS: buildAllowedOrigins(agentManagerBaseUrl),
+        TERM: 'xterm-256color'
+      },
+      ...(namedSecret ? { secrets: [namedSecret] } : {}),
+      encryptedPorts: [SETUP_TERMINAL_PORT],
+      timeoutMs: SETUP_TIMEOUT_MS,
+      idleTimeoutMs: SETUP_IDLE_TIMEOUT_MS,
+      ...(regions ? { regions } : {})
+    })
+  } catch (err) {
+    const source = normalizedBaseImageSource
+      ? `baseImage=${normalizedBaseImageSource}`
+      : `baseImageRef=${baseImageRef ?? 'unknown'}`
+    log.error('Setup sandbox create failed', {
+      imageId: input.imageId,
+      variantId: input.variantId,
+      source,
+      error: err
+    })
+    throw new Error(
+      `Setup sandbox create failed from ${source}: ${describeUnknownError(err)}`
+    )
+  }
 
   try {
     const probe = await sandbox.exec(
