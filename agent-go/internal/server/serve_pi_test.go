@@ -2,15 +2,17 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestExecutePiCLIRunUsesPrintMode(t *testing.T) {
+func TestExecutePiCLIRunUsesRPCModeAndStdinPrompt(t *testing.T) {
 	tmpDir := t.TempDir()
 	argsPath := filepath.Join(tmpDir, "pi-args.txt")
+	stdinPath := filepath.Join(tmpDir, "pi-stdin.txt")
 	fakePiPath := filepath.Join(tmpDir, "fake-pi")
 
 	script := "#!/bin/sh\n" +
@@ -19,6 +21,8 @@ func TestExecutePiCLIRunUsesPrintMode(t *testing.T) {
 		"for arg in \"$@\"; do\n" +
 		"  printf '%s\\n' \"$arg\" >> \"" + argsPath + "\"\n" +
 		"done\n" +
+		"cat > \"" + stdinPath + "\"\n" +
+		"printf '%s\\n' '{\"type\":\"response\",\"command\":\"prompt\",\"success\":true}'\n" +
 		"printf '%s\\n' '{\"type\":\"message_update\",\"assistantMessageEvent\":{\"type\":\"text_delta\",\"delta\":\"ok\"}}'\n" +
 		"printf '%s\\n' '{\"type\":\"message_end\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}}'\n"
 	if err := os.WriteFile(fakePiPath, []byte(script), 0o755); err != nil {
@@ -37,10 +41,11 @@ func TestExecutePiCLIRunUsesPrintMode(t *testing.T) {
 
 	sessionID := "1234567890abcdef1234567890abcdef"
 	session := &sessionRecord{ID: sessionID, Harness: "pi"}
+	prompt := "@~/uploaded/test_image.png what is in this image"
 
 	events := make([]map[string]any, 0, 1)
 	result, err := app.executePiCLIRun(context.Background(), session, []normalizedInput{
-		{Type: "text", Text: "hello from pi"},
+		{Type: "text", Text: prompt},
 	}, func(evt map[string]any) {
 		events = append(events, evt)
 	})
@@ -64,14 +69,28 @@ func TestExecutePiCLIRunUsesPrintMode(t *testing.T) {
 		t.Fatalf("read args: %v", err)
 	}
 	args := strings.Split(strings.TrimSpace(string(rawArgs)), "\n")
-	expectArg(t, args, "-p")
 	expectArg(t, args, "--mode")
-	expectArg(t, args, "json")
+	expectArg(t, args, "rpc")
 	expectArg(t, args, "--session")
 	expectArg(t, args, expectedSessionFile)
 	expectArg(t, args, "--session-dir")
 	expectArg(t, args, filepath.Dir(expectedSessionFile))
-	expectArg(t, args, "hello from pi")
+	expectNoArg(t, args, prompt)
+
+	rawStdin, err := os.ReadFile(stdinPath)
+	if err != nil {
+		t.Fatalf("read stdin: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rawStdin, &payload); err != nil {
+		t.Fatalf("decode stdin JSON: %v\nraw=%q", err, string(rawStdin))
+	}
+	if got := strings.TrimSpace(payload["type"].(string)); got != "prompt" {
+		t.Fatalf("expected prompt command, got %#v", payload)
+	}
+	if got := payload["message"]; got != prompt {
+		t.Fatalf("expected stdin prompt %q, got %#v", prompt, got)
+	}
 }
 
 func TestExecutePiCLIRunPreservesUsageOnMessageEnd(t *testing.T) {
@@ -138,4 +157,13 @@ func expectArg(t *testing.T, args []string, want string) {
 		}
 	}
 	t.Fatalf("expected arg %q, got %v", want, args)
+}
+
+func expectNoArg(t *testing.T, args []string, want string) {
+	t.Helper()
+	for _, arg := range args {
+		if arg == want {
+			t.Fatalf("did not expect arg %q in %v", want, args)
+		}
+	}
 }

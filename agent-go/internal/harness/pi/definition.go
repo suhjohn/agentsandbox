@@ -1,6 +1,7 @@
 package pi
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -73,11 +74,9 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 	}
 
 	opts := PiOptions{
-		Print:      true,
-		Mode:       "json",
+		Mode:       "rpc",
 		Session:    sessionFile,
 		SessionDir: filepath.Dir(sessionFile),
-		Messages:   []string{prompt},
 	}
 	if req.Session.Model != nil {
 		opts.Model = strings.TrimSpace(*req.Session.Model)
@@ -85,9 +84,13 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 	if req.Session.ModelReasoningEffort != nil {
 		opts.Thinking = strings.TrimSpace(*req.Session.ModelReasoningEffort)
 	}
+	stdinPayload, err := EncodePiRPCCommand(PiRPCPrompt("", prompt, nil, ""))
+	if err != nil {
+		return registry.RunResult{}, err
+	}
 
 	var textBuilder strings.Builder
-	_, err := h.CLI.RunJSONL(ctx, h.CLI.Args(opts), nil, func(evt PiJSONLEvent) {
+	_, err = h.CLI.RunJSONL(ctx, h.CLI.Args(opts), bytes.NewReader(stdinPayload), func(evt PiJSONLEvent) {
 		if req.EmitEvent != nil {
 			if compact, ok := compactEventForStream(evt.Value); ok {
 				req.EmitEvent(compact)
