@@ -105,6 +105,25 @@ function getAgentDetailViewLabel (tab: AgentDetailTab): string {
   return option?.label ?? 'Session List'
 }
 
+function getAgentDetailTitle (config: AgentDetailPanelConfig): string {
+  const agentName = config.agentName?.trim() || ''
+  const agentId = config.agentId?.trim() || ''
+  const agentLabel =
+    agentName || (agentId.length > 0 ? agentId.slice(0, 8) : '')
+
+  if (config.activeTab === 'session_detail') {
+    const sessionTitle = config.sessionTitle?.trim() || ''
+    const sessionLabel = sessionTitle || 'Session'
+
+    return agentLabel.length > 0
+      ? `${agentLabel} — ${sessionLabel}`
+      : sessionLabel
+  }
+
+  const viewLabel = getAgentDetailViewLabel(config.activeTab)
+  return agentLabel.length > 0 ? `${agentLabel} — ${viewLabel}` : viewLabel
+}
+
 function clampLimit (value: number): number {
   if (!Number.isFinite(value)) return 20
   return Math.min(50, Math.max(1, Math.round(value)))
@@ -250,6 +269,31 @@ function toErrorMessage (value: unknown): string {
 }
 
 export function AgentDetailPanel (props: PanelProps<AgentDetailPanelConfig>) {
+  const agentId =
+    typeof props.config.agentId === 'string' ? props.config.agentId.trim() : ''
+  const agentQuery = useGetAgentsAgentId(agentId, {
+    query: { enabled: agentId.length > 0 }
+  })
+  const agent = unwrapAgent(agentQuery.data)
+
+  useEffect(() => {
+    if (agentId.length === 0) {
+      props.setConfig(prev => {
+        if ((prev.agentName?.trim() ?? '') === '') return prev
+        return { ...prev, agentName: '' }
+      })
+      return
+    }
+
+    const nextName = agent?.name?.trim() ?? ''
+    if (nextName.length === 0) return
+
+    props.setConfig(prev => {
+      if ((prev.agentName?.trim() ?? '') === nextName) return prev
+      return { ...prev, agentName: nextName }
+    })
+  }, [agent?.name, agentId, props.setConfig])
+
   const resolvedSessionId = useMemo(
     () =>
       resolveAgentDetailSessionId({
@@ -487,22 +531,6 @@ function AgentDetailSessionListView (props: {
 
   const agent = unwrapAgent(agentQuery.data)
   const access = unwrapAccess(accessQuery.data)
-
-  useEffect(() => {
-    if (agentId.length === 0) {
-      props.setConfig(prev => {
-        if ((prev.agentName?.trim() ?? '') === '') return prev
-        return { ...prev, agentName: '' }
-      })
-      return
-    }
-    const nextName = agent?.name?.trim() ?? ''
-    if (nextName.length === 0) return
-    props.setConfig(prev => {
-      if ((prev.agentName?.trim() ?? '') === nextName) return prev
-      return { ...prev, agentName: nextName }
-    })
-  }, [agent?.name, agentId, props.setConfig])
 
   const sessionsParams: GetSessionParams = useMemo(
     () => ({
@@ -1093,19 +1121,7 @@ export const agentDetailPanelDefinition: PanelDefinition<AgentDetailPanelConfig>
       sessionHarness: undefined
     },
     deserializeConfig: raw => deserializeAgentDetailConfig(raw),
-    getTitle: config => {
-      const agentName = config.agentName?.trim() || ''
-      const agentId = config.agentId?.trim() || ''
-      const agentLabel =
-        agentName || (agentId.length > 0 ? agentId.slice(0, 8) : '')
-      const sessionTitle = config.sessionTitle?.trim() || ''
-      if (agentLabel.length > 0 && sessionTitle.length > 0) {
-        return `[${agentLabel}] ${sessionTitle}`
-      }
-      if (agentLabel.length > 0) return agentLabel
-      if (sessionTitle.length > 0) return sessionTitle
-      return 'Agent Detail'
-    },
+    getTitle: config => getAgentDetailTitle(config),
     bodyPadding: 'none',
     getAutoFocusSelector: config =>
       config.activeTab === 'session_detail'

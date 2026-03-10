@@ -141,7 +141,10 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - `self`: replace current pane’s panel
   - `left` / `right` / `top` / `bottom`: replace adjacent pane if one exists in that direction; otherwise create a new split pane on that edge
   - when `config` is provided, it is normalized via the target panel definition’s `deserializeConfig` before storing
-- `agent_detail` remains a container panel with internal tabs in its own config (`session_list`, `session_detail`, `terminal`, `browser`, `diff`).
+- `agent_detail` remains a container panel with internal tabs in its own config (`session_list`, `session_detail`, `terminal`, `vscode`, `browser`, `diff`).
+- `agent_detail` pane titles derive from panel config:
+  - selected agent + non-session tab: `<agent> — <view>` (for example `my-agent — Terminal`)
+  - selected agent + session detail: `<agent> — <sessionTitle>` with `Session` as the fallback when no title is available yet
 - In `agent_detail` session detail, the bottom composer bar is owned by `panels/agent-session.tsx` and includes:
   - harness label from the active harness definition
   - model combobox
