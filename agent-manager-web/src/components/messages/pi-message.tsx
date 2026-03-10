@@ -734,7 +734,7 @@ export function PiMessage (props: {
       <div
         className={`${
           props.isFirst ? '' : 'mt-8'
-        } w-full bg-surface-3 px-3 py-2 text-sm whitespace-pre-wrap break-words`}
+        } w-full bg-surface-4 px-3 py-2 text-sm whitespace-pre-wrap break-words`}
       >
         {text}
       </div>
@@ -808,9 +808,7 @@ export function PiMessage (props: {
 
     // Render text content if present
     const textElement =
-      text && text.trim().length > 0 ? (
-        <MessageTextBlock text={text} />
-      ) : null
+      text && text.trim().length > 0 ? <MessageTextBlock text={text} /> : null
 
     // Render tool calls with their results
     const toolCallElements = toolCalls.map((toolCall, index) => {

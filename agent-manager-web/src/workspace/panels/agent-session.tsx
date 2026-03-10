@@ -1123,24 +1123,24 @@ function toStoredMessageBody (value: unknown): string | null | undefined {
   }
 }
 
-function findRunStartTimestamp(
-  messages: readonly GetSessionId200MessagesItem[],
+function findRunStartTimestamp (
+  messages: readonly GetSessionId200MessagesItem[]
 ): string | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    if (!message) continue;
-    const body = parseBody(message.body);
-    if (!isRecord(body)) continue;
-    const type = body.type;
+    const message = messages[i]
+    if (!message) continue
+    const body = parseBody(message.body)
+    if (!isRecord(body)) continue
+    const type = body.type
     if (
-      type === "user_input" ||
-      type === "agent_start" ||
-      type === "turn.started"
+      type === 'user_input' ||
+      type === 'agent_start' ||
+      type === 'turn.started'
     ) {
-      return message.createdAt;
+      return message.createdAt
     }
   }
-  return null;
+  return null
 }
 
 function useElapsedSeconds (
@@ -1780,7 +1780,7 @@ function SessionComposer (props: {
       </div>
       <div
         className={cn(
-          'relative bg-surface-3 transition-colors',
+          'relative bg-surface-4 transition-colors',
           isDragOver && 'bg-surface-2 ring-1 ring-inset ring-border'
         )}
         onDragEnter={event => {

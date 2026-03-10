@@ -671,7 +671,7 @@ export function CodexMessage (props: {
       <div
         className={`${
           props.isFirst ? '' : 'mt-8'
-        } w-full bg-surface-3 px-3 py-2 text-sm whitespace-pre-wrap break-words`}
+        } w-full bg-surface-4 px-3 py-2 text-sm whitespace-pre-wrap break-words`}
       >
         {text}
       </div>
