@@ -6,16 +6,12 @@ ENV NODE_ENV=production
 # Build arguments for version pinning
 ARG OPENVSCODE_SERVER_RELEASE=openvscode-server-v1.106.3
 ARG RUNC_VERSION=1.3.0
-ARG GO_VERSION=1.24.0
-
 # Persist versions as ENV for runtime access
 ENV OPENVSCODE_SERVER_RELEASE=${OPENVSCODE_SERVER_RELEASE} \
   OPENVSCODE_SERVER_PORT=39393 \
   RUNC_VERSION=${RUNC_VERSION} \
-  GO_VERSION=${GO_VERSION} \
   UV_INSTALL_DIR=/usr/local/bin \
-  UV_NO_MODIFY_PATH=1 \
-  PATH="/usr/local/go/bin:${PATH}"
+  UV_NO_MODIFY_PATH=1
 
 # Layer 1: Base system packages (rarely changes)
 RUN set -eux; \
@@ -98,27 +94,19 @@ RUN set -eux; \
   ln -sfn /usr/local/bin/runc /usr/bin/runc; \
   ln -sfn /usr/local/bin/runc /usr/sbin/runc
 
-# Layer 5: Go installation (version-pinned)
-RUN set -eux; \
-  arch="$(dpkg --print-architecture)"; \
-  rm -rf /usr/local/go; \
-  curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${arch}.tar.gz" | tar -C /usr/local -xz; \
-  /usr/local/go/bin/go version
-
-# Layer 6: Node.js + npm packages (changes when updating codex/pi/opencode versions)
+# Layer 5: Node.js + npm packages (changes when updating codex/pi versions)
 RUN set -eux; \
   export DEBIAN_FRONTEND=noninteractive; \
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
   apt-get install -y --no-install-recommends nodejs; \
   node --version; \
-  npm i -g @openai/codex@latest @mariozechner/pi-coding-agent@latest opencode-ai@latest; \
+  npm i -g @openai/codex@latest @mariozechner/pi-coding-agent@latest; \
   npm cache clean --force; \
   command -v codex >/dev/null; \
   command -v pi >/dev/null; \
-  command -v opencode >/dev/null; \
   rm -rf /var/lib/apt/lists/*
 
-# Layer 7: OpenVSCode Server (version-pinned, large download)
+# Layer 6: OpenVSCode Server (version-pinned, large download)
 RUN set -eux; \
   arch="$(dpkg --print-architecture)"; \
   case "${arch}" in \
@@ -129,23 +117,13 @@ RUN set -eux; \
   curl -fsSL "https://github.com/gitpod-io/openvscode-server/releases/download/${OPENVSCODE_SERVER_RELEASE}/${OPENVSCODE_SERVER_RELEASE}-linux-${ov_arch}.tar.gz" | tar -xz -C /opt; \
   ln -sfn "/opt/${OPENVSCODE_SERVER_RELEASE}-linux-${ov_arch}/bin/openvscode-server" /usr/local/bin/openvscode-server
 
-# Layer 8: uv (Python package manager)
+# Layer 7: uv (Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --quiet
 
 ARG AGENT_REPO_DIR=/opt/agentsandbox
-ENV AGENT_GO_CACHE_DIR=/var/cache/agent-go \
-  GOCACHE=/var/cache/agent-go/build-cache \
-  GOMODCACHE=/var/cache/agent-go/mod-cache
+RUN mkdir -p "${AGENT_REPO_DIR}/agent-go"
 
-RUN mkdir -p "${AGENT_REPO_DIR}/agent-go" "${GOCACHE}" "${GOMODCACHE}"
-
-# Layer 9: Prewarm Go module cache from agent-go/go.mod/go.sum
-COPY agent-go/go.mod agent-go/go.sum ${AGENT_REPO_DIR}/agent-go/
-RUN set -eux; \
-  cd "${AGENT_REPO_DIR}/agent-go"; \
-  go mod download
-
-# Layer 10: Copy entire repo (includes agent-go/docker and agent-go/tools)
+# Layer 8: Copy entire repo (includes agent-go/docker and agent-go/tools)
 COPY . ${AGENT_REPO_DIR}
 
 # Symlink docker/tools to /app for backwards compatibility
@@ -188,7 +166,6 @@ ENV CODEX_HOME=${AGENT_HOME}/.codex
 ENV PI_CODING_AGENT_DIR=${AGENT_HOME}/.pi
 ENV HOME=${AGENT_HOME}
 ENV RUNTIME_DIR=${ROOT_DIR}/runtime
-ENV OPENCODE_CONFIG_DIR=${RUNTIME_DIR}/opencode
 ENV DATABASE_PATH=${ROOT_DIR}/app/agent.db
 ENV BROWSER_STATE_DIR=${ROOT_DIR}/browser
 ENV CHROMIUM_USER_DATA_DIR=${BROWSER_STATE_DIR}/chromium
@@ -231,7 +208,6 @@ RUN set -eux; \
   "${BROWSER_XDG_DATA_HOME}" \
   "${CODEX_HOME}" \
   "${PI_CODING_AGENT_DIR}" \
-  "${OPENCODE_CONFIG_DIR}" \
   "${XDG_CONFIG_HOME}" \
   "${XDG_CACHE_HOME}" \
   "${XDG_DATA_HOME}" \

@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { isCodexMessageBody } from "@/components/messages/codex-message";
-import { isOpencodeMessageBody } from "@/components/messages/opencode-message";
 import {
   isPiMessageBody,
   parsePiStoredMessage,
@@ -20,10 +19,6 @@ export function formatLastMessagePreview(
   }
   if (isPiMessageBody(parsed)) {
     const text = extractPiMessageText(parsed);
-    return text ? normalizePreview(text) : renderActivityPlaceholder();
-  }
-  if (isOpencodeMessageBody(parsed)) {
-    const text = extractOpencodeMessageText(parsed);
     return text ? normalizePreview(text) : renderActivityPlaceholder();
   }
   const text = extractGenericText(parsed);
@@ -119,44 +114,6 @@ function extractPiMessageText(value: unknown): string | null {
   }
   if (parsed.kind === "assistant") return parsed.text;
   if (parsed.kind === "user") return parsed.message.content;
-  return null;
-}
-
-function extractOpencodeMessageText(value: unknown): string | null {
-  if (!isOpencodeMessageBody(value)) return null;
-  const record = value as Record<string, unknown>;
-
-  if (record.type === "user_input") {
-    const input = record.input;
-    if (Array.isArray(input)) return formatCodexUserInput(input);
-    return null;
-  }
-
-  if (record.type === "text" || record.type === "reasoning") {
-    const part = record.part;
-    if (!isRecord(part)) return null;
-    const text = part.text;
-    return typeof text === "string" && text.trim().length > 0 ? text : null;
-  }
-
-  if (record.type === "error") {
-    const message = record.message;
-    return typeof message === "string" && message.trim().length > 0
-      ? message
-      : null;
-  }
-
-  const part = record.part;
-  if (isRecord(part) && typeof part.text === "string") {
-    const text = part.text.trim();
-    return text.length > 0 ? text : null;
-  }
-
-  if (typeof record.message === "string") {
-    const message = record.message.trim();
-    return message.length > 0 ? message : null;
-  }
-
   return null;
 }
 

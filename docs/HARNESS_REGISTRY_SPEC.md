@@ -6,11 +6,11 @@ This spec defines a harness architecture that removes most `codex`/`pi` hardcodi
 - `agent-manager`
 - `agent-manager-web`
 
-The goal is to make adding a new harness such as `opencode` mostly mechanical and localized.
+The goal is to make adding a new harness mostly mechanical and localized.
 
 For CLI-backed harnesses, the runtime should also give each harness a clear, stable
 container-level config root when the upstream tool expects one
-for example `CODEX_HOME`, `PI_CODING_AGENT_DIR`, or `OPENCODE_CONFIG_DIR`.
+for example `CODEX_HOME` or `PI_CODING_AGENT_DIR`.
 
 ---
 
@@ -360,7 +360,7 @@ This allows one harness module per folder:
 
 - `src/harnesses/codex/index.ts`
 - `src/harnesses/pi/index.ts`
-- `src/harnesses/opencode/index.ts`
+- `src/harnesses/<id>/index.ts`
 
 Each module exports one default `HarnessDefinition`.
 
@@ -369,15 +369,15 @@ Each module exports one default `HarnessDefinition`.
 Example:
 
 ```ts
-import { OpencodeMessages } from '@/components/messages/opencode-message'
+import { ExampleHarnessMessages } from '@/components/messages/example-harness-message'
 import type { HarnessDefinition } from '../types'
 
 const def: HarnessDefinition = {
-  id: 'opencode',
-  label: 'OpenCode',
+  id: 'example',
+  label: 'Example',
   getModels: () => [],
   getThinkingLevels: () => ['low', 'medium', 'high'],
-  MessageView: OpencodeMessages
+  MessageView: ExampleHarnessMessages
 }
 
 export default def
@@ -407,19 +407,19 @@ It should not coerce or drop unknown values during:
 
 ## 8. Addition Workflow
 
-Target workflow for a new harness `opencode`:
+Target workflow for a new harness:
 
 ### Backend
 
-1. add `agent-go/internal/harness/opencode/`
+1. add `agent-go/internal/harness/<id>/`
 2. implement `registry.Definition`
 3. add or regenerate the harness aggregator
 4. ensure the runtime image includes the required binary/config
 
 ### Frontend
 
-1. add `agent-manager-web/src/harnesses/opencode/index.ts`
-2. add `agent-manager-web/src/components/messages/opencode-message.tsx`
+1. add `agent-manager-web/src/harnesses/<id>/index.ts`
+2. add `agent-manager-web/src/components/messages/<id>-message.tsx`
 
 ### Manager
 

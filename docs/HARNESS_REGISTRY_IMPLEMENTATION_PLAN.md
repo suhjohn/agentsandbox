@@ -85,9 +85,7 @@ This checklist tracks the implementation of the harness registry architecture de
 
 ## Phase 10: New Harness Trial Run
 
-- [x] Add a sample third harness such as `opencode` in `agent-go/internal/harness/opencode/`.
-- [x] Add a matching frontend harness module in `agent-manager-web/src/harnesses/opencode/index.ts`.
-- [x] Add a matching message renderer such as `agent-manager-web/src/components/messages/opencode-message.tsx`.
+- [x] Add a sample third harness in its own backend/frontend/message-renderer modules.
 - [x] Confirm that no manager route/service code requires a harness-specific change.
 - [x] Confirm that runtime wiring stays localized to harness registration plus harness-specific CLI/container setup.
 - [x] Confirm that the only required frontend wiring is the new harness module and renderer.

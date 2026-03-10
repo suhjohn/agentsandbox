@@ -93,7 +93,7 @@ describe("Runtime internal auth -> manager session sync (integration)", () => {
       body: JSON.stringify({
         agentId: agent.id,
         status: "processing",
-        harness: "opencode",
+        harness: "codex",
         modelReasoningEffort: "deliberate",
         title: "Synced session",
       }),
@@ -111,7 +111,7 @@ describe("Runtime internal auth -> manager session sync (integration)", () => {
     };
     expect(body.session.id).toBe(sessionId);
     expect(body.session.agentId).toBe(agent.id);
-    expect(body.session.harness).toBe("opencode");
+    expect(body.session.harness).toBe("codex");
     expect(body.session.modelReasoningEffort).toBe("deliberate");
     expect(body.session.title).toBe("Synced session");
   });
@@ -153,7 +153,7 @@ describe("Runtime internal auth -> manager session sync (integration)", () => {
       body: JSON.stringify({
         agentId: agent.id,
         status: "processing",
-        harness: "opencode",
+        harness: "codex",
       }),
     });
 

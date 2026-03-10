@@ -160,28 +160,6 @@ func TestSessionAPIBlackbox_CreateSessionRejectsNonOpenAIModelForCodex(t *testin
 	}
 }
 
-func TestSessionAPIBlackbox_CreateSessionRejectsUnknownHarness(t *testing.T) {
-	srv := startAgentGoServer(t)
-	defer stopAgentGoServer(t, srv)
-
-	sessionID := newSessionID()
-	auth := sandboxAuthHeader(t, sessionID, "integration-user", srv.secretSeed, srv.agentID)
-
-	res := httpJSON(t, http.MethodPost, srv.baseURL+"/session", auth, map[string]any{
-		"id":      sessionID,
-		"harness": "opencode",
-	})
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", res.StatusCode)
-	}
-
-	payload := decodeJSON[map[string]any](t, res.Body)
-	if !strings.Contains(fmt.Sprintf("%v", payload["error"]), "Invalid harness") {
-		t.Fatalf("unexpected error payload: %#v", payload)
-	}
-}
-
 func TestSessionAPIBlackbox_CreateSessionNormalizesPIModel(t *testing.T) {
 	srv := startAgentGoServer(t)
 	defer stopAgentGoServer(t, srv)

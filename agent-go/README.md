@@ -43,7 +43,7 @@ Use `./scripts/dev.sh ...` directly for everything else, including local run/res
 - SQLite persistence (sessions/messages/events outbox)
 - Manager outbox sync dispatcher
 - A harness registry that dispatches runtime execution by harness ID
-- Codex, OpenCode, and PI harness implementations backed by CLI wrappers
+- Codex and PI harness implementations backed by CLI wrappers
 
 ## Harness CLI model and thinking controls
 
@@ -70,18 +70,6 @@ The runtime exposes model/thinking controls through harness definitions in
 - Thinking level is a first-class field on `PiOptions` as `Thinking`, which emits `--thinking <level>`.
 - The PI RPC helpers also expose thinking controls through `PiRPCSetThinkingLevel(...)` and `PiRPCCycleThinkingLevel(...)`.
 - Supported thinking levels for PI sessions are: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`.
-
-### OpenCode
-
-- Wrapper types live in `agent-go/internal/harness/opencode/cli.go`.
-- Harness definition lives in `agent-go/internal/harness/opencode/definition.go`.
-- The current `anomalyco/opencode` CLI is driven through the `run` subcommand, not root-level prompt flags.
-- The harness executes `opencode run --format json ...` and now forwards the raw JSONL event stream without provider-side compaction. OpenCode currently emits events including `step_start`, `text`, and `step_finish` with token/cost metadata.
-- Session continuation is supported through the OpenCode session ID returned in the streamed events and replayed back through `--session <id>`.
-- Model selection is passed directly through `--model <provider/model>`, using the shared model catalog for validation and normalization.
-- Thinking/reasoning is passed through `--variant <value>`. The runtime validates a simple token format and does not hard-code a short enum because upstream variants are provider-specific.
-- Runtime state is isolated per agent session with XDG directories rooted under the runtime dir, while the managed runtime instructions file is written to `${OPENCODE_CONFIG_DIR}/AGENTS.md`.
-- The harness writes a managed OpenCode config at `${RUNTIME_DIR}/opencode/config.json` with `{"permission":"allow"}` and exports `OPENCODE_CONFIG` to force allow-all permissions for non-interactive `opencode run` sessions.
 
 ## Standalone binary
 
@@ -114,12 +102,11 @@ so this helper will restart that `agent-server` service in place when available.
 
 ## Docker image (source-driven server launcher)
 
-The image installs all three CLI harness binaries during build: `codex`, `pi`, and `opencode`.
+The image installs both CLI harness binaries during build: `codex` and `pi`.
 The container runtime also exports harness-specific config roots:
 
 - `CODEX_HOME`
 - `PI_CODING_AGENT_DIR`
-- `OPENCODE_CONFIG_DIR`
 
 Build with the repository root as context:
 

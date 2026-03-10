@@ -152,7 +152,7 @@ describe("POST /agents/:agentId/session (integration)", () => {
       body: JSON.stringify({
         message: "hi",
         title: "Say hi",
-        harness: "opencode",
+        harness: "codex",
         model: "openrouter/qwen-coder",
         modelReasoningEffort: "deliberate",
       }),
@@ -170,7 +170,7 @@ describe("POST /agents/:agentId/session (integration)", () => {
     expect(observed[0]?.body).toEqual({
       id: body.session.id,
       title: "Say hi",
-      harness: "opencode",
+      harness: "codex",
       model: "openrouter/qwen-coder",
       modelReasoningEffort: "deliberate",
     });

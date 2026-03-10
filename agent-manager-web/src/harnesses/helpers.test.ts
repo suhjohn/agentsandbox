@@ -26,7 +26,7 @@ const testHarness: HarnessDefinition = {
 
 describe('harness helpers', () => {
   it('preserves arbitrary non-empty harness ids', () => {
-    expect(normalizeHarnessId(' opencode ')).toBe('opencode')
+    expect(normalizeHarnessId(' custom-harness ')).toBe('custom-harness')
     expect(normalizeHarnessId('')).toBeUndefined()
   })
 

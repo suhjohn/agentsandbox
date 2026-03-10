@@ -39,7 +39,6 @@ func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext 
 	if piDir == "" {
 		piDir = envString("PI_CODING_AGENT_DIR", filepath.Join(strings.TrimSpace(cfg.AgentHome), ".pi"))
 	}
-	opencodeConfigDir := envString("OPENCODE_CONFIG_DIR", filepath.Join(strings.TrimSpace(cfg.RuntimeDir), "opencode"))
 	toolsDir := effectiveWorkspaceToolsDir(cfg)
 
 	return harnessregistry.RuntimeContext{
@@ -51,7 +50,6 @@ func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext 
 		DefaultWorkingDir:          strings.TrimSpace(cfg.DefaultWorkingDir),
 		CodexHome:                  codexHome,
 		PIDir:                      piDir,
-		OpencodeConfigDir:          opencodeConfigDir,
 		ToolsDir:                   toolsDir,
 		ToolReadmes:                listToolReadmes(toolsDir),
 		Display:                    strings.TrimSpace(os.Getenv("DISPLAY")),
