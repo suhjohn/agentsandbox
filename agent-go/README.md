@@ -80,7 +80,7 @@ The runtime exposes model/thinking controls through harness definitions in
 - Session continuation is supported through the OpenCode session ID returned in the streamed events and replayed back through `--session <id>`.
 - Model selection is passed directly through `--model <provider/model>`, using the shared model catalog for validation and normalization.
 - Thinking/reasoning is passed through `--variant <value>`. The runtime validates a simple token format and does not hard-code a short enum because upstream variants are provider-specific.
-- Runtime state is isolated per agent session with XDG directories rooted under the runtime dir, while the managed runtime instructions file is written to `runtime/opencode/AGENTS.md` and exposed through `OPENCODE_CONFIG_DIR`.
+- Runtime state is isolated per agent session with XDG directories rooted under the runtime dir, while the managed runtime instructions file is written to `${OPENCODE_CONFIG_DIR}/AGENTS.md`.
 
 ## Standalone binary
 
@@ -114,6 +114,11 @@ so this helper will restart that `agent-server` service in place when available.
 ## Docker image (source-driven server launcher)
 
 The image installs all three CLI harness binaries during build: `codex`, `pi`, and `opencode`.
+The container runtime also exports harness-specific config roots:
+
+- `CODEX_HOME`
+- `PI_CODING_AGENT_DIR`
+- `OPENCODE_CONFIG_DIR`
 
 Build with the repository root as context:
 

@@ -8,6 +8,10 @@ This spec defines a harness architecture that removes most `codex`/`pi` hardcodi
 
 The goal is to make adding a new harness such as `opencode` mostly mechanical and localized.
 
+For CLI-backed harnesses, the runtime should also give each harness a clear, stable
+container-level config root when the upstream tool expects one
+for example `CODEX_HOME`, `PI_CODING_AGENT_DIR`, or `OPENCODE_CONFIG_DIR`.
+
 ---
 
 ## 1. Goals

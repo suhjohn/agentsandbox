@@ -151,7 +151,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - harness label from the active harness definition
   - model combobox
   - thinking-level dropdown persisted in panel config as `sessionModelReasoningEffort`; it uses a custom fixed-position floating menu instead of `Popover`, and flips above the trigger when there is not enough room below
-  - harness behavior is registry-driven from `src/harnesses/registry.ts`, which eagerly loads `src/harnesses/*/index.ts`; built-in harnesses currently include `codex` and `pi`
+  - harness behavior is registry-driven from `src/harnesses/registry.ts`, which eagerly loads `src/harnesses/*/index.ts`; built-in harnesses currently include `codex`, `opencode`, and `pi`
   - valid thinking options are supplied by the active harness definition rather than hardcoded in the panel
   - session config preserves arbitrary non-empty harness IDs from the runtime; unknown harnesses use a fallback message renderer instead of being coerced to `codex`
   - composer create/send/reset calls forward both `model` and `modelReasoningEffort` to the runtime session API

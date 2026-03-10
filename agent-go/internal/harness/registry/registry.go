@@ -44,6 +44,7 @@ type RuntimeContext struct {
 	DefaultWorkingDir          string
 	CodexHome                  string
 	PIDir                      string
+	OpencodeConfigDir          string
 	ToolsDir                   string
 	ToolReadmes                []string
 	Display                    string

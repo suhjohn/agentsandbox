@@ -67,7 +67,7 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 	sessionRoot := sessionRuntimeDir(req.RuntimeDir, req.Session.ID)
 	cli := *h.CLI
 	cli.Env = append(append([]string(nil), h.CLI.Env...),
-		"OPENCODE_CONFIG_DIR="+runtimeConfigDir(req.RuntimeDir),
+		"OPENCODE_CONFIG_DIR="+resolveOpencodeConfigDir(h.CLI.Env, req.RuntimeDir),
 		"OPENCODE_DISABLE_AUTOUPDATE=true",
 		"XDG_CONFIG_HOME="+filepath.Join(sessionRoot, "xdg", "config"),
 		"XDG_DATA_HOME="+filepath.Join(sessionRoot, "xdg", "data"),
@@ -131,7 +131,7 @@ func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
 	}
 	_, err := registry.EnsureManagedContextFile(registry.ManagedFileSpec{
 		Harness: h.ID(),
-		Path:    filepath.Join(runtimeConfigDir(runtimeDir), "AGENTS.md"),
+		Path:    filepath.Join(resolveRuntimeConfigDir(ctx.RuntimeContext), "AGENTS.md"),
 		Version: 1,
 		Content: renderAgentsContent(ctx.RuntimeContext),
 	})
@@ -145,7 +145,7 @@ func renderAgentsContent(ctx registry.RuntimeContext) string {
 	content.WriteString("- Runtime state root: " + strings.TrimSpace(ctx.RootDir) + "\n")
 	content.WriteString("- Home/workspace root: " + strings.TrimSpace(ctx.AgentHome) + "\n")
 	content.WriteString("- Agent identity: AGENT_ID=" + strings.TrimSpace(ctx.AgentID) + "\n")
-	content.WriteString("- OpenCode runtime config dir: " + runtimeConfigDir(ctx.RuntimeDir) + "\n")
+	content.WriteString("- OpenCode runtime config dir: " + resolveRuntimeConfigDir(ctx) + "\n")
 	if workingDir := strings.TrimSpace(ctx.DefaultWorkingDir); workingDir != "" {
 		content.WriteString("- Default working directory: " + workingDir + "\n")
 	}
@@ -324,6 +324,25 @@ func firstErrorMessage(value any) string {
 
 func runtimeConfigDir(runtimeDir string) string {
 	return filepath.Join(strings.TrimSpace(runtimeDir), "opencode")
+}
+
+func resolveRuntimeConfigDir(ctx registry.RuntimeContext) string {
+	if dir := strings.TrimSpace(ctx.OpencodeConfigDir); dir != "" {
+		return dir
+	}
+	return runtimeConfigDir(ctx.RuntimeDir)
+}
+
+func resolveOpencodeConfigDir(env []string, runtimeDir string) string {
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok && strings.EqualFold(strings.TrimSpace(key), "OPENCODE_CONFIG_DIR") {
+			if trimmed := strings.TrimSpace(value); trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return runtimeConfigDir(runtimeDir)
 }
 
 func sessionRuntimeDir(runtimeDir, sessionID string) string {

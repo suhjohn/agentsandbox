@@ -114,6 +114,9 @@ func runServe(args []string) error {
 	if strings.TrimSpace(cfg.PIDir) != "" {
 		app.pi.Env = append(app.pi.Env, "PI_CODING_AGENT_DIR="+strings.TrimSpace(cfg.PIDir))
 	}
+	if value := strings.TrimSpace(os.Getenv("OPENCODE_CONFIG_DIR")); value != "" {
+		app.opencode.Env = append(app.opencode.Env, "OPENCODE_CONFIG_DIR="+value)
+	}
 	app.harnesses, err = harnessall.Build(app.codex, app.pi, app.opencode, harnessall.Config{
 		DefaultWorkingDir: cfg.DefaultWorkingDir,
 		RuntimeDir:        cfg.RuntimeDir,
