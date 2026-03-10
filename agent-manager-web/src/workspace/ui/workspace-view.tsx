@@ -95,6 +95,7 @@ import type {
 } from '@/coordinator-actions/types'
 import { Loader } from '@/components/loader'
 import { formatLastMessagePreview } from '@/utils/message-preview'
+import { UserIdentity } from '@/components/user-identity'
 
 const SESSIONS_PANEL_OPEN_COOKIE = 'agentManagerWeb.workspaceSessionsPanelOpen'
 const SESSIONS_PANEL_WIDTH_COOKIE =
@@ -169,6 +170,7 @@ type UserListItem = {
   readonly id: string
   readonly name: string
   readonly email: string
+  readonly avatar: string | null
 }
 
 const SESSION_TIME_RANGE_OPTIONS: ReadonlyArray<{
@@ -399,8 +401,12 @@ function unwrapUsers (value: unknown): readonly UserListItem[] {
       const id = typeof row.id === 'string' ? row.id.trim() : ''
       const name = typeof row.name === 'string' ? row.name.trim() : ''
       const email = typeof row.email === 'string' ? row.email.trim() : ''
+      const avatar =
+        typeof row.avatar === 'string' && row.avatar.trim().length > 0
+          ? row.avatar
+          : null
       if (id.length === 0 || name.length === 0) continue
-      result.push({ id, name, email })
+      result.push({ id, name, email, avatar })
     }
     return result
   }
@@ -852,6 +858,15 @@ export function WorkspaceView () {
     }
   })
   const users = usersQuery.data ?? []
+  const userById = useMemo(() => {
+    const byId = new Map<string, UserListItem>()
+    for (const user of users) {
+      const id = user.id.trim()
+      if (id.length === 0) continue
+      byId.set(id, user)
+    }
+    return byId
+  }, [users])
   const userNameById = useMemo(() => {
     const byId = new Map<string, string>()
     for (const user of users) {
@@ -1650,12 +1665,44 @@ export function WorkspaceView () {
                                     : imageNameById.get(group.key) ??
                                       group.label
                                   : group.label
+                              const createdByHeaderUser =
+                                sessionGroupBy === 'createdBy'
+                                  ? group.key !== null
+                                    ? userById.get(group.key) ?? {
+                                        id: group.key,
+                                        name:
+                                          groupLabel.trim().length > 0
+                                            ? groupLabel
+                                            : group.key,
+                                        email: '',
+                                        avatar: null
+                                      }
+                                    : {
+                                        id: '__unknown-user__',
+                                        name:
+                                          groupLabel.trim().length > 0
+                                            ? groupLabel
+                                            : 'Unknown user',
+                                        email: '',
+                                        avatar: null
+                                      }
+                                  : null
                               return (
                                 <div key={group.key ?? '__null__'}>
-                                  <div className='px-3 py-1.5 border-b bg-surface-2/40 text-[10px] uppercase tracking-wide text-text-tertiary flex items-center justify-between'>
-                                    <span className='truncate'>
-                                      {groupLabel}
-                                    </span>
+                                  <div className='px-3 py-1.5 border-b bg-surface-2/40 text-text-tertiary flex items-center justify-between gap-3'>
+                                    {createdByHeaderUser ? (
+                                      <UserIdentity
+                                        user={createdByHeaderUser}
+                                        className='min-w-0'
+                                        avatarClassName='h-5 w-5'
+                                        avatarTextClassName='text-[10px]'
+                                        nameClassName='truncate text-xs text-text-secondary'
+                                      />
+                                    ) : (
+                                      <span className='truncate text-[10px] uppercase tracking-wide'>
+                                        {groupLabel}
+                                      </span>
+                                    )}
                                     <span>{group.sessions.length}</span>
                                   </div>
                                   <div className='divide-y divide-border/60'>

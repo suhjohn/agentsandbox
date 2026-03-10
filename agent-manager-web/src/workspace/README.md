@@ -87,6 +87,7 @@ This document describes how pane and panel behavior flows through the workspace 
   - Session rows show an archive action button on hover; archiving sets `isArchived = true` via `PUT /session/{id}` and refreshes list/group queries.
   - Filter menu fields: `image name` (stored/query-backed by `imageId`), `agentId`, `createdBy`, `archived` (`false` default, `true`, `all`), `status`, `updatedAt` range, `createdAt` range.
   - Group-by menu options: `image name` (`imageId` key with display joined to image names), `createdBy`, `status` (or none).
+  - `createdBy` group headers resolve through the same shared avatar + display-name UI used by message sender headers; when user metadata is missing they fall back to a synthesized avatar and the raw group label/ID.
 - Clicking a listed session opens/replaces the focused pane with `agent_detail` in `session_detail` tab for that session (`panel/open` with `placement: "self"`). The hover detail card provides explicit open targets for `self`/`right`/`bottom`.
 
 ## Event -> Action -> State Flow

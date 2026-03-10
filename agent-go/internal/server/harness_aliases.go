@@ -22,7 +22,9 @@ var NewCodexCLI = codexh.NewCodexCLI
 
 type OpencodeCLI = opencodeh.OpencodeCLI
 
-type OpencodeOptions = opencodeh.OpencodeOptions
+type OpencodeOptions = opencodeh.OpencodeRunOptions
+
+type OpencodeRunOptions = opencodeh.OpencodeRunOptions
 
 var NewOpencodeCLI = opencodeh.NewOpencodeCLI
 
