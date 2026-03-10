@@ -33,7 +33,8 @@ import {
   WORKSPACE_RUN_COMMAND_EVENT,
   type WorkspaceCancelStreamEventDetail,
   type WorkspaceRunCommandEventDetail,
-  WORKSPACE_TOGGLE_ALL_COLLAPSIBLES_EVENT
+  WORKSPACE_TOGGLE_ALL_COLLAPSIBLES_EVENT,
+  type WorkspaceToggleAllCollapsiblesEventDetail
 } from '../keybindings/events'
 import {
   WorkspaceCommandPalette,
@@ -59,18 +60,27 @@ function getWindowIndexArg (args: unknown): number | null {
   return Math.trunc(index)
 }
 
-function toggleAllCollapsibles (): void {
-  const collapsibles = document.querySelectorAll('[data-collapsible-toggle-all]')
+function toggleAllCollapsibles (leafId: string | null): void {
+  const scope =
+    leafId === null
+      ? document
+      : document.querySelector<HTMLElement>(`[data-workspace-leaf-id="${leafId}"]`)
+  if (!scope) return
+
+  const collapsibles = scope.querySelectorAll('[data-collapsible-toggle-all]')
   if (collapsibles.length === 0) return
 
-  const openCollapsibles = document.querySelectorAll(
+  const openCollapsibles = scope.querySelectorAll(
     '[data-collapsible-toggle-all][data-collapsible-open="true"]'
   )
   const nextOpen = openCollapsibles.length !== collapsibles.length
   window.dispatchEvent(
-    new CustomEvent(WORKSPACE_TOGGLE_ALL_COLLAPSIBLES_EVENT, {
-      detail: { open: nextOpen }
-    })
+    new CustomEvent<WorkspaceToggleAllCollapsiblesEventDetail>(
+      WORKSPACE_TOGGLE_ALL_COLLAPSIBLES_EVENT,
+      {
+        detail: leafId ? { open: nextOpen, leafId } : { open: nextOpen }
+      }
+    )
   )
 }
 
@@ -324,7 +334,7 @@ function WorkspaceHotkeysLayerImpl (
           return
         }
         case 'workspace.collapsibles.toggle_all': {
-          toggleAllCollapsibles()
+          toggleAllCollapsibles(focusedLeafId)
           return
         }
         case 'workspace.coordinator.open': {

@@ -15,6 +15,11 @@ export interface WorkspacePaneZoomToggleEventDetail {
   readonly leafId?: string
 }
 
+export interface WorkspaceToggleAllCollapsiblesEventDetail {
+  readonly open?: boolean
+  readonly leafId?: string
+}
+
 export interface WorkspaceRunCommandEventDetail {
   readonly commandId: WorkspaceCommandId
   readonly args?: unknown

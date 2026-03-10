@@ -43,7 +43,7 @@ This directory contains components for rendering agent messages from different a
 
 ### Collapsible Behavior
 
-- All collapsibles respond to global toggle events (`collapsible:toggle-all`)
+- Workspace collapsibles respond to toggle events (`collapsible:toggle-all`) scoped to the active workspace leaf when a `leafId` is present
 - Content background: `bg-surface-3`
 - Content left inset for tool/bash bodies: `ml-4`
 - Content padding: `px-3 py-2`

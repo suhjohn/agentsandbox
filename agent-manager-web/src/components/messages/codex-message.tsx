@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import type { GetSessionId200MessagesItem } from '@/api/generated/agent'
 import type {
   CommandExecutionItem,
@@ -21,6 +21,7 @@ import {
 import { MessageSenderHeader } from '@/components/messages/message-sender-header'
 import { MessageTextBlock } from '@/components/messages/message-text-block'
 import { StatusIndicator } from '@/components/messages/status-indicator'
+import type { WorkspaceToggleAllCollapsiblesEventDetail } from '@/workspace/keybindings/events'
 
 type CodexUserInputEvent = {
   readonly type: 'user_input'
@@ -147,11 +148,22 @@ function formatMaybeJson (value: unknown): string | null {
   return safeJsonStringify(value)
 }
 
+const CollapsibleScopeContext = createContext<string | null>(null)
+
 function useCollapsibleToggleAll (initial = false) {
+  const leafId = useContext(CollapsibleScopeContext)
   const [isOpen, setIsOpen] = useState(initial)
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ open?: boolean }>).detail
+      const detail = (
+        event as CustomEvent<WorkspaceToggleAllCollapsiblesEventDetail>
+      ).detail
+      if (
+        typeof detail?.leafId === 'string' &&
+        detail.leafId !== leafId
+      ) {
+        return
+      }
       if (detail && typeof detail.open === 'boolean') {
         setIsOpen(detail.open)
       }
@@ -618,10 +630,11 @@ function parseCodexBody (raw: unknown): CodexMessageBody | null {
 export function CodexMessages (props: {
   readonly messages: readonly GetSessionId200MessagesItem[]
   readonly senderById?: Readonly<Record<string, HarnessMessageSender>>
+  readonly leafId?: string
 }) {
   const displayMessages = buildDisplayMessages(props.messages)
   return (
-    <>
+    <CollapsibleScopeContext.Provider value={props.leafId ?? null}>
       {displayMessages.map(({ key, message, body }, index) => (
         <CodexMessage
           key={key}
@@ -631,7 +644,7 @@ export function CodexMessages (props: {
           sender={getMessageSender(message, props.senderById)}
         />
       ))}
-    </>
+    </CollapsibleScopeContext.Provider>
   )
 }
 

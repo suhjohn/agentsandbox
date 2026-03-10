@@ -695,6 +695,7 @@ function LeafViewImpl (props: { readonly leaf: LeafNode }) {
   return (
     <div
       ref={leafRef}
+      data-workspace-leaf-id={leafId}
       data-workspace-leaf-focused={isFocused ? 'true' : 'false'}
       className={cn(
         'relative h-full w-full min-h-0 min-w-0 flex flex-col bg-surface-1',

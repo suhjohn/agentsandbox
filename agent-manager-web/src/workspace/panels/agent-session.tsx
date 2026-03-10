@@ -1221,6 +1221,7 @@ function formatElapsed (startTimestamp: string | null): string {
 function SessionMessages (props: {
   readonly messages: readonly GetSessionId200MessagesItem[]
   readonly harness: HarnessDefinition
+  readonly leafId: string
 }) {
   const auth = useAuth()
   const MessageView = props.harness.MessageView
@@ -1275,7 +1276,13 @@ function SessionMessages (props: {
     )
   }, [senderIds, sendersQuery.data])
 
-  return <MessageView messages={props.messages} senderById={senderById} />
+  return (
+    <MessageView
+      messages={props.messages}
+      senderById={senderById}
+      leafId={props.leafId}
+    />
+  )
 }
 
 function useScrollParent (ref: React.RefObject<HTMLElement | null>) {
@@ -2453,7 +2460,11 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
               )
             ) : (
               <>
-                <SessionMessages messages={messages} harness={messageHarness} />
+                <SessionMessages
+                  messages={messages}
+                  harness={messageHarness}
+                  leafId={props.runtime.leafId}
+                />
                 {isWorking ? (
                   <div className='pt-1'>
                     <Loader label={workingLabel} />

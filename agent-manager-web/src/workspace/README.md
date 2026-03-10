@@ -128,6 +128,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - `Option/Alt+Shift+L` (coordinator sessions list)
   - `Cmd/Ctrl+.` (PTT)
 - `Escape` cancellation and `Cmd/Ctrl+O` collapsible toggling are routed through workspace commands rather than pane-local `onKeyDown` handlers.
+- `Cmd/Ctrl+O` is leaf-scoped: the hotkey layer inspects collapsibles inside the focused leaf only and dispatches the target `leafId`, so other workspace panes do not expand/collapse in sync.
 - Stream-cancel commands dispatch the focused `leafId`, so `Escape` / `Prefix Escape` only interrupt the active run in the currently focused pane instead of every open streaming panel.
 - Pane expand hotkey (`pane.zoom.toggle`) dispatches `agent-manager-web:workspace-pane-zoom-toggle`; `LeafView` listens and toggles fullscreen for the targeted/focused leaf.
 
@@ -169,6 +170,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
 - Focused pane visual treatment is in pane chrome (grab-handle accent + stronger border) instead of a dedicated top-border accent line.
 - Pane header background is focus-aware: focused pane headers use a lighter surface, unfocused pane headers remain darker.
 - Pane focus (`leaf/focus`) is dispatched from both pane chrome (`LeafView`) and panel body host (`PanelHost`) pointer interactions, so clicking panel content activates focused-pane chrome.
+- Leaf root elements expose `data-workspace-leaf-id` so pane-scoped commands can resolve DOM state for the focused panel.
 - Pane header includes a fullscreen control that opens the active panel in an edge-to-edge viewport dialog (`inset: 0`, full `dvh`, no inset margins/radius); panel content is moved from the leaf body slot into the dialog slot while open, then returns to the leaf when closed.
 - Top bar includes a horizontal window-chip strip (stable index order from `Object.keys(windowsById)`), click-to-activate for each window, an inline close button on each chip (disabled for the last remaining window), and a create-window button.
 - `pane/rotate` rotates panel instances across leaves and then re-focuses the leaf that now contains the previously focused panel instance.

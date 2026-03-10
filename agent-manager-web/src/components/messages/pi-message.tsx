@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import type { GetSessionId200MessagesItem } from '@/api/generated/agent'
 import type { AgentSessionEvent } from '@mariozechner/pi-coding-agent'
 import type { UserInput } from '@openai/codex-sdk'
@@ -12,6 +12,7 @@ import {
 import { MessageSenderHeader } from '@/components/messages/message-sender-header'
 import { MessageTextBlock } from '@/components/messages/message-text-block'
 import { StatusIndicator } from '@/components/messages/status-indicator'
+import type { WorkspaceToggleAllCollapsiblesEventDetail } from '@/workspace/keybindings/events'
 
 type StoredSessionMessage = { readonly id: string; readonly body: unknown }
 type PiUserInputEvent = {
@@ -96,6 +97,8 @@ function formatUserInput (input: readonly UserInput[]): string | null {
   const content = parts.join('\n\n').trim()
   return content.length > 0 ? content : null
 }
+
+const CollapsibleScopeContext = createContext<string | null>(null)
 
 export function isPiMessageBody (value: unknown): value is PiMessageBody {
   if (isPiUserInputEvent(value)) return true
@@ -377,10 +380,19 @@ function extractToolCalls (message: unknown): ToolCallItem[] {
 }
 
 function useCollapsibleToggleAll (initial = false) {
+  const leafId = useContext(CollapsibleScopeContext)
   const [isOpen, setIsOpen] = useState(initial)
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ open?: boolean }>).detail
+      const detail = (
+        event as CustomEvent<WorkspaceToggleAllCollapsiblesEventDetail>
+      ).detail
+      if (
+        typeof detail?.leafId === 'string' &&
+        detail.leafId !== leafId
+      ) {
+        return
+      }
       if (detail && typeof detail.open === 'boolean') {
         setIsOpen(detail.open)
       }
@@ -644,6 +656,7 @@ function parsePiBody (raw: unknown): PiMessageBody | null {
 export function PiMessages (props: {
   readonly messages: readonly GetSessionId200MessagesItem[]
   readonly senderById?: Readonly<Record<string, HarnessMessageSender>>
+  readonly leafId?: string
 }) {
   // First pass: build map of toolCallId → tool execution result
   const toolResultsByCallId = new Map<string, ToolExecutionInfo>()
@@ -728,7 +741,7 @@ export function PiMessages (props: {
   }
 
   return (
-    <>
+    <CollapsibleScopeContext.Provider value={props.leafId ?? null}>
       {displayMessages.map(({ key, message, body }, index) => {
         return (
           <PiMessage
@@ -741,7 +754,7 @@ export function PiMessages (props: {
           />
         )
       })}
-    </>
+    </CollapsibleScopeContext.Provider>
   )
 }
 

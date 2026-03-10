@@ -18,6 +18,7 @@ export type HarnessMessageSender = {
 export type HarnessMessageProps = {
   readonly messages: readonly GetSessionId200MessagesItem[]
   readonly senderById?: Readonly<Record<string, HarnessMessageSender>>
+  readonly leafId?: string
 }
 
 export type HarnessDefinition = {
