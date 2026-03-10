@@ -1399,225 +1399,6 @@ export function WorkspaceView () {
         onSetSessionsPanelOpen={setSessionPanelOpenPersisted}
         onFocusSessionsFilter={focusSessionFilters}
       />
-      <TooltipProvider delayDuration={250}>
-        <div className='h-10 flex items-center gap-1 px-3 border-b bg-surface-1'>
-          <TopBarTooltip
-            label={
-              sessionPanelOpen
-                ? 'Close sessions side panel'
-                : 'Open sessions side panel'
-            }
-            shortcut={sessionsPanelToggleShortcut}
-          >
-            <Button
-              variant='icon'
-              size='icon'
-              aria-label={
-                sessionPanelOpen
-                  ? 'Close sessions side panel'
-                  : 'Open sessions side panel'
-              }
-              onClick={() => setSessionPanelOpenPersisted(!sessionPanelOpen)}
-            >
-              {sessionPanelOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
-            </Button>
-          </TopBarTooltip>
-          <div className='flex items-center'>
-            <img
-              src='/src/assets/cube-rotating.svg'
-              alt='Cube'
-              className='h-6 w-6'
-            />
-            <p className='text-xs font-semibold text-text-secondary'>
-              AgentSandbox
-            </p>
-          </div>
-          <div className='ml-2 flex min-w-0 items-center gap-1'>
-            <div className='flex min-w-0 max-w-[32rem] items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'>
-              {windows.map(window => (
-                <div
-                  key={window.id}
-                  className={cn(
-                    'group h-6 rounded-md text-xs whitespace-nowrap flex items-center overflow-hidden',
-                    window.active
-                      ? 'bg-surface-4'
-                      : 'bg-surface-1 hover:bg-surface-3'
-                  )}
-                >
-                  <TopBarTooltip
-                    label={`Switch to window ${window.index}: ${window.name}`}
-                    shortcut={getPrefixShortcut('window.select_index', {
-                      args: { index: window.index }
-                    })}
-                  >
-                    <Button
-                      variant='ghost'
-                      className={cn(
-                        'h-full min-w-0 px-2 flex items-center rounded-none bg-transparent hover:bg-transparent',
-                        window.active
-                          ? 'text-text-primary'
-                          : 'text-text-secondary'
-                      )}
-                      aria-label={`Switch to window ${window.index}: ${window.name}`}
-                      onClick={() =>
-                        store.dispatch({
-                          type: 'window/activate',
-                          windowId: window.id
-                        })
-                      }
-                    >
-                      <span className='font-mono text-[10px] opacity-75 mr-1'>
-                        {window.index}
-                      </span>
-                      <span className='truncate'>{window.name}</span>
-                    </Button>
-                  </TopBarTooltip>
-                  <TopBarTooltip
-                    label={
-                      windows.length <= 1
-                        ? 'Cannot close the last window'
-                        : `Close window ${window.index}: ${window.name}`
-                    }
-                    shortcut={
-                      windows.length <= 1
-                        ? null
-                        : window.active
-                        ? getPrefixShortcut('window.close')
-                        : null
-                    }
-                    disabled={windows.length <= 1}
-                  >
-                    <Button
-                      variant='icon'
-                      size='icon'
-                      disabled={windows.length <= 1}
-                      className={cn(
-                        'opacity-0 group-hover:opacity-100 rounded-sm hover:bg-surface-4',
-                        window.active && 'opacity-100'
-                      )}
-                      aria-label={`Close window ${window.index}: ${window.name}`}
-                      onClick={event => {
-                        event.stopPropagation()
-                        store.dispatch({
-                          type: 'window/close',
-                          windowId: window.id
-                        })
-                      }}
-                    >
-                      <X className='!h-3 !w-3' />
-                    </Button>
-                  </TopBarTooltip>
-                </div>
-              ))}
-            </div>
-            <TopBarTooltip
-              label='Create window'
-              shortcut={createWindowShortcut}
-            >
-              <Button
-                variant='icon'
-                size='icon'
-                aria-label='Create window'
-                onClick={() => {
-                  store.dispatch({ type: 'window/create' })
-                }}
-              >
-                <Plus />
-              </Button>
-            </TopBarTooltip>
-          </div>
-          <div className='flex-1' />
-          <TopBarTooltip
-            label='Open key bindings'
-            shortcut={openKeyBindingsShortcut}
-          >
-            <Button
-              variant='icon'
-              size='icon'
-              aria-label='Open key bindings'
-              onClick={openKeyBindings}
-            >
-              <Keyboard />
-            </Button>
-          </TopBarTooltip>
-          <TopBarTooltip
-            label='Open coordinator'
-            shortcut={openCoordinatorShortcut}
-          >
-            <Button
-              variant='icon'
-              size='icon'
-              aria-label='Open coordinator'
-              onClick={openCoordinator}
-            >
-              <Bot />
-            </Button>
-          </TopBarTooltip>
-          <TopBarTooltip
-            label='Split (side-by-side)'
-            shortcut={splitRightShortcut}
-            disabled={!focusedLeafId}
-          >
-            <Button
-              variant='icon'
-              size='icon'
-              disabled={!focusedLeafId}
-              aria-label='Split (side-by-side)'
-              onClick={() => {
-                if (!focusedLeafId) return
-                store.dispatch({
-                  type: 'leaf/split',
-                  leafId: focusedLeafId,
-                  dir: 'row'
-                })
-              }}
-            >
-              <Columns2 />
-            </Button>
-          </TopBarTooltip>
-          <TopBarTooltip
-            label='Stack (top-to-bottom)'
-            shortcut={splitDownShortcut}
-            disabled={!focusedLeafId}
-          >
-            <Button
-              variant='icon'
-              size='icon'
-              disabled={!focusedLeafId}
-              aria-label='Stack (top-to-bottom)'
-              onClick={() => {
-                if (!focusedLeafId) return
-                store.dispatch({
-                  type: 'leaf/split',
-                  leafId: focusedLeafId,
-                  dir: 'col'
-                })
-              }}
-            >
-              <Rows2 />
-            </Button>
-          </TopBarTooltip>
-          <TopBarTooltip
-            label='Close focused pane'
-            shortcut={closePaneShortcut}
-            disabled={!canCloseFocused}
-          >
-            <Button
-              variant='icon'
-              size='icon'
-              disabled={!canCloseFocused}
-              aria-label='Close focused pane'
-              onClick={() => {
-                if (!focusedLeafId) return
-                store.dispatch({ type: 'leaf/close', leafId: focusedLeafId })
-              }}
-            >
-              <X />
-            </Button>
-          </TopBarTooltip>
-        </div>
-      </TooltipProvider>
-
       <div className='flex-1 min-h-0 flex'>
         {sessionPanelOpen ? (
           <div
@@ -1633,7 +1414,48 @@ export function WorkspaceView () {
                 </div>
               ) : (
                 <>
-                  <div className='p-3 border-b space-y-2'>
+                  <TooltipProvider delayDuration={250}>
+                    <div className='justify-between flex items-center px-3 py-2'>
+                      <div className='flex items-center gap-1'>
+                        <img
+                          src='/src/assets/cube-rotating.svg'
+                          alt='Cube'
+                          className='h-7 w-7'
+                        />
+                        <p className='text-sm font-semibold text-text-secondary'>
+                          AgentSandbox
+                        </p>
+                      </div>
+                      <TopBarTooltip
+                        label={
+                          sessionPanelOpen
+                            ? 'Close sessions side panel'
+                            : 'Open sessions side panel'
+                        }
+                        shortcut={sessionsPanelToggleShortcut}
+                      >
+                        <Button
+                          variant='icon'
+                          size='icon'
+                          aria-label={
+                            sessionPanelOpen
+                              ? 'Close sessions side panel'
+                              : 'Open sessions side panel'
+                          }
+                          onClick={() =>
+                            setSessionPanelOpenPersisted(!sessionPanelOpen)
+                          }
+                        >
+                          {sessionPanelOpen ? (
+                            <PanelLeftClose />
+                          ) : (
+                            <PanelLeftOpen />
+                          )}
+                        </Button>
+                      </TopBarTooltip>
+                    </div>
+                  </TooltipProvider>
+                  <div className='px-3 border-b space-y-2'>
                     <Button
                       size='sm'
                       className='w-full justify-center'
@@ -2044,6 +1866,225 @@ export function WorkspaceView () {
         ) : null}
 
         <div className='flex-1 min-h-0 min-w-0'>
+          <TooltipProvider delayDuration={250}>
+            <div className='h-10 flex items-center gap-1 px-3 border-b bg-surface-1'>
+              <div className='flex min-w-0 items-center gap-1'>
+                {!sessionPanelOpen && (
+                  <TopBarTooltip
+                    label={
+                      sessionPanelOpen
+                        ? 'Close sessions side panel'
+                        : 'Open sessions side panel'
+                    }
+                    shortcut={sessionsPanelToggleShortcut}
+                  >
+                    <Button
+                      variant='icon'
+                      size='icon'
+                      aria-label={
+                        sessionPanelOpen
+                          ? 'Close sessions side panel'
+                          : 'Open sessions side panel'
+                      }
+                      onClick={() =>
+                        setSessionPanelOpenPersisted(!sessionPanelOpen)
+                      }
+                    >
+                      {sessionPanelOpen ? (
+                        <PanelLeftClose />
+                      ) : (
+                        <PanelLeftOpen />
+                      )}
+                    </Button>
+                  </TopBarTooltip>
+                )}
+                <div className='flex min-w-0 max-w-[32rem] items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'>
+                  {windows.map(window => (
+                    <div
+                      key={window.id}
+                      className={cn(
+                        'group h-6 rounded-md text-xs whitespace-nowrap flex items-center overflow-hidden',
+                        window.active
+                          ? 'bg-surface-4'
+                          : 'bg-surface-1 hover:bg-surface-3'
+                      )}
+                    >
+                      <TopBarTooltip
+                        label={`Switch to window ${window.index}: ${window.name}`}
+                        shortcut={getPrefixShortcut('window.select_index', {
+                          args: { index: window.index }
+                        })}
+                      >
+                        <Button
+                          variant='ghost'
+                          className={cn(
+                            'h-full min-w-0 px-2 flex items-center rounded-none bg-transparent hover:bg-transparent',
+                            window.active
+                              ? 'text-text-primary'
+                              : 'text-text-secondary'
+                          )}
+                          aria-label={`Switch to window ${window.index}: ${window.name}`}
+                          onClick={() =>
+                            store.dispatch({
+                              type: 'window/activate',
+                              windowId: window.id
+                            })
+                          }
+                        >
+                          <span className='font-mono text-[10px] opacity-75 mr-1'>
+                            {window.index}
+                          </span>
+                          <span className='truncate'>{window.name}</span>
+                        </Button>
+                      </TopBarTooltip>
+                      <TopBarTooltip
+                        label={
+                          windows.length <= 1
+                            ? 'Cannot close the last window'
+                            : `Close window ${window.index}: ${window.name}`
+                        }
+                        shortcut={
+                          windows.length <= 1
+                            ? null
+                            : window.active
+                            ? getPrefixShortcut('window.close')
+                            : null
+                        }
+                        disabled={windows.length <= 1}
+                      >
+                        <Button
+                          variant='icon'
+                          size='icon'
+                          disabled={windows.length <= 1}
+                          className={cn(
+                            'opacity-0 group-hover:opacity-100 rounded-sm hover:bg-surface-4',
+                            window.active && 'opacity-100'
+                          )}
+                          aria-label={`Close window ${window.index}: ${window.name}`}
+                          onClick={event => {
+                            event.stopPropagation()
+                            store.dispatch({
+                              type: 'window/close',
+                              windowId: window.id
+                            })
+                          }}
+                        >
+                          <X className='!h-3 !w-3' />
+                        </Button>
+                      </TopBarTooltip>
+                    </div>
+                  ))}
+                </div>
+                <TopBarTooltip
+                  label='Create window'
+                  shortcut={createWindowShortcut}
+                >
+                  <Button
+                    variant='icon'
+                    size='icon'
+                    aria-label='Create window'
+                    onClick={() => {
+                      store.dispatch({ type: 'window/create' })
+                    }}
+                  >
+                    <Plus />
+                  </Button>
+                </TopBarTooltip>
+              </div>
+              <div className='flex-1' />
+              <TopBarTooltip
+                label='Open key bindings'
+                shortcut={openKeyBindingsShortcut}
+              >
+                <Button
+                  variant='icon'
+                  size='icon'
+                  aria-label='Open key bindings'
+                  onClick={openKeyBindings}
+                >
+                  <Keyboard />
+                </Button>
+              </TopBarTooltip>
+              <TopBarTooltip
+                label='Open coordinator'
+                shortcut={openCoordinatorShortcut}
+              >
+                <Button
+                  variant='icon'
+                  size='icon'
+                  aria-label='Open coordinator'
+                  onClick={openCoordinator}
+                >
+                  <Bot />
+                </Button>
+              </TopBarTooltip>
+              <TopBarTooltip
+                label='Split (side-by-side)'
+                shortcut={splitRightShortcut}
+                disabled={!focusedLeafId}
+              >
+                <Button
+                  variant='icon'
+                  size='icon'
+                  disabled={!focusedLeafId}
+                  aria-label='Split (side-by-side)'
+                  onClick={() => {
+                    if (!focusedLeafId) return
+                    store.dispatch({
+                      type: 'leaf/split',
+                      leafId: focusedLeafId,
+                      dir: 'row'
+                    })
+                  }}
+                >
+                  <Columns2 />
+                </Button>
+              </TopBarTooltip>
+              <TopBarTooltip
+                label='Stack (top-to-bottom)'
+                shortcut={splitDownShortcut}
+                disabled={!focusedLeafId}
+              >
+                <Button
+                  variant='icon'
+                  size='icon'
+                  disabled={!focusedLeafId}
+                  aria-label='Stack (top-to-bottom)'
+                  onClick={() => {
+                    if (!focusedLeafId) return
+                    store.dispatch({
+                      type: 'leaf/split',
+                      leafId: focusedLeafId,
+                      dir: 'col'
+                    })
+                  }}
+                >
+                  <Rows2 />
+                </Button>
+              </TopBarTooltip>
+              <TopBarTooltip
+                label='Close focused pane'
+                shortcut={closePaneShortcut}
+                disabled={!canCloseFocused}
+              >
+                <Button
+                  variant='icon'
+                  size='icon'
+                  disabled={!canCloseFocused}
+                  aria-label='Close focused pane'
+                  onClick={() => {
+                    if (!focusedLeafId) return
+                    store.dispatch({
+                      type: 'leaf/close',
+                      leafId: focusedLeafId
+                    })
+                  }}
+                >
+                  <X />
+                </Button>
+              </TopBarTooltip>
+            </div>
+          </TooltipProvider>
           <LayoutNodeView
             node={activeWindowRoot}
             paneExpandShortcut={paneExpandShortcut}
