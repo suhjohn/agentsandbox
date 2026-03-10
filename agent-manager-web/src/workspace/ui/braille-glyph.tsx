@@ -442,8 +442,69 @@ function rotateZ (point: Point3D, angle: number): Point3D {
   }
 }
 
+function cross (a: Point3D, b: Point3D): Point3D {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x
+  }
+}
+
+function subtract (a: Point3D, b: Point3D): Point3D {
+  return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }
+}
+
+function dot3 (a: Point3D, b: Point3D): number {
+  return a.x * b.x + a.y * b.y + a.z * b.z
+}
+
+function normalize (v: Point3D): Point3D {
+  const len = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+  if (len === 0) return { x: 0, y: 0, z: 0 }
+  return { x: v.x / len, y: v.y / len, z: v.z / len }
+}
+
+function getFaceNormal (vertices: Point3D[], face: readonly number[]): Point3D {
+  const v0 = vertices[face[0]!]!
+  const v1 = vertices[face[1]!]!
+  const v2 = vertices[face[2]!]!
+  const edge1 = subtract(v1, v0)
+  const edge2 = subtract(v2, v0)
+  return normalize(cross(edge1, edge2))
+}
+
+// Light direction (normalized) - coming from upper-front-right
+const LIGHT_DIR: Point3D = normalize({ x: 0.3, y: -0.5, z: 1 })
+
+// Colors matching the isometric cube SVG
+const BASE_COLORS = {
+  dark: { r: 148, g: 163, b: 184 },   // #94a3b8 - slate-400
+  medium: { r: 203, g: 213, b: 225 }, // #cbd5e1 - slate-300
+  light: { r: 226, g: 232, b: 240 }   // #e2e8f0 - slate-200
+}
+
+function lerpColor (
+  intensity: number
+): string {
+  // Map intensity (0-1) to color gradient from dark to light
+  const t = Math.max(0, Math.min(1, intensity))
+  const from = BASE_COLORS.dark
+  const to = BASE_COLORS.light
+  const r = Math.round(from.r + (to.r - from.r) * t)
+  const g = Math.round(from.g + (to.g - from.g) * t)
+  const b = Math.round(from.b + (to.b - from.b) * t)
+  return `rgb(${r}, ${g}, ${b})`
+}
+
 export function SpinningCube ({ className }: BrailleDepthGlyphProps) {
   const [time, setTime] = useState(0)
+
+  // Random rotation speeds determined once on mount
+  const [rotationSpeeds] = useState(() => ({
+    x: (Math.random() - 0.5) * 0.4,  // -0.2 to 0.2
+    y: (Math.random() - 0.5) * 0.4,
+    z: (Math.random() - 0.5) * 0.4
+  }))
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -466,41 +527,44 @@ export function SpinningCube ({ className }: BrailleDepthGlyphProps) {
     return () => cancelAnimationFrame(animationId)
   }, [])
 
-  const { faces, projected } = useMemo(() => {
+  const visibleFaces = useMemo(() => {
     const t = time * 0.001
-
-    const rotX = t * 0.7
-    const rotY = t * 1.1
-    const rotZ = t * 0.5
 
     const rotated = CUBE_VERTICES.map(v => {
       let p = v
-      p = rotateX(p, rotX)
-      p = rotateY(p, rotY)
-      p = rotateZ(p, rotZ)
+      p = rotateX(p, t * rotationSpeeds.x)
+      p = rotateY(p, t * rotationSpeeds.y)
+      p = rotateZ(p, t * rotationSpeeds.z)
       return p
     })
 
     const proj = rotated.map(v => project(v, 5, 14, 14))
 
-    const facesWithDepth = CUBE_FACES.map((face, idx) => ({
-      face,
-      idx,
-      depth: getFaceCenter(rotated, face)
-    }))
-    facesWithDepth.sort((a, b) => a.depth - b.depth)
+    // Calculate face data with normals for culling and lighting
+    const faceData = CUBE_FACES.map((face, idx) => {
+      const normal = getFaceNormal(rotated, face)
+      // Backface culling: only show faces pointing toward camera (positive z normal)
+      const facingCamera = normal.z > 0
+      // Lighting intensity based on angle to light
+      const lightIntensity = Math.max(0, dot3(normal, LIGHT_DIR))
+      // Depth for sorting (average z of vertices)
+      const depth = getFaceCenter(rotated, face)
 
-    return { faces: facesWithDepth, projected: proj }
-  }, [time])
+      return {
+        face,
+        idx,
+        depth,
+        facingCamera,
+        lightIntensity,
+        points: face.map(i => proj[i]!)
+      }
+    })
 
-  const faceColors = [
-    'rgba(255,255,255,0.08)',
-    'rgba(255,255,255,0.95)',
-    'rgba(255,255,255,0.25)',
-    'rgba(255,255,255,0.45)',
-    'rgba(255,255,255,0.65)',
-    'rgba(255,255,255,0.15)'
-  ]
+    // Filter to visible faces and sort back-to-front
+    return faceData
+      .filter(f => f.facingCamera)
+      .sort((a, b) => a.depth - b.depth)
+  }, [time, rotationSpeeds])
 
   return (
     <svg
@@ -508,36 +572,20 @@ export function SpinningCube ({ className }: BrailleDepthGlyphProps) {
       viewBox='0 0 28 28'
       aria-hidden='true'
     >
-      {faces.map(({ face, idx }) => {
-        const points = face.map(i => projected[i]!)
-        return (
-          <path
-            key={idx}
-            d={pointsToPath(points)}
-            fill={faceColors[idx]}
-            stroke='rgba(255,255,255,0.4)'
-            strokeWidth={0.5}
-            strokeLinejoin='round'
-          />
-        )
-      })}
+      {visibleFaces.map(({ idx, points, lightIntensity }) => (
+        <path
+          key={idx}
+          d={pointsToPath(points)}
+          fill={lerpColor(lightIntensity)}
+          stroke='#1e293b'
+          strokeWidth={0.5}
+          strokeLinejoin='round'
+        />
+      ))}
     </svg>
   )
 }
 
 export function BrailleDepthGlyph ({ className }: BrailleDepthGlyphProps) {
-  const [direction] = useState(() => (Math.random() > 0.5 ? 1 : -1))
-
-  return (
-    <img
-      src='/src/assets/cube-rotating.svg'
-      alt=''
-      className={cn('animate-spin', className)}
-      style={{
-        animationDuration: '3s',
-        animationDirection: direction === 1 ? 'normal' : 'reverse'
-      }}
-      aria-hidden='true'
-    />
-  )
+  return <SpinningCube className={className} />
 }

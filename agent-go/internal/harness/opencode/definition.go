@@ -13,6 +13,8 @@ import (
 
 var opencodeVariantPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
+const opencodePermissionAllowAll = `{"*":"allow"}`
+
 type Harness struct {
 	CLI *OpencodeCLI
 }
@@ -64,16 +66,8 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 		return registry.RunResult{}, nil
 	}
 
-	sessionRoot := sessionRuntimeDir(req.RuntimeDir, req.Session.ID)
 	cli := *h.CLI
-	cli.Env = append(append([]string(nil), h.CLI.Env...),
-		"OPENCODE_CONFIG_DIR="+resolveOpencodeConfigDir(h.CLI.Env, req.RuntimeDir),
-		"OPENCODE_DISABLE_AUTOUPDATE=true",
-		"XDG_CONFIG_HOME="+filepath.Join(sessionRoot, "xdg", "config"),
-		"XDG_DATA_HOME="+filepath.Join(sessionRoot, "xdg", "data"),
-		"XDG_STATE_HOME="+filepath.Join(sessionRoot, "xdg", "state"),
-		"XDG_CACHE_HOME="+filepath.Join(sessionRoot, "xdg", "cache"),
-	)
+	cli.Env = opencodeRunEnv(h.CLI.Env, req.RuntimeDir, req.Session.ID)
 
 	opts := OpencodeRunOptions{
 		Format:   "json",
@@ -343,6 +337,36 @@ func resolveOpencodeConfigDir(env []string, runtimeDir string) string {
 		}
 	}
 	return runtimeConfigDir(runtimeDir)
+}
+
+func opencodeRunEnv(baseEnv []string, runtimeDir, sessionID string) []string {
+	sessionRoot := sessionRuntimeDir(runtimeDir, sessionID)
+	env := append([]string(nil), baseEnv...)
+	env = setEnvValue(env, "OPENCODE_CONFIG_DIR", resolveOpencodeConfigDir(baseEnv, runtimeDir))
+	env = setEnvValue(env, "OPENCODE_PERMISSION", opencodePermissionAllowAll)
+	env = setEnvValue(env, "OPENCODE_DISABLE_AUTOUPDATE", "true")
+	env = setEnvValue(env, "XDG_CONFIG_HOME", filepath.Join(sessionRoot, "xdg", "config"))
+	env = setEnvValue(env, "XDG_DATA_HOME", filepath.Join(sessionRoot, "xdg", "data"))
+	env = setEnvValue(env, "XDG_STATE_HOME", filepath.Join(sessionRoot, "xdg", "state"))
+	env = setEnvValue(env, "XDG_CACHE_HOME", filepath.Join(sessionRoot, "xdg", "cache"))
+	return env
+}
+
+func setEnvValue(env []string, key, value string) []string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return append([]string(nil), env...)
+	}
+	entry := key + "=" + value
+	out := append([]string(nil), env...)
+	for i, current := range out {
+		currentKey, _, ok := strings.Cut(current, "=")
+		if ok && strings.EqualFold(strings.TrimSpace(currentKey), key) {
+			out[i] = entry
+			return out
+		}
+	}
+	return append(out, entry)
 }
 
 func sessionRuntimeDir(runtimeDir, sessionID string) string {
