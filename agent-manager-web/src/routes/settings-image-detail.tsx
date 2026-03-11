@@ -1791,6 +1791,35 @@ export function SettingsImageDetailPage () {
                       </Button>
                     ) : null}
                   </div>
+
+                  {!setupSandboxId && extendMode === 'api' && (
+                    <div className='mt-3 space-y-2 text-xs text-text-secondary'>
+                      <div className='font-medium text-text-secondary'>
+                        API reference for agents
+                      </div>
+                      <p>
+                        <span className='font-mono text-text-primary'>
+                          POST /images/:imageId/setup-sandbox
+                        </span>{' '}
+                        with{' '}
+                        <span className='font-mono text-text-primary'>
+                          {`{ variantId, sshPublicKeys[] }`}
+                        </span>
+                      </p>
+                      <p>
+                        Returns{' '}
+                        <span className='font-mono text-text-primary'>
+                          {`{ sandboxId, ssh: { username, host, port, knownHostsLine } }`}
+                        </span>
+                      </p>
+                      <p>
+                        <span className='font-mono text-text-primary'>
+                          DELETE /images/:imageId/setup-sandbox/:sandboxId
+                        </span>{' '}
+                        to close and persist changes.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className='border-t border-border px-4 py-3'>
@@ -1903,35 +1932,6 @@ export function SettingsImageDetailPage () {
                     />
                   </div>
                 ) : null}
-
-                {!setupSandboxId && extendMode === 'api' && (
-                  <div className='border-t border-border px-4 py-3 space-y-2 text-xs text-text-secondary'>
-                    <div className='font-medium text-text-secondary'>
-                      API reference for agents
-                    </div>
-                    <p>
-                      <span className='font-mono text-text-primary'>
-                        POST /images/:imageId/setup-sandbox
-                      </span>{' '}
-                      with{' '}
-                      <span className='font-mono text-text-primary'>
-                        {`{ variantId, sshPublicKeys[] }`}
-                      </span>
-                    </p>
-                    <p>
-                      Returns{' '}
-                      <span className='font-mono text-text-primary'>
-                        {`{ sandboxId, ssh: { username, host, port, knownHostsLine } }`}
-                      </span>
-                    </p>
-                    <p>
-                      <span className='font-mono text-text-primary'>
-                        DELETE /images/:imageId/setup-sandbox/:sandboxId
-                      </span>{' '}
-                      to close and persist changes.
-                    </p>
-                  </div>
-                )}
               </div>
             </SettingsList>
             {buildLogs.length > 0 ? (
