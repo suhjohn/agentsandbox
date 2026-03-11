@@ -335,6 +335,25 @@ function shellQuote (value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`
 }
 
+function buildHookCommand (hookPath: string): string {
+  const quotedHookPath = shellQuote(hookPath)
+  return [
+    `if [[ -r ${quotedHookPath} ]]; then`,
+    `  if [[ -x ${quotedHookPath} ]]; then`,
+    `    bash ${quotedHookPath}`,
+    '  else',
+    '    (',
+    '      staged_hook="$(mktemp)"',
+    '      trap \'rm -f "$staged_hook"\' EXIT',
+    `      cp ${quotedHookPath} "$staged_hook"`,
+    '      chmod +x "$staged_hook"',
+    '      bash "$staged_hook"',
+    '    )',
+    '  fi',
+    'fi'
+  ].join('\n')
+}
+
 function buildSandboxStartCommand (): readonly string[] {
   const serverCommand = SANDBOX_START_COMMAND.map(part =>
     shellQuote(part)
@@ -347,7 +366,9 @@ function buildSandboxStartCommand (): readonly string[] {
       'set -euo pipefail',
       `if [[ -r ${shellQuote(IMAGE_START_HOOK_PATH)} ]]; then`,
       '  echo "[sandbox-start] running shared start hook..." >&2',
-      `  bash ${shellQuote(IMAGE_START_HOOK_PATH)}`,
+      'fi',
+      buildHookCommand(IMAGE_START_HOOK_PATH),
+      `if [[ -r ${shellQuote(IMAGE_START_HOOK_PATH)} ]]; then`,
       '  echo "[sandbox-start] shared start hook complete." >&2',
       'fi',
       `exec ${serverCommand}`

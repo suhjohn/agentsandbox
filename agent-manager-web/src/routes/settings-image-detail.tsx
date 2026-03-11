@@ -152,6 +152,7 @@ export function SettingsImageDetailPage () {
     null
   )
   const [setupSandboxId, setSetupSandboxId] = useState<string | null>(null)
+  const closeRequestedSetupSandboxIdRef = useRef<string | null>(null)
   const [setupTerminalConnection, setSetupTerminalConnection] =
     useState<SetupTerminalConnection | null>(null)
   const setupTerminalReconnectInFlightRef = useRef(false)
@@ -1064,6 +1065,7 @@ export function SettingsImageDetailPage () {
   const closeSetupSandboxMutation = useMutation({
     mutationFn: async () => {
       if (!setupSandboxId) throw new Error('Start a setup sandbox first.')
+      closeRequestedSetupSandboxIdRef.current = setupSandboxId
       return auth.api.closeImageSetupSandbox({
         imageId,
         sandboxId: setupSandboxId
@@ -1094,6 +1096,7 @@ export function SettingsImageDetailPage () {
       ])
     },
     onError: err => {
+      closeRequestedSetupSandboxIdRef.current = null
       const msg =
         err instanceof Error ? err.message : 'Failed to close setup sandbox'
       toast.error(msg)
@@ -1137,6 +1140,7 @@ export function SettingsImageDetailPage () {
 
   useEffect(() => {
     if (!setupSandboxId) {
+      closeRequestedSetupSandboxIdRef.current = null
       setSetupTerminalConnection(null)
       return
     }
@@ -1162,6 +1166,7 @@ export function SettingsImageDetailPage () {
   useEffect(() => {
     return () => {
       if (!setupSandboxId) return
+      if (closeRequestedSetupSandboxIdRef.current === setupSandboxId) return
       void auth.api.closeImageSetupSandbox({
         imageId,
         sandboxId: setupSandboxId

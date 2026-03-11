@@ -25,7 +25,7 @@ Behavior:
 - Missing secret names are logged to build stderr and ignored.
 - Always runs an internal setup sequence before snapshotting:
   - source sync via `agent-go/docker/update-agent-go-source.sh` when available, forcing the checkout to match the remote branch and failing the build if sync fails,
-  - then `/shared/image-hooks/build.sh` if that file exists in the image-scoped shared hook volume,
+  - then `/shared/image-hooks/build.sh` if that file exists in the image-scoped shared hook volume; when the hook is readable but not executable, the builder stages a temporary copy, `chmod +x`s that copy, and runs it,
   - then verifies `/opt/agentsandbox/agent-go/build-artifacts/agent-server` exists and is executable before snapshotting.
 
 ## image.service.ts
@@ -389,6 +389,7 @@ Behavior:
 - Setup sandboxes likewise rely on container defaults for home/workspace paths, but explicitly force `AGENT_RUNTIME_MODE=server`.
 - Session sandboxes mount the image-scoped shared hook volume read-only at `/shared/image-hooks`; setup sandboxes mount the same volume read-write.
 - When `/shared/image-hooks/start.sh` exists in the shared hook volume, session sandbox startup runs that hook once before `/opt/agentsandbox/agent-go/build-artifacts/agent-server serve`.
+- Because the session sandbox hook mount is read-only, a readable but non-executable `/shared/image-hooks/start.sh` is staged to a temporary file, `chmod +x` is applied to that temp copy, and the temp copy is run.
 - If an agent no longer has an owner (`created_by` is `NULL`), sandbox creation fails with `409 Agent owner is missing`.
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.
 - Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).

@@ -44,6 +44,25 @@ const AGENT_SERVER_VERIFY_COMMAND = [
   'chmod +x "${AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server}"'
 ].join('\n')
 
+function buildHookCommand (hookPath: string): string {
+  const quotedHookPath = shellQuote(hookPath)
+  return [
+    `if [[ -r ${quotedHookPath} ]]; then`,
+    `  if [[ -x ${quotedHookPath} ]]; then`,
+    `    bash ${quotedHookPath}`,
+    '  else',
+    '    (',
+    '      staged_hook="$(mktemp)"',
+    '      trap \'rm -f "$staged_hook"\' EXIT',
+    `      cp ${quotedHookPath} "$staged_hook"`,
+    '      chmod +x "$staged_hook"',
+    '      bash "$staged_hook"',
+    '    )',
+    '  fi',
+    'fi'
+  ].join('\n')
+}
+
 export type BuildChunk = {
   readonly source: 'stdout' | 'stderr'
   readonly text: string
@@ -173,11 +192,7 @@ export async function runModalImageBuild (input: {
 
     setupSteps.push({
       label: 'shared image build hook',
-      command: [
-        'if [[ -r ' + shellQuote(IMAGE_BUILD_HOOK_PATH) + ' ]]; then',
-        '  bash ' + shellQuote(IMAGE_BUILD_HOOK_PATH),
-        'fi'
-      ].join('\n'),
+      command: buildHookCommand(IMAGE_BUILD_HOOK_PATH),
       errorPrefix: 'build hook'
     })
 
