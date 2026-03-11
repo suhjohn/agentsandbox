@@ -1232,6 +1232,10 @@ export function ChatConversationPage(props: {
         void runSendFlow(text);
         return { accepted: true, streamingStarted: true };
       },
+      focusInput: async () => {
+        messageInputRef.current?.focus();
+        return { focused: true };
+      },
       stopStream: async () => {
         return await stopStream();
       },

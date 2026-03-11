@@ -63,13 +63,9 @@ export function getUiContextSnapshot(auth: AuthContextValue): UiContextSnapshot 
     settingsImageCanEdit: settingsImageDetail?.canEdit ?? false,
     settingsImageArchived: settingsImageDetail?.isArchived ?? false,
     settingsImageBuildRunning: settingsImageDetail?.isBuildRunning ?? false,
-    settingsImageSecretTabKeys: settingsImageDetail?.secretTabKeys ?? [],
-    settingsImageActiveSecretCanSave:
-      settingsImageDetail?.activeSecretTabCanSave ?? false,
     activeImageId: settingsImageDetail?.imageId ?? readActiveImageId(routePath),
     hasDirtyImageDraft: settingsImageDetail?.hasDirtyDraft ?? false,
     isBusy: settingsImageDetail?.isBusy ?? false,
-    activeSecretTabKey: settingsImageDetail?.activeSecretTabKey ?? null,
   };
 }
 

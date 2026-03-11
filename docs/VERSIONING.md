@@ -43,7 +43,7 @@ imageVariantBuilds
 ├── id
 ├── variantId
 ├── status               # running | succeeded | failed
-├── inputPayload         # { imageId, variantId, baseImageId, setupScript, fileSecrets, ... }
+├── inputPayload         # { imageId, variantId, baseImageId, setupScript, environmentSecretNames, ... }
 ├── outputImageId        # Modal im-* (OUTPUT of build) = effective "headImageId"
 └── ...
 

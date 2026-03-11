@@ -1812,6 +1812,13 @@ function SessionComposer (props: {
       })
     )
     if (!created) throw new Error('Unexpected response shape (createSession).')
+    if (import.meta.env.DEV) {
+      console.log('[AgentSessionPanel] created session', {
+        agentId: props.agentId,
+        previousSessionId: props.sessionId,
+        createdSessionId: created.id
+      })
+    }
     props.setConfig(prev => ({
       ...prev,
       sessionId: created.id,
@@ -1836,6 +1843,13 @@ function SessionComposer (props: {
 
       try {
         const nextSessionId = await ensureSessionId()
+        if (import.meta.env.DEV) {
+          console.log('[AgentSessionPanel] sendDraftText using session', {
+            agentId: props.agentId,
+            previousSessionId: props.sessionId,
+            nextSessionId
+          })
+        }
         const optimisticMessage = createOptimisticUserMessage({
           agentId: props.agentId,
           sessionId: nextSessionId,
@@ -2110,7 +2124,6 @@ export function AgentSessionPanel (props: AgentSessionPanelProps) {
     query: { enabled: agentId.length > 0 }
   })
   const { accessQuery, access } = useAgentRuntimeAccess(agentId, {
-    caller: 'agent-session-panel',
     enabled: agentId.length > 0,
     retry: false
   })
@@ -2394,6 +2407,25 @@ export function AgentSessionPanel (props: AgentSessionPanelProps) {
   }, [access?.agentApiUrl, access?.agentAuthToken, sessionId])
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return
+    console.log('[AgentSessionPanel] session state', {
+      agentId,
+      sessionId,
+      optimisticSessionId: optimisticMessage?.sessionId ?? null,
+      isOptimisticSending,
+      streamPhase: stream.phase,
+      streamIsRunning: stream.isRunning
+    })
+  }, [
+    agentId,
+    isOptimisticSending,
+    optimisticMessage?.sessionId,
+    sessionId,
+    stream.isRunning,
+    stream.phase
+  ])
+
+  useEffect(() => {
     if (!props.allowCoordinatorComposeEvents) return
 
     const onCompose = (event: Event): void => {
@@ -2442,6 +2474,12 @@ export function AgentSessionPanel (props: AgentSessionPanelProps) {
         const controller = composerControllerRef.current
         if (!controller) throw new Error('Composer is not ready')
         return await controller.sendText(text)
+      },
+      focusInput: async () => {
+        const controller = composerControllerRef.current
+        if (!controller) throw new Error('Composer is not ready')
+        controller.focusInput()
+        return { focused: true }
       },
       stopStream: async () => {
         await stopRun()

@@ -111,8 +111,9 @@ export const imageVariants = pgTable(
     ownerUserId: uuid("owner_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    baseImageId: text("base_image_id"),
-    headBuildId: uuid("head_build_id"),
+    headImageId: text("head_image_id")
+      .notNull()
+      .default("suhjohn/agentdesktop"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -175,30 +176,6 @@ export const imageVariantBuilds = pgTable(
     ),
     index("image_variant_builds_status_idx").on(table.status),
     index("image_variant_builds_started_at_idx").on(table.startedAt),
-  ],
-);
-
-// ── File Secrets (per-path secret bindings, loaded as exact files) ──────────
-
-export const fileSecrets = pgTable(
-  "file_secrets",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    imageId: uuid("image_id").references(() => images.id, {
-      onDelete: "cascade",
-    }),
-    path: text("path").notNull(),
-    modalSecretName: text("modal_secret_name").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    uniqueIndex("file_secrets_image_id_path_idx").on(table.imageId, table.path),
-    index("file_secrets_image_id_idx").on(table.imageId),
   ],
 );
 
@@ -326,17 +303,9 @@ export const imagesRelations = relations(images, ({ one, many }) => ({
     references: [users.id],
   }),
   agents: many(agents),
-  fileSecrets: many(fileSecrets),
   environmentSecrets: many(environmentSecrets),
   variants: many(imageVariants),
   variantBuilds: many(imageVariantBuilds),
-}));
-
-export const fileSecretsRelations = relations(fileSecrets, ({ one }) => ({
-  image: one(images, {
-    fields: [fileSecrets.imageId],
-    references: [images.id],
-  }),
 }));
 
 export const environmentSecretsRelations = relations(
@@ -357,10 +326,6 @@ export const imageVariantsRelations = relations(imageVariants, ({ one, many }) =
   image: one(images, {
     fields: [imageVariants.imageId],
     references: [images.id],
-  }),
-  headBuild: one(imageVariantBuilds, {
-    fields: [imageVariants.headBuildId],
-    references: [imageVariantBuilds.id],
   }),
   agents: many(agents),
   builds: many(imageVariantBuilds),

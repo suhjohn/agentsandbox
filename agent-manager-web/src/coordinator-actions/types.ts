@@ -68,12 +68,9 @@ export type UiContextSnapshot = {
   readonly settingsImageCanEdit: boolean;
   readonly settingsImageArchived: boolean;
   readonly settingsImageBuildRunning: boolean;
-  readonly settingsImageSecretTabKeys: readonly string[];
-  readonly settingsImageActiveSecretCanSave: boolean;
   readonly activeImageId: string | null;
   readonly hasDirtyImageDraft: boolean;
   readonly isBusy: boolean;
-  readonly activeSecretTabKey: string | null;
 };
 
 export type WorkspaceLayoutNodeSnapshot =
@@ -124,6 +121,7 @@ export type ChatRuntimeController = {
   readonly sendMessage: (
     text: string,
   ) => Promise<{ readonly accepted: boolean; readonly streamingStarted: boolean }>;
+  readonly focusInput: () => Promise<{ readonly focused: boolean }>;
   readonly stopStream: () => Promise<{ readonly stopped: boolean }>;
   readonly isStreaming: () => boolean;
   readonly hasConversation: () => boolean;
@@ -131,6 +129,7 @@ export type ChatRuntimeController = {
 
 export type DialogRuntimeController = {
   readonly openSessionsList: () => Promise<{ readonly mode: "sessions" }>;
+  readonly focusComposer: () => Promise<{ readonly focused: boolean }>;
   readonly draftNewSession: () => Promise<{
     readonly drafted: true;
     readonly mode: "conversation";
@@ -294,9 +293,6 @@ export type SettingsImageDetailSnapshot = {
   readonly isBusy: boolean;
   readonly hasDirtyDraft: boolean;
   readonly isBuildRunning: boolean;
-  readonly secretTabKeys: readonly string[];
-  readonly activeSecretTabKey: string | null;
-  readonly activeSecretTabCanSave: boolean;
 };
 
 export type SettingsImageDetailRuntimeController = {
@@ -319,29 +315,6 @@ export type SettingsImageDetailRuntimeController = {
   readonly stopBuild: () => Promise<{ readonly buildStopped: true }>;
   readonly archive: () => Promise<{ readonly archived: true; readonly routePath: string }>;
   readonly delete: () => Promise<{ readonly deleted: true; readonly redirectedTo: string }>;
-  readonly addSecretTab: () => Promise<{
-    readonly added: true;
-    readonly activeSecretTabKey: string;
-  }>;
-  readonly selectSecretTab: (tabKey: string) => Promise<{
-    readonly selected: true;
-    readonly activeSecretTabKey: string;
-  }>;
-  readonly setSecretName: (
-    modalSecretName: string,
-  ) => Promise<{ readonly updated: true; readonly activeSecretTabKey: string }>;
-  readonly setSecretPath: (
-    path: string,
-  ) => Promise<{ readonly updated: true; readonly activeSecretTabKey: string }>;
-  readonly setSecretEnv: (
-    envText: string,
-  ) => Promise<{ readonly updated: true; readonly activeSecretTabKey: string }>;
-  readonly saveSecret: () => Promise<{
-    readonly saved: true;
-    readonly bindingId: string | null;
-    readonly activeSecretTabKey: string;
-  }>;
-  readonly deleteSecretBinding: (tabKey: string) => Promise<{ readonly deleted: true }>;
 };
 
 export type UiExecutionContext = {

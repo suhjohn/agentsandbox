@@ -183,41 +183,6 @@ export const COORDINATOR_SEMANTIC_ACTIONS = [
     description: "Delete archived image from settings image detail page.",
   },
   {
-    id: "settings.image_detail.secret.add_tab",
-    version: 1,
-    description: "Add a new secret-file tab on settings image detail page.",
-  },
-  {
-    id: "settings.image_detail.secret.select_tab",
-    version: 1,
-    description: "Select secret-file tab by key on image detail page.",
-  },
-  {
-    id: "settings.image_detail.secret.set_name",
-    version: 1,
-    description: "Set modal secret name for active secret tab.",
-  },
-  {
-    id: "settings.image_detail.secret.set_path",
-    version: 1,
-    description: "Set file path for active secret tab.",
-  },
-  {
-    id: "settings.image_detail.secret.set_env",
-    version: 1,
-    description: "Set dotenv contents for active secret tab.",
-  },
-  {
-    id: "settings.image_detail.secret.save",
-    version: 1,
-    description: "Save active secret tab metadata and secret values.",
-  },
-  {
-    id: "settings.image_detail.secret.delete_binding",
-    version: 1,
-    description: "Delete secret file binding by tab key on image detail page.",
-  },
-  {
     id: "keyboard.help.open",
     version: 1,
     description: "Open keyboard shortcuts overlay in workspace.",

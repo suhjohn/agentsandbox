@@ -157,7 +157,6 @@ Manager CORS config (`agent-manager/src/app.ts`) explicitly allows:
 
 - `Authorization`
 - `Content-Type`
-- `X-Agent-Manager-Api-Key`
 - `X-Refresh-Csrf`
 
 ## 5. Agent Sandbox Runtime Auth Flow
@@ -173,7 +172,6 @@ Runtime env injection includes:
 - `OPENVSCODE_CONNECTION_TOKEN = sandboxAccessToken`
 - `VNC_PASSWORD = sandboxAccessToken`
 - `AGENT_MANAGER_BASE_URL`
-- `AGENT_MANAGER_API_KEY`
 - `AGENT_ALLOWED_ORIGINS`
 
 Allowed origins are composed from:
@@ -260,8 +258,7 @@ HTTP/SSE runtime calls from frontend are made with `X-Agent-Auth` in:
 
 Auth headers are injected at dispatch time, not stored in event rows:
 
-- prefer `X-Agent-Internal-Auth` + `X-Agent-Id`
-- fallback legacy manager auth headers only when no runtime-internal secret is configured
+- use `X-Agent-Internal-Auth` + `X-Agent-Id`
 
 Persisted event rows store event-declared headers (for current callbacks, typically `content-type`) and not injected manager auth credentials.
 
@@ -280,7 +277,6 @@ Manager creates setup sandbox with:
 - `PORT=8080`
 - `SECRET_SEED=SANDBOX_SIGNING_SECRET`
 - `AGENT_MANAGER_BASE_URL`
-- `AGENT_MANAGER_API_KEY`
 - `AGENT_ALLOWED_ORIGINS`
 
 ### 6.2 Setup sandbox terminal auth

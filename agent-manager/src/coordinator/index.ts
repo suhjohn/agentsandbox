@@ -233,12 +233,11 @@ Trigger conditions:
 ### Create or Update Image Secrets
 Trigger conditions:
 - User asks to add/update API keys, tokens, env vars, or secrets for an image.
-- User asks to mount/bind a secret at a specific image path.
-- User asks to verify image secret bindings after updates.
+- User asks to configure a Modal secret that should be injected into build/runtime environment variables.
 1. Confirm image exists: \`GET /images/{imageId}\`.
 2. Upsert Modal secret values: \`POST /images/{imageId}/modal-secrets\` with \`{ name?, env }\`.
-3. Upsert image secret binding: \`PUT /images/{imageId}/file-secrets\` with \`{ path, modalSecretName }\`.
-4. Verify bindings: \`GET /images/{imageId}/file-secrets\`.
+3. Attach the secret name to the image environment: \`PUT /images/{imageId}/environment-secrets\` with \`{ modalSecretName }\`.
+4. Verify attached environment secrets: \`GET /images/{imageId}/environment-secrets\`.
 
 ### Build and Validate an Image
 Trigger conditions:
@@ -308,7 +307,7 @@ Trigger conditions:
 - User asks to create/manage agents directly (without bootstrap \`POST /session\` first-run flow).
 - User asks for archive/resume/status/access operations on existing agents.
 - User provides an existing \`agentId\` and asks for lifecycle actions.
-1. Confirm image is built: \`GET /images/{imageId}/variants\` and ensure the chosen variant has non-null \`headImageId\`.
+1. Confirm image has a current head image: \`GET /images/{imageId}/variants\` and ensure the chosen variant has non-empty \`headImageId\`.
 2. Create agent: \`POST /agents\`.
    The manager generates the agent \`id\` and default \`name\`; do not send a \`name\` field.
 3. Runtime access links if requested: \`GET /agents/{agentId}/access\`.

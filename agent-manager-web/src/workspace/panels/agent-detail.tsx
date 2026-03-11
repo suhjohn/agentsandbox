@@ -52,10 +52,7 @@ import {
   AgentBrowserPanel,
   type AgentBrowserPanelConfig
 } from './agent-browser'
-import {
-  AgentVscodePanel,
-  type AgentVscodePanelConfig
-} from './agent-vscode'
+import { AgentVscodePanel, type AgentVscodePanelConfig } from './agent-vscode'
 import {
   AgentDiffPanel,
   readAgentDiffStylePreference,
@@ -504,7 +501,6 @@ function AgentDetailSessionListView (props: {
     query: { enabled: agentId.length > 0 }
   })
   const { access } = useAgentRuntimeAccess(agentId, {
-    caller: 'agent-detail-session-list',
     enabled: agentId.length > 0,
     retry: false
   })
@@ -643,11 +639,6 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
   const [diffSettingsOpen, setDiffSettingsOpen] = useState(false)
   const agentQuery = useGetAgentsAgentId(agentId, {
     query: { enabled: agentId.length > 0 }
-  })
-  const { access } = useAgentRuntimeAccess(agentId, {
-    caller: 'agent-detail-header',
-    enabled: agentId.length > 0,
-    retry: false
   })
   const agent = unwrapAgent(agentQuery.data)
   const viewItems = AGENT_DETAIL_VIEW_ITEMS.map(item => ({
@@ -830,14 +821,8 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
           <SessionPicker
             agentId={agentId}
             value={props.config.sessionId}
-            access={
-              access
-                ? {
-                    agentApiUrl: access.agentApiUrl,
-                    agentAuthToken: access.agentAuthToken
-                  }
-                : null
-            }
+            valueTitle={props.config.sessionTitle}
+            valueHarness={props.config.sessionHarness}
             disabled={agentId.length === 0}
             onOpenChange={handleSessionPickerOpenChange}
             onChange={next =>

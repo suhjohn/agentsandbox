@@ -1,6 +1,10 @@
 import { resolveGhcrDigest } from '@/clients/ghcr'
 import { env } from '@/env'
 import { ModalClient, type Secret, type Sandbox } from 'modal'
+import {
+  isLikelyModalImageId,
+  normalizeHeadImageId
+} from '../utils/image-source'
 
 const modalClient = new ModalClient()
 
@@ -39,15 +43,9 @@ export type BuildChunk = {
   readonly text: string
 }
 
-export type BuildFileSecretBinding = {
-  readonly path: string
-  readonly modalSecretName: string
-}
-
 export async function runModalImageBuild (input: {
   readonly imageId: string
   readonly setupScript: string
-  readonly fileSecrets: readonly BuildFileSecretBinding[]
   readonly environmentSecretNames?: readonly string[]
   readonly baseImageId?: string | null
   readonly modalSecretName?: string
@@ -71,38 +69,18 @@ export async function runModalImageBuild (input: {
     createIfMissing: true
   })
 
-  let baseImage = normalizeNullableText(input.baseImageId)
+  const baseImage = normalizeHeadImageId(input.baseImageId)
   let imageForSandbox:
     | Awaited<ReturnType<typeof modalClient.images.fromId>>
     | ReturnType<typeof modalClient.images.fromRegistry>
   let baseImageKey = ''
 
-  if (baseImage) {
-    if (isLikelyModalImageId(baseImage)) {
-      logStep(`Using explicit base image id: ${baseImage}`)
-      imageForSandbox = await modalClient.images.fromId(baseImage)
-      baseImageKey = baseImage
-    } else {
-      let baseImageRef = baseImage
-      try {
-        const resolved = await resolveGhcrDigest(baseImageRef)
-        if (resolved && resolved !== baseImageRef) {
-          logStep(`Resolved explicit base image ref to digest: ${resolved}`)
-          baseImageRef = resolved
-        }
-      } catch (err) {
-        logStep(
-          `Warning: failed to resolve GHCR digest for ${baseImageRef}: ${
-            err instanceof Error ? err.message : String(err)
-          }; continuing with tag ref`
-        )
-      }
-      logStep(`Using explicit base image ref: ${baseImageRef}`)
-      imageForSandbox = modalClient.images.fromRegistry(baseImageRef)
-      baseImageKey = baseImageRef
-    }
+  if (isLikelyModalImageId(baseImage)) {
+    logStep(`Using base image id: ${baseImage}`)
+    imageForSandbox = await modalClient.images.fromId(baseImage)
+    baseImageKey = baseImage
   } else {
-    let baseImageRef = env.AGENT_BASE_IMAGE_REF.trim()
+    let baseImageRef = baseImage
     try {
       const resolved = await resolveGhcrDigest(baseImageRef)
       if (resolved && resolved !== baseImageRef) {
@@ -236,38 +214,6 @@ export async function runModalImageBuild (input: {
       }
     }
 
-    const fileSecrets = parseFileSecrets(input.fileSecrets)
-    if (fileSecrets.length > 0) {
-      logStep(`Materializing ${fileSecrets.length} file secret binding(s)...`)
-      const cache = new Map<string, Record<string, string>>()
-      for (const binding of fileSecrets) {
-        const secret = binding.modalSecretName.trim()
-        if (!cache.has(secret)) {
-          const items = await inspectModalSecretItemsInSandbox(sandbox, secret)
-          cache.set(secret, items)
-        }
-        const targetEnvPath = resolveSandboxSecretFilePath(binding.path)
-        const dotenvContents = renderDotenv(cache.get(secret) ?? {})
-        try {
-          await writeDotenvFile(sandbox, targetEnvPath, dotenvContents)
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          throw new Error(
-            `Failed to write secret file binding (path=${JSON.stringify(
-              binding.path
-            )} resolved=${JSON.stringify(
-              targetEnvPath
-            )} secret=${JSON.stringify(secret)}): ${message}`
-          )
-        }
-        logStep(
-          `Wrote ${
-            Object.keys(cache.get(secret) ?? {}).length
-          } item(s) to ${targetEnvPath}`
-        )
-      }
-    }
-
     logStep('Snapshotting filesystem...')
     const image = await sandbox.snapshotFilesystem(SNAPSHOT_TIMEOUT_MS)
     logStep('Snapshot complete.')
@@ -335,116 +281,6 @@ async function writeFile (
   }
 }
 
-function envDiffKeys (
-  a: Record<string, string>,
-  b: Record<string, string>
-): Set<string> {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
-  const out = new Set<string>()
-  for (const key of keys) {
-    if ((a[key] ?? null) !== (b[key] ?? null)) out.add(key)
-  }
-  return out
-}
-
-async function sandboxExecJson (input: {
-  readonly sandbox: Sandbox
-  readonly args: readonly string[]
-  readonly secrets?: readonly Secret[]
-  readonly timeoutMs?: number
-}): Promise<Record<string, unknown>> {
-  const { exitCode, stdout, stderr } = await execText(
-    input.sandbox,
-    [...input.args],
-    {
-      timeoutMs: input.timeoutMs,
-      secrets: input.secrets ? [...input.secrets] : undefined
-    }
-  )
-  if (exitCode !== 0) {
-    throw new Error(
-      `Sandbox exec failed (exit ${exitCode}).${
-        stderr.trim().length > 0 ? ` (stderr: ${stderr.trim()})` : ''
-      }`
-    )
-  }
-  const trimmed = stdout.trim()
-  if (trimmed.length === 0) {
-    throw new Error('Sandbox exec produced no stdout.')
-  }
-  const parsed = JSON.parse(trimmed) as unknown
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('expected JSON object')
-  }
-  return parsed as Record<string, unknown>
-}
-
-async function sandboxDumpEnv (input: {
-  readonly sandbox: Sandbox
-  readonly secrets?: readonly Secret[]
-  readonly timeoutMs?: number
-}): Promise<Record<string, string>> {
-  const payload = await sandboxExecJson({
-    sandbox: input.sandbox,
-    args: [
-      'python3',
-      '-c',
-      'import json, os; print(json.dumps(dict(os.environ)))'
-    ],
-    secrets: input.secrets,
-    timeoutMs: input.timeoutMs
-  })
-  const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(payload)) {
-    if (typeof key === 'string' && typeof value === 'string') {
-      env[key] = value
-    }
-  }
-  return env
-}
-
-async function inspectModalSecretItemsInSandbox (
-  sandbox: Sandbox,
-  secretName: string
-): Promise<Record<string, string>> {
-  const name = secretName.trim()
-  if (name.length === 0) throw new Error('secret name must be non-empty')
-
-  const env0 = await sandboxDumpEnv({ sandbox, timeoutMs: 60_000 })
-  const env1 = await sandboxDumpEnv({ sandbox, timeoutMs: 60_000 })
-  const noise = envDiffKeys(env0, env1)
-
-  const secret = await modalClient.secrets.fromName(name)
-  const envSecret = await sandboxDumpEnv({
-    sandbox,
-    timeoutMs: 60_000,
-    secrets: [secret]
-  })
-
-  const candidates = envDiffKeys(env1, envSecret)
-  const out: Record<string, string> = {}
-  for (const key of [...candidates].sort()) {
-    if (noise.has(key)) continue
-    if (key.startsWith('MODAL_')) continue
-    if (typeof envSecret[key] === 'string') out[key] = envSecret[key]!
-  }
-  return out
-}
-
-function parseFileSecrets (
-  input: readonly BuildFileSecretBinding[]
-): readonly BuildFileSecretBinding[] {
-  return input
-    .map(item => ({
-      path: item.path,
-      modalSecretName: item.modalSecretName
-    }))
-    .filter(
-      item =>
-        item.path.trim().length > 0 && item.modalSecretName.trim().length > 0
-    )
-}
-
 function normalizeSecretNames (input: readonly string[]): readonly string[] {
   const normalized: string[] = []
   const seen = new Set<string>()
@@ -456,102 +292,6 @@ function normalizeSecretNames (input: readonly string[]): readonly string[] {
     normalized.push(name)
   }
   return normalized
-}
-
-function dotenvEscapeValue (value: string): string {
-  if (value === '') return ''
-  const safe = /^[a-zA-Z0-9_./:@+-]+$/
-  if (safe.test(value)) return value
-  return `"${value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r')
-    .replace(/\t/g, '\\t')}"`
-}
-
-function renderDotenv (items: Record<string, string>): string {
-  const lines: string[] = []
-  const keys = Object.keys(items).sort()
-  for (const key of keys) {
-    if (!key.trim()) continue
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
-      throw new Error(
-        `Invalid env var key in Modal secret: ${JSON.stringify(
-          key
-        )} (expected [A-Za-z_][A-Za-z0-9_]*).`
-      )
-    }
-    const value = items[key]
-    if (typeof value !== 'string') continue
-    lines.push(`${key}=${dotenvEscapeValue(value)}`)
-  }
-  return `${lines.join('\n')}\n`
-}
-
-function resolveSandboxSecretFilePath (bindingPath: string): string {
-  const raw = bindingPath.trim()
-  let base: string
-  if (raw === '.' || raw === './') {
-    base = SANDBOX_WORKSPACES_DIR
-  } else if (raw === '~') {
-    base = SANDBOX_AGENT_HOME
-  } else if (raw.startsWith('~/')) {
-    base = normalizePosixPath(`${SANDBOX_AGENT_HOME}/${raw.slice(2)}`)
-    if (
-      base !== SANDBOX_AGENT_HOME &&
-      !base.startsWith(`${SANDBOX_AGENT_HOME}/`)
-    ) {
-      throw new Error('~ paths must stay within the sandbox home')
-    }
-  } else if (raw.startsWith('/')) {
-    base = normalizePosixPath(raw)
-  } else {
-    let rel = raw
-    while (rel.startsWith('./')) rel = rel.slice(2)
-    base = normalizePosixPath(`${SANDBOX_WORKSPACES_DIR}/${rel}`)
-    if (
-      base !== SANDBOX_WORKSPACES_DIR &&
-      !base.startsWith(`${SANDBOX_WORKSPACES_DIR}/`)
-    ) {
-      throw new Error(
-        'Relative paths must stay within the sandbox workspaces directory'
-      )
-    }
-  }
-  return trimTrailingSlash(base)
-}
-
-async function writeDotenvFile (
-  sandbox: Sandbox,
-  targetPath: string,
-  contents: string
-): Promise<void> {
-  const parent = dirnamePosix(targetPath) || '/'
-  const preflightScript = [
-    'set -euo pipefail',
-    `mkdir -p ${shellQuote(parent)}`,
-    `chmod 700 ${shellQuote(parent)}`,
-    `if [[ -d ${shellQuote(targetPath)} ]]; then`,
-    `  echo "target path is a directory: ${shellQuote(targetPath)}" >&2`,
-    `  exit 1`,
-    `fi`
-  ].join('\n')
-  const preflight = await execText(sandbox, ['bash', '-lc', preflightScript])
-  if (preflight.exitCode !== 0) {
-    const stderr = preflight.stderr.trim()
-    throw new Error(
-      `Secret file target is not writable: ${targetPath}${
-        stderr.length > 0 ? ` (stderr: ${stderr})` : ''
-      }`
-    )
-  }
-  await writeFile(sandbox, targetPath, contents)
-  await execText(sandbox, [
-    'bash',
-    '-lc',
-    `chmod 600 ${shellQuote(targetPath)}`
-  ])
 }
 
 async function execText (
@@ -641,43 +381,9 @@ function normalizeNullableText (
   return trimmed.length > 0 ? trimmed : null
 }
 
-function isLikelyModalImageId (value: string): boolean {
-  return /^im-[a-z0-9]+$/i.test(value.trim())
-}
-
 function truncateTail (text: string): string {
   if (text.length <= MAX_LOG_CHARS) return text
   return `... (truncated, showing last ${MAX_LOG_CHARS} chars)\n${text.slice(
     -MAX_LOG_CHARS
   )}`
-}
-
-function normalizePosixPath (value: string): string {
-  const input = value.trim()
-  const absolute = input.startsWith('/')
-  const parts = input.split('/')
-  const stack: string[] = []
-  for (const part of parts) {
-    if (!part || part === '.') continue
-    if (part === '..') {
-      if (stack.length > 0) stack.pop()
-      continue
-    }
-    stack.push(part)
-  }
-  return `${absolute ? '/' : ''}${stack.join('/')}` || (absolute ? '/' : '.')
-}
-
-function dirnamePosix (value: string): string {
-  if (value === '/') return '/'
-  const trimmed = trimTrailingSlash(value)
-  const idx = trimmed.lastIndexOf('/')
-  if (idx < 0) return '.'
-  if (idx === 0) return '/'
-  return trimmed.slice(0, idx)
-}
-
-function trimTrailingSlash (value: string): string {
-  if (value === '/') return '/'
-  return value.replace(/\/+$/, '')
 }

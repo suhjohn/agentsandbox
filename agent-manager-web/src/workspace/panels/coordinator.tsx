@@ -105,6 +105,13 @@ function CoordinatorPanel (props: PanelProps<CoordinatorPanelConfig>) {
   })
 
   const sessions = sessionsQuery.data?.data ?? []
+  const selectedSessionId = props.config.sessionId.trim()
+  const activeSessionId =
+    selectedSessionId.length > 0
+      ? selectedSessionId
+      : isDraftingNewSession
+        ? ''
+        : sessions[0]?.id ?? ''
 
   useEffect(() => {
     const nextAgent = selectedAgent
@@ -149,9 +156,14 @@ function CoordinatorPanel (props: PanelProps<CoordinatorPanelConfig>) {
     if (selectedAgentId.length === 0 || isDraftingNewSession) return
     if (sessionsQuery.isLoading) return
 
-    const nextSession = sessions.find(
-      session => session.id === props.config.sessionId.trim()
-    ) ?? sessions[0] ?? null
+    const nextSession =
+      selectedSessionId.length > 0
+        ? sessions.find(session => session.id === selectedSessionId) ?? null
+        : sessions[0] ?? null
+
+    if (selectedSessionId.length > 0 && !nextSession) {
+      return
+    }
 
     props.setConfig(prev => {
       const nextSessionId = nextSession?.id ?? ''
@@ -319,7 +331,7 @@ function CoordinatorPanel (props: PanelProps<CoordinatorPanelConfig>) {
             <div className='divide-y divide-border'>
               {sessions.map(session => {
                 const isCurrent =
-                  session.id === props.config.sessionId.trim() &&
+                  session.id === activeSessionId &&
                   !isDraftingNewSession
                 return (
                   <button
@@ -359,7 +371,7 @@ function CoordinatorPanel (props: PanelProps<CoordinatorPanelConfig>) {
             ...props.config,
             agentId: selectedAgentId,
             agentName: selectedAgent?.name?.trim() ?? '',
-            sessionId: isDraftingNewSession ? '' : props.config.sessionId
+            sessionId: activeSessionId
           }}
           setConfig={props.setConfig}
           runtime={props.runtime}

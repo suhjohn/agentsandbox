@@ -66,19 +66,19 @@ describe("setup sandbox ownership guard (integration)", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns 404 for snapshot when setup sandbox belongs to another user", async () => {
-    const owner = await registerUser(server.baseUrl, "owner-snapshot");
-    const caller = await registerUser(server.baseUrl, "caller-snapshot");
+  it("returns 404 for close when setup sandbox belongs to another user", async () => {
+    const owner = await registerUser(server.baseUrl, "owner-close");
+    const caller = await registerUser(server.baseUrl, "caller-close");
 
     const image = await createImage({
-      name: `setup ownership snapshot ${new Date().toISOString()}`,
+      name: `setup ownership close ${new Date().toISOString()}`,
       createdBy: owner.userId,
     });
     cleanup.push(async () => {
       await deleteImage(image.id);
     });
 
-    const sandboxId = "sb-owned-by-other-user-snapshot";
+    const sandboxId = "sb-owned-by-other-user-close";
     const variantId = crypto.randomUUID();
     vi.spyOn(sandboxService, "getImageSetupSandboxSession").mockReturnValue({
       sandboxId,
@@ -88,52 +88,11 @@ describe("setup sandbox ownership guard (integration)", () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
-    const snapshotSpy = vi
-      .spyOn(sandboxService, "snapshotSetupSandbox")
-      .mockResolvedValue({
-        baseImageId: "im-snapshot",
-        variantId,
-      });
-
-    const res = await fetch(
-      `${server.baseUrl}/images/${image.id}/setup-sandbox/${sandboxId}/snapshot`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${caller.accessToken}` },
-      },
-    );
-
-    expect(res.status).toBe(404);
-    const body = (await res.json()) as { error?: string };
-    expect(body.error).toBe("Setup sandbox not found");
-    expect(snapshotSpy).not.toHaveBeenCalled();
-  });
-
-  it("returns 404 for terminate when setup sandbox belongs to another user", async () => {
-    const owner = await registerUser(server.baseUrl, "owner-terminate");
-    const caller = await registerUser(server.baseUrl, "caller-terminate");
-
-    const image = await createImage({
-      name: `setup ownership terminate ${new Date().toISOString()}`,
-      createdBy: owner.userId,
-    });
-    cleanup.push(async () => {
-      await deleteImage(image.id);
-    });
-
-    const sandboxId = "sb-owned-by-other-user-terminate";
-    const variantId = crypto.randomUUID();
-    vi.spyOn(sandboxService, "getImageSetupSandboxSession").mockReturnValue({
-      sandboxId,
-      imageId: image.id,
+    const closeSpy = vi.spyOn(sandboxService, "closeSetupSandbox").mockResolvedValue({
+      baseImageId: "im-base",
+      headImageId: "im-head",
       variantId,
-      userId: owner.userId,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
     });
-    const terminateSpy = vi
-      .spyOn(sandboxService, "terminateSetupSandbox")
-      .mockResolvedValue();
 
     const res = await fetch(
       `${server.baseUrl}/images/${image.id}/setup-sandbox/${sandboxId}`,
@@ -146,7 +105,7 @@ describe("setup sandbox ownership guard (integration)", () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error?: string };
     expect(body.error).toBe("Setup sandbox not found");
-    expect(terminateSpy).not.toHaveBeenCalled();
+    expect(closeSpy).not.toHaveBeenCalled();
   });
 
   it("returns 404 for terminal connect when setup sandbox belongs to another user", async () => {

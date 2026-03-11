@@ -10,7 +10,6 @@ This document tracks exported service signatures and behavior details that other
 runModalImageBuild(input: {
   readonly imageId: string
   readonly setupScript: string
-  readonly fileSecrets: readonly BuildFileSecretBinding[]
   readonly environmentSecretNames?: readonly string[]
   readonly baseImageId?: string | null
   readonly modalSecretName?: string
@@ -29,8 +28,6 @@ Behavior:
   - source sync via `agent-go/docker/update-agent-go-source.sh` when available, forcing the checkout to match the remote branch and failing the build if sync fails,
   - then `input.setupScript` if non-empty,
   - then verifies `/opt/agentsandbox/agent-go/build-artifacts/agent-server` exists and is executable before snapshotting.
-- Materializes `fileSecrets` into secret files at their exact configured paths in the sandbox before snapshotting.
-  - Builds fail with a descriptive error when a binding path resolves to an existing directory (for example `~/.venv`), because the secret must be written to a file path.
 
 ## image.service.ts
 
@@ -48,15 +45,35 @@ Behavior:
 createImageVariant(input: {
   readonly imageId: string
   readonly name?: string
-  readonly scope: "shared" | "private"
+  readonly scope: "shared" | "personal"
   readonly ownerUserId?: string | null
-  readonly baseImageId?: string | null
+  readonly headImageId?: string | null
 })
 ```
 
 Behavior:
-- For `scope: "private"`, the variant row is owned by `ownerUserId` (and `ownerUserId` is cleared for `scope: "shared"`).
-- When `name` is omitted/blank for a private variant, the service auto-numbers `Variant`, `Variant 2`, `Variant 3`, ... per `(imageId, ownerUserId)` to avoid unique-index collisions.
+- For `scope: "personal"`, the variant row is owned by `ownerUserId` (and `ownerUserId` is cleared for `scope: "shared"`).
+- When `name` is omitted/blank for a personal variant, the service auto-numbers `Variant`, `Variant 2`, `Variant 3`, ... per `(imageId, ownerUserId)` to avoid unique-index collisions.
+- `headImageId` is the single live image pointer for a variant. When callers omit it, the variant starts from the default ref `suhjohn/agentdesktop`.
+
+### `updateImageVariant(input)`
+
+```ts
+updateImageVariant(input: {
+  readonly imageId: string
+  readonly variantId: string
+  readonly name?: string
+  readonly scope?: "shared" | "personal"
+  readonly ownerUserId?: string | null
+})
+```
+
+Behavior:
+- Updates the variant name when `name` is provided.
+- Updates the variant scope between `personal` and `shared`.
+- Shared variants clear `ownerUserId`; personal variants assign `ownerUserId`.
+- When switching a variant to `personal`, the service auto-renames on conflict using `Variant`, `Variant 2`, ... style suffixing for that owner scope.
+- Explicit rename collisions fail with `Variant name already exists`.
 
 ### `runBuild(input)`
 
@@ -70,9 +87,10 @@ runBuild(input: {
 ```
 
 Behavior:
-- Loads both file secret bindings (`listFileSecrets`) and environment secret bindings (`listEnvironmentSecrets`) for `imageRecordId`.
 - Passes environment secret names to `runModalImageBuild` via `environmentSecretNames`.
-- Includes both `fileSecrets` and `environmentSecretNames` in the build input payload/hash.
+- Includes `environmentSecretNames` in the build input payload/hash.
+- Uses the variant's current `headImageId` as the build base and records that value as `baseImageId` in the build input payload.
+- On success, writes the produced Modal image id directly back to the variant's `headImageId`.
 
 ## agent.service.ts
 
@@ -255,6 +273,54 @@ Behavior:
 
 ## sandbox.service.ts
 
+### `createSetupSandbox(input)`
+
+```ts
+createSetupSandbox(input: {
+  readonly imageId: string
+  readonly variantId: string
+  readonly userId: string
+  readonly region?: SandboxRegion
+  readonly sshPublicKeys?: readonly string[]
+}): Promise<{
+  readonly sandboxId: string
+  readonly variantId: string
+  readonly headImageId: string
+  readonly ssh: {
+    readonly username: string
+    readonly host: string
+    readonly port: number
+    readonly hostPublicKey: string
+    readonly hostKeyFingerprint: string
+    readonly knownHostsLine: string
+  } | null
+}>
+```
+
+Behavior:
+- Creates the setup sandbox from the selected variant `headImageId`.
+- Continues to expose the existing setup terminal/API over encrypted port `8080`.
+- When `sshPublicKeys` is provided and non-empty, also exposes sandbox port `22` over a Modal unencrypted TCP tunnel, provisions `authorized_keys` for the `agent` user, starts `sshd`, and returns the tunnel host/port plus host verification material.
+- When `sshPublicKeys` is omitted or empty, no SSH tunnel is provisioned and `ssh` is returned as `null`.
+- Setup sandbox SSH access is creation-time only; callers are expected to terminate and recreate the setup sandbox to rotate keys or reissue access.
+
+### `closeSetupSandbox(input)`
+
+```ts
+closeSetupSandbox(input: {
+  readonly userId: string
+  readonly sandboxId: string
+}): Promise<{
+  readonly baseImageId: string
+  readonly headImageId: string
+  readonly variantId: string
+}>
+```
+
+Behavior:
+- Snapshots the live setup sandbox filesystem, writes the snapshot image id back to the variant's `headImageId`, and terminates the sandbox.
+- Records the previous variant `headImageId` as `baseImageId` in a succeeded `image_variant_builds` row with source `setup-sandbox`.
+
 ### `ensureAgentSandbox(input)`
 
 ```ts
@@ -278,5 +344,5 @@ Behavior:
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.
 - Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).
 - Manager-side `/health` probes to `*.modal.host` sandbox tunnel URLs disable TLS certificate verification to avoid Bun-specific certificate validation failures on Modal tunnels.
-- Agent sandboxes receive a per-runtime opaque `AGENT_INTERNAL_AUTH_SECRET`; manager/runtime traffic uses that secret instead of the legacy manager API-key path.
+- Agent sandboxes receive a per-runtime opaque `AGENT_INTERNAL_AUTH_SECRET`; manager/runtime traffic uses that secret exclusively.
 - `waitForLock: false` makes sandbox creation opportunistic: if the per-agent create lock is already held, the call fails immediately instead of waiting for the existing create/warmup flow.

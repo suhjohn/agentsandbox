@@ -329,6 +329,11 @@ export function RootLayout() {
     return dialogController;
   }, []);
 
+  const focusCoordinatorComposer = useCallback(async (): Promise<void> => {
+    const dialogController = await getReadyDialogController();
+    await dialogController?.focusComposer();
+  }, [getReadyDialogController]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const cycleDirection = getCoordinatorPttDeviceCycleDirection(e);
@@ -350,9 +355,10 @@ export function RootLayout() {
         if (!e.repeat) {
           e.preventDefault();
           setCoordinatorDialogOpenPersisted(true);
-          void getReadyDialogController().then((controller) =>
-            controller?.draftNewSession(),
-          );
+          void getReadyDialogController().then(async (controller) => {
+            await controller?.draftNewSession();
+            await controller?.focusComposer();
+          });
         }
         return;
       }
@@ -368,7 +374,11 @@ export function RootLayout() {
       }
       if (!isCoordinatorToggleShortcut(e)) return;
       e.preventDefault();
+      const willOpen = !isCoordinatorDialogOpen;
       setCoordinatorDialogOpenPersisted((prev) => !prev);
+      if (willOpen) {
+        void focusCoordinatorComposer();
+      }
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -388,6 +398,7 @@ export function RootLayout() {
     };
   }, [
     cycleCoordinatorPttInputDevice,
+    focusCoordinatorComposer,
     getReadyDialogController,
     setCoordinatorDialogOpenPersisted,
     startCoordinatorPtt,

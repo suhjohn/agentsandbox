@@ -4,7 +4,10 @@ import { List, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from './ui/button'
 import { useAuth } from '../lib/auth'
-import { registerDialogRuntimeController } from '@/coordinator-actions/runtime-bridge'
+import {
+  getChatRuntimeController,
+  registerDialogRuntimeController
+} from '@/coordinator-actions/runtime-bridge'
 import { AgentSessionPanel, type AgentSessionPanelConfig } from '@/workspace/panels/agent-session'
 import type { PanelRuntime } from '@/workspace/panels/types'
 
@@ -153,15 +156,6 @@ export function CoordinatorAgentShell (props: {
 
   const sessions = sessionsQuery.data?.data ?? []
 
-  useEffect(() => {
-    if (isDraftingNewSession) return
-    if (selectedSessionId.length === 0) return
-    if (sessions.some(session => session.id === selectedSessionId)) return
-    const first = sessions[0]
-    setSelectedSessionId(first?.id ?? '')
-    setSelectedSessionTitle(first?.title?.trim() ?? '')
-  }, [isDraftingNewSession, selectedSessionId, sessions])
-
   const resolvedSession =
     !isDraftingNewSession && selectedSessionId.length > 0
       ? sessions.find(session => session.id === selectedSessionId) ?? null
@@ -169,9 +163,17 @@ export function CoordinatorAgentShell (props: {
   const fallbackSession =
     !isDraftingNewSession && selectedSessionId.length === 0 ? sessions[0] ?? null : null
   const activeSession = resolvedSession ?? fallbackSession
-  const currentSessionId = isDraftingNewSession ? '' : activeSession?.id ?? ''
+  const currentSessionId =
+    selectedSessionId.length > 0
+      ? selectedSessionId
+      : isDraftingNewSession
+        ? ''
+        : fallbackSession?.id ?? ''
   const currentSessionTitle =
-    activeSession?.title?.trim() ?? selectedSessionTitle.trim() ?? ''
+    resolvedSession?.title?.trim() ??
+    (selectedSessionId.length > 0
+      ? selectedSessionTitle.trim()
+      : fallbackSession?.title?.trim() ?? selectedSessionTitle.trim() ?? '')
 
   useEffect(() => {
     props.onSelectionChange?.({
@@ -231,6 +233,20 @@ export function CoordinatorAgentShell (props: {
       openSessionsList: async () => {
         setMode('sessions')
         return { mode: 'sessions' as const }
+      },
+      focusComposer: async () => {
+        setMode('conversation')
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          await new Promise<void>(resolve => window.setTimeout(resolve, 0))
+          const chatController = getChatRuntimeController('dialog')
+          if (!chatController) continue
+          try {
+            return await chatController.focusInput()
+          } catch {
+            // Wait for the dialog conversation surface to finish mounting.
+          }
+        }
+        return { focused: false }
       },
       draftNewSession: async () => {
         startDraftSession()
@@ -374,7 +390,9 @@ export function CoordinatorAgentShell (props: {
       setSelectedSessionId(nextSessionId)
       setSelectedSessionTitle(next.sessionTitle?.trim() ?? '')
       setIsDraftingNewSession(nextSessionId.length === 0)
-      setConversationViewKey(prev => prev + 1)
+      if (!(currentSessionId.length === 0 && nextSessionId.length > 0)) {
+        setConversationViewKey(prev => prev + 1)
+      }
       if (currentSessionId.length === 0 && nextSessionId.length > 0) {
         void queryClient.invalidateQueries({ queryKey: ['/session'] })
       }
@@ -575,7 +593,7 @@ export function CoordinatorAgentShell (props: {
   const conversation = (
     <div className='h-full min-h-0'>
       <AgentSessionPanel
-        key={`${selectedAgentId}:${currentSessionId}:${conversationViewKey}`}
+        key={`${selectedAgentId}:${conversationViewKey}`}
         config={panelConfig}
         setConfig={setPanelConfig}
         runtime={runtime}

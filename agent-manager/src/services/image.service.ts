@@ -12,7 +12,6 @@ import { createHash } from "node:crypto";
 import { db } from "../db";
 import {
   environmentSecrets,
-  fileSecrets,
   imageVariantBuilds,
   images,
   imageVariants,
@@ -21,6 +20,8 @@ import { log } from "../log";
 import { runModalImageBuild, type BuildChunk } from "./build";
 
 // ── Shared helpers ──────────────────────────────────────────────────
+
+export const DEFAULT_VARIANT_HEAD_IMAGE_REF = "suhjohn/agentdesktop";
 
 const DEFAULT_SETUP_SCRIPT = [
   "set -euo pipefail",
@@ -66,71 +67,10 @@ function hydrateImage(input: { readonly image: typeof images.$inferSelect }) {
 
 // ── Types ───────────────────────────────────────────────────────────
 
-export type ImageVariantScope = "shared" | "private";
+export type ImageVariantScope = "shared" | "personal";
 export type ImageVariantBuildStatus = "running" | "succeeded" | "failed";
 
-export type ImageVariantWithHead = typeof imageVariants.$inferSelect & {
-  readonly headImageId: string | null;
-};
-
-// ── File Secrets ────────────────────────────────────────────────────
-
-export async function listFileSecrets(imageId: string | null) {
-  if (imageId !== null && !isUuid(imageId)) return [];
-  const condition =
-    imageId === null
-      ? isNull(fileSecrets.imageId)
-      : eq(fileSecrets.imageId, imageId);
-  return db.select().from(fileSecrets).where(condition).orderBy(fileSecrets.path);
-}
-
-export async function upsertFileSecret(input: {
-  readonly imageId: string | null;
-  readonly path: string;
-  readonly modalSecretName: string;
-}) {
-  if (input.imageId !== null && !isUuid(input.imageId)) return null;
-
-  const trimmedPath = input.path.trim();
-  const trimmedSecretName = input.modalSecretName.trim();
-  if (trimmedPath.length === 0) throw new Error("path must be non-empty");
-  if (trimmedSecretName.length === 0)
-    throw new Error("modalSecretName must be non-empty");
-
-  const [row] = await db
-    .insert(fileSecrets)
-    .values({
-      imageId: input.imageId,
-      path: trimmedPath,
-      modalSecretName: trimmedSecretName,
-    })
-    .onConflictDoUpdate({
-      target: [fileSecrets.imageId, fileSecrets.path],
-      set: { modalSecretName: trimmedSecretName, updatedAt: new Date() },
-    })
-    .returning();
-
-  return row ?? null;
-}
-
-export async function deleteFileSecret(input: {
-  readonly imageId: string | null;
-  readonly fileSecretId: string;
-}): Promise<boolean> {
-  if (input.imageId !== null && !isUuid(input.imageId)) return false;
-  if (!isUuid(input.fileSecretId)) return false;
-
-  const imageCondition =
-    input.imageId === null
-      ? isNull(fileSecrets.imageId)
-      : eq(fileSecrets.imageId, input.imageId);
-
-  const result = await db
-    .delete(fileSecrets)
-    .where(and(eq(fileSecrets.id, input.fileSecretId), imageCondition))
-    .returning();
-  return result.length > 0;
-}
+export type ImageVariantWithHead = typeof imageVariants.$inferSelect;
 
 // ── Environment Secrets ─────────────────────────────────────────────
 
@@ -201,9 +141,7 @@ const IMAGE_VARIANT_SELECT = {
   scope: imageVariants.scope,
   imageId: imageVariants.imageId,
   ownerUserId: imageVariants.ownerUserId,
-  baseImageId: imageVariants.baseImageId,
-  headBuildId: imageVariants.headBuildId,
-  headImageId: imageVariantBuilds.outputImageId,
+  headImageId: imageVariants.headImageId,
   createdAt: imageVariants.createdAt,
   updatedAt: imageVariants.updatedAt,
 };
@@ -212,7 +150,6 @@ async function getImageVariantByFilter(where: SQL<unknown>) {
   const rows = await db
     .select(IMAGE_VARIANT_SELECT)
     .from(imageVariants)
-    .leftJoin(imageVariantBuilds, eq(imageVariants.headBuildId, imageVariantBuilds.id))
     .where(where)
     .limit(1);
   return rows[0] ?? null;
@@ -244,7 +181,6 @@ export async function listImageVariantsForUser(input: {
   return db
     .select(IMAGE_VARIANT_SELECT)
     .from(imageVariants)
-    .leftJoin(imageVariantBuilds, eq(imageVariants.headBuildId, imageVariantBuilds.id))
     .where(eq(imageVariants.imageId, input.imageId))
     .orderBy(asc(imageVariants.createdAt));
 }
@@ -268,7 +204,7 @@ export function canUserMutateImageVariant(input: {
   };
 }): boolean {
   if (input.userId === input.imageCreatedBy) return true;
-  if (input.variant.scope !== "private") return false;
+  if (input.variant.scope !== "personal") return false;
   return input.variant.ownerUserId === input.userId;
 }
 
@@ -299,17 +235,19 @@ export async function createImageVariant(input: {
   readonly name?: string;
   readonly scope: ImageVariantScope;
   readonly ownerUserId?: string | null;
-  readonly baseImageId?: string | null;
+  readonly headImageId?: string | null;
 }) {
   if (!isUuid(input.imageId)) return null;
 
   const trimmedName = (input.name ?? "").trim();
   const baseName = trimmedName.length > 0 ? trimmedName : "Variant";
-  const ownerUserId = input.scope === "private" ? input.ownerUserId ?? null : null;
-  const baseImageId = normalizeNullableText(input.baseImageId);
+  const ownerUserId =
+    input.scope === "personal" ? input.ownerUserId ?? null : null;
+  const headImageId =
+    normalizeNullableText(input.headImageId) ?? DEFAULT_VARIANT_HEAD_IMAGE_REF;
 
-  // UI currently creates private variants without specifying a name. Auto-number
-  // default names so users can create multiple private variants per image.
+  // UI can create personal variants without specifying a name. Auto-number
+  // default names so users can create multiple personal variants per image.
   let candidateName = baseName;
   let knownNames: Set<string> | null = null;
   const shouldAutoNumber =
@@ -337,7 +275,7 @@ export async function createImageVariant(input: {
           name: candidateName,
           scope: input.scope,
           ownerUserId,
-          baseImageId,
+          headImageId,
         })
         .returning({ id: imageVariants.id });
       if (!created) return null;
@@ -355,6 +293,82 @@ export async function createImageVariant(input: {
   }
 
   return null;
+}
+
+export async function updateImageVariant(input: {
+  readonly imageId: string;
+  readonly variantId: string;
+  readonly name?: string;
+  readonly scope?: ImageVariantScope;
+  readonly ownerUserId?: string | null;
+}) {
+  if (!isUuid(input.imageId) || !isUuid(input.variantId)) return null;
+
+  const existing = await getImageVariantForImage({
+    imageId: input.imageId,
+    variantId: input.variantId,
+  });
+  if (!existing) return null;
+
+  const nextScope = input.scope ?? (existing.scope as ImageVariantScope);
+  const nextOwnerUserId =
+    nextScope === "personal" ? input.ownerUserId ?? null : null;
+  const requestedName = typeof input.name === "string" ? input.name.trim() : null;
+  if (requestedName !== null && requestedName.length === 0) {
+    throw new Error("name must be non-empty");
+  }
+
+  let nextName = requestedName ?? existing.name;
+  const shouldAutoRenameOnPersonalConflict =
+    requestedName === null &&
+    nextScope === "personal" &&
+    nextOwnerUserId &&
+    isUuid(nextOwnerUserId);
+  if (shouldAutoRenameOnPersonalConflict) {
+    const existingRows = await db
+      .select({ name: imageVariants.name })
+      .from(imageVariants)
+      .where(
+        and(
+          eq(imageVariants.imageId, input.imageId),
+          eq(imageVariants.ownerUserId, nextOwnerUserId),
+        )!,
+      );
+    const existingNames = new Set(
+      existingRows
+        .map((row) => row.name)
+        .filter((name) => name !== existing.name),
+    );
+    nextName = buildUniqueVariantName({
+      baseName: nextName,
+      existingNames,
+    });
+  }
+
+  try {
+    const [updated] = await db
+      .update(imageVariants)
+      .set({
+        scope: nextScope,
+        ownerUserId: nextOwnerUserId,
+        name: nextName,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(imageVariants.id, input.variantId),
+          eq(imageVariants.imageId, input.imageId),
+        ),
+      )
+      .returning({ id: imageVariants.id });
+    if (!updated) return null;
+    return getImageVariantById(updated.id);
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new Error("Variant name already exists");
+    }
+    throw err;
+  }
 }
 
 export async function deleteImageVariant(input: {
@@ -377,39 +391,15 @@ export async function deleteImageVariant(input: {
 export async function createDefaultImageVariantForImage(input: {
   readonly imageId: string;
   readonly ownerUserId: string;
-  readonly baseImageId?: string | null;
   readonly headImageId?: string | null;
 }) {
-  const created = await createImageVariant({
+  return createImageVariant({
     imageId: input.imageId,
     name: "Default",
     scope: "shared",
     ownerUserId: input.ownerUserId,
-    baseImageId: input.baseImageId,
+    headImageId: input.headImageId,
   });
-  if (!created) return null;
-
-  const headImageId = normalizeNullableText(input.headImageId);
-  if (!headImageId) return created;
-
-  const build = await createImageVariantBuild({
-    imageId: input.imageId,
-    variantId: created.id,
-    requestedByUserId: input.ownerUserId,
-    status: "succeeded",
-    inputHash: "cloned",
-    inputPayload: { source: "clone" },
-    outputImageId: headImageId,
-    logs: "",
-    errorMessage: null,
-    finishedAt: new Date(),
-  });
-  if (!build) return null;
-  await setImageVariantHeadBuildId({
-    variantId: created.id,
-    headBuildId: build.id,
-  });
-  return getImageVariantById(created.id);
 }
 
 export async function setImageDefaultVariantId(input: {
@@ -456,33 +446,16 @@ export async function resolveImageVariantForUser(input: {
   return getDefaultImageVariantForImage(input.imageId);
 }
 
-export async function setImageVariantBaseImageId(input: {
+export async function setImageVariantHeadImageId(input: {
   readonly variantId: string;
-  readonly baseImageId: string | null;
+  readonly headImageId: string | null;
 }) {
   if (!isUuid(input.variantId)) return null;
   const [updated] = await db
     .update(imageVariants)
     .set({
-      baseImageId: normalizeNullableText(input.baseImageId),
-      updatedAt: new Date(),
-    })
-    .where(eq(imageVariants.id, input.variantId))
-    .returning({ id: imageVariants.id });
-  if (!updated) return null;
-  return getImageVariantById(updated.id);
-}
-
-export async function setImageVariantHeadBuildId(input: {
-  readonly variantId: string;
-  readonly headBuildId: string | null;
-}) {
-  if (!isUuid(input.variantId)) return null;
-  if (input.headBuildId !== null && !isUuid(input.headBuildId)) return null;
-  const [updated] = await db
-    .update(imageVariants)
-    .set({
-      headBuildId: input.headBuildId,
+      headImageId:
+        normalizeNullableText(input.headImageId) ?? DEFAULT_VARIANT_HEAD_IMAGE_REF,
       updatedAt: new Date(),
     })
     .where(eq(imageVariants.id, input.variantId))
@@ -593,7 +566,7 @@ export async function createImage(input: {
   readonly description?: string;
   readonly setupScript?: string;
   readonly runScript?: string;
-  readonly baseImageId?: string | null;
+  readonly headImageId?: string | null;
   readonly createdBy: string;
 }) {
   const [image] = await db
@@ -612,7 +585,7 @@ export async function createImage(input: {
   const defaultVariant = await createDefaultImageVariantForImage({
     imageId: image.id,
     ownerUserId: input.createdBy,
-    baseImageId: input.baseImageId,
+    headImageId: input.headImageId,
   });
   if (!defaultVariant) throw new Error("Failed to create default image variant");
 
@@ -777,7 +750,6 @@ export async function cloneImage(input: {
   const defaultVariant = await createDefaultImageVariantForImage({
     imageId: cloned.id,
     ownerUserId: input.clonedByUserId,
-    baseImageId: sourceDefaultVariant?.baseImageId ?? null,
     headImageId: sourceDefaultVariant?.headImageId ?? null,
   });
   if (!defaultVariant) throw new Error("Failed to clone default variant");
@@ -824,21 +796,8 @@ export async function runBuild(input: {
   }
 
   const setupScript = resolveSetupScript(image.setupScript ?? null);
-  const baseImageId = normalizeNullableText(variant.baseImageId);
-
-  let fileSecretRows = [] as Awaited<ReturnType<typeof listFileSecrets>>;
-  try {
-    fileSecretRows = await listFileSecrets(input.imageRecordId);
-  } catch (err) {
-    log.warn("Failed to load file secret bindings; continuing without them.", {
-      err,
-    });
-    fileSecretRows = [];
-  }
-  const fileSecretsForBuild = fileSecretRows.map((secret) => ({
-    path: secret.path,
-    modalSecretName: secret.modalSecretName,
-  }));
+  const baseImageId =
+    normalizeNullableText(variant.headImageId) ?? DEFAULT_VARIANT_HEAD_IMAGE_REF;
 
   let environmentSecretRows =
     [] as Awaited<ReturnType<typeof listEnvironmentSecrets>>;
@@ -859,7 +818,6 @@ export async function runBuild(input: {
     variantId: variant.id,
     setupScript,
     baseImageId,
-    fileSecrets: fileSecretsForBuild,
     environmentSecretNames,
   } as const;
   const inputHash = createHash("sha256")
@@ -887,7 +845,6 @@ export async function runBuild(input: {
     const { builtImageId } = await runModalImageBuild({
       imageId: input.imageRecordId,
       setupScript,
-      fileSecrets: fileSecretsForBuild,
       environmentSecretNames,
       baseImageId,
       onChunk: (chunk) => {
@@ -908,9 +865,9 @@ export async function runBuild(input: {
       throw new Error("Failed to update build record");
     }
 
-    const updatedVariant = await setImageVariantHeadBuildId({
+    const updatedVariant = await setImageVariantHeadImageId({
       variantId: variant.id,
-      headBuildId: build.id,
+      headImageId: builtImageId,
     });
     if (!updatedVariant) throw new Error("Image variant not found after build");
 

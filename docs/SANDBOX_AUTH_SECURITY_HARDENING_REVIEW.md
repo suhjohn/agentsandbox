@@ -126,7 +126,7 @@ Where:
 Behavior:
 
 - runtime receives `SECRET_SEED`
-- runtime receives `AGENT_MANAGER_API_KEY`
+- runtime receives `AGENT_INTERNAL_AUTH_SECRET`
 - runtime flow may inject provider API keys via Modal secret object
 
 Risk:

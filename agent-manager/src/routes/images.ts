@@ -17,9 +17,6 @@ import {
   listImages,
   cloneImage,
   runBuild,
-  deleteFileSecret,
-  listFileSecrets,
-  upsertFileSecret,
   listEnvironmentSecrets,
   upsertEnvironmentSecret,
   deleteEnvironmentSecret,
@@ -32,14 +29,13 @@ import {
   listImageVariantsForUser,
   listImageVariantBuilds,
   setImageDefaultVariantId,
-  setImageVariantBaseImageId
+  updateImageVariant
 } from '../services/image.service'
 import { upsertModalSecret } from '../services/modal-secret.service'
 import {
+  closeSetupSandbox,
   createSetupSandbox,
-  getImageSetupSandboxSession,
-  snapshotSetupSandbox,
-  terminateSetupSandbox
+  getImageSetupSandboxSession
 } from '../services/sandbox.service'
 
 const app = new Hono<AppEnv>()
@@ -77,7 +73,7 @@ const createImageSchema = z.object({
   description: z.string().max(2000).optional(),
   setupScript: z.string().optional(),
   runScript: z.string().optional(),
-  baseImageId: z.string().optional()
+  headImageId: z.string().optional()
 })
 
 const updateImageSchema = z.object({
@@ -91,6 +87,20 @@ const listImagesQuery = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().optional(),
   archived: z.enum(['true', 'false']).optional()
+})
+
+const sshPublicKeySchema = z
+  .string()
+  .min(1)
+  .max(8192)
+  .refine(
+    value => !value.includes('\n') && !value.includes('\r'),
+    'sshPublicKeys entries must be single-line public keys'
+  )
+
+const createSetupSandboxSchema = z.object({
+  variantId: z.string().uuid(),
+  sshPublicKeys: z.array(sshPublicKeySchema).max(20).optional()
 })
 
 const variantIdInputSchema = z.object({
@@ -128,24 +138,33 @@ const imageSchema = z.object({
 const imageVariantSchema = z.object({
   id: z.string(),
   name: z.string(),
-  scope: z.enum(['shared', 'private'] as const),
+  scope: z.enum(['shared', 'personal'] as const),
   imageId: z.string(),
   ownerUserId: z.string().nullable().optional(),
-  baseImageId: z.string().nullable().optional(),
-  headBuildId: z.string().uuid().nullable().optional(),
-  headImageId: z.string().nullable().optional(),
+  headImageId: z.string(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date())
+})
+
+const setupSandboxSshSchema = z.object({
+  username: z.string(),
+  host: z.string(),
+  port: z.number().int().positive(),
+  hostPublicKey: z.string(),
+  hostKeyFingerprint: z.string(),
+  knownHostsLine: z.string()
 })
 
 const setupSandboxSchema = z.object({
   sandboxId: z.string(),
   variantId: z.string().uuid(),
-  baseImageId: z.string().nullable()
+  headImageId: z.string(),
+  ssh: setupSandboxSshSchema.nullable().optional()
 })
 
-const setupSandboxSnapshotSchema = z.object({
+const closeSetupSandboxSchema = z.object({
   baseImageId: z.string(),
+  headImageId: z.string(),
   variantId: z.string().uuid()
 })
 
@@ -156,18 +175,19 @@ const buildResultSchema = z.object({
 
 const createVariantSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  scope: z.enum(['shared', 'private'] as const).default('private'),
-  baseImageId: z.string().optional(),
+  scope: z.enum(['shared', 'personal'] as const).default('personal'),
+  headImageId: z.string().optional(),
   setAsDefault: z.boolean().optional().default(false)
+})
+
+const updateVariantSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  scope: z.enum(['shared', 'personal'] as const).optional()
 })
 
 const variantParamsSchema = z.object({
   imageId: z.string().min(1),
   variantId: z.string().uuid()
-})
-
-const setVariantBaseImageSchema = z.object({
-  baseImageId: z.string().nullable()
 })
 
 const listVariantBuildsQuery = z.object({
@@ -193,39 +213,6 @@ const imageVariantBuildSchema = z.object({
 const upsertModalSecretResponseSchema = z.object({
   ok: z.boolean(),
   name: z.string()
-})
-
-const fileSecretSchema = z.object({
-  id: z.string(),
-  imageId: z.string().nullable(),
-  path: z.string(),
-  modalSecretName: z.string(),
-  createdAt: z.string().or(z.date()),
-  updatedAt: z.string().or(z.date())
-})
-
-const upsertFileSecretBindingSchema = z.object({
-  path: z
-    .string()
-    .min(1)
-    .max(2048)
-    .refine(value => value.trim().length > 0, 'path must be non-empty')
-    .refine(
-      value => {
-        const trimmed = value.trim()
-        if (trimmed.length === 0) return false
-        if (!trimmed.startsWith('~/')) return false
-        if (trimmed.endsWith('/')) return false
-        const lastSegment = trimmed.split('/').pop() ?? ''
-        return (
-          lastSegment.length > 0 &&
-          lastSegment !== '.' &&
-          lastSegment !== '..'
-        )
-      },
-      'path must start with ~/ and include a filename'
-    ),
-  modalSecretName: z.string().min(1).max(255)
 })
 
 const environmentSecretSchema = z.object({
@@ -319,7 +306,7 @@ registerRoute(
       description: body.description,
       setupScript: body.setupScript,
       runScript: body.runScript,
-      baseImageId: body.baseImageId,
+      headImageId: body.headImageId,
       createdBy: user.id
     })
     return c.json(image, 201)
@@ -451,7 +438,7 @@ registerRoute(
       name: body.name,
       scope: body.scope,
       ownerUserId: user.id,
-      baseImageId: body.baseImageId
+      headImageId: body.headImageId
     })
     if (!created) return c.json({ error: 'Failed to create variant' }, 400)
     if (body.setAsDefault) {
@@ -469,6 +456,84 @@ registerRoute(
       })
     }
     return c.json(created, 201)
+  }
+)
+
+// Update variant
+registerRoute(
+  app,
+  {
+    method: 'patch',
+    path: `${BASE}/:imageId/variants/:variantId`,
+    summary: 'Update image variant',
+    tags: ['images'],
+    security: [{ bearerAuth: [] }],
+    request: {
+      params: variantParamsSchema,
+      json: updateVariantSchema
+    },
+    responses: {
+      200: imageVariantSchema,
+      400: z.object({ error: z.string() }),
+      404: z.object({ error: z.string() })
+    }
+  },
+  '/:imageId/variants/:variantId',
+  zValidator('param', variantParamsSchema),
+  zValidator('json', updateVariantSchema),
+  async c => {
+    const user = c.get('user')
+    const { imageId, variantId } = c.req.valid('param' as never) as z.infer<
+      typeof variantParamsSchema
+    >
+    const body = c.req.valid('json' as never) as z.infer<
+      typeof updateVariantSchema
+    >
+
+    const image = await getImageById(imageId)
+    if (!image) return c.json({ error: 'Image not found' }, 404)
+    try {
+      ensureCanReadImage(user.id, {
+        visibility: image.visibility as Visibility,
+        createdBy: image.createdBy
+      })
+    } catch {
+      return c.json({ error: 'Image not found' }, 404)
+    }
+
+    const variant = await getImageVariantForImage({ imageId, variantId })
+    if (!variant) return c.json({ error: 'Image variant not found' }, 404)
+
+    if (
+      !canUserMutateImageVariant({
+        userId: user.id,
+        imageCreatedBy: image.createdBy ?? '',
+        variant
+      })
+    ) {
+      return c.json({ error: 'Image variant not found' }, 404)
+    }
+
+    if (body.scope === 'shared') {
+      try {
+        ensureCanWriteImage(user.id, { createdBy: image.createdBy })
+      } catch {
+        return c.json(
+          { error: 'Only image owners can make variants shared' },
+          400
+        )
+      }
+    }
+
+    const updated = await updateImageVariant({
+      imageId,
+      variantId,
+      name: body.name,
+      scope: body.scope,
+      ownerUserId: user.id
+    })
+    if (!updated) return c.json({ error: 'Failed to update variant' }, 400)
+    return c.json(updated)
   }
 )
 
@@ -509,67 +574,6 @@ registerRoute(
     }
     await setImageDefaultVariantId({ imageId, variantId })
     return c.json({ ok: true })
-  }
-)
-
-// Set variant base image
-registerRoute(
-  app,
-  {
-    method: 'post',
-    path: `${BASE}/:imageId/variants/:variantId/base-image`,
-    summary: 'Set image variant base image',
-    tags: ['images'],
-    security: [{ bearerAuth: [] }],
-    request: { params: variantParamsSchema, json: setVariantBaseImageSchema },
-    responses: {
-      200: imageVariantSchema,
-      404: z.object({ error: z.string() }),
-      400: z.object({ error: z.string() })
-    }
-  },
-  '/:imageId/variants/:variantId/base-image',
-  zValidator('param', variantParamsSchema),
-  zValidator('json', setVariantBaseImageSchema),
-  async c => {
-    const user = c.get('user')
-    const { imageId, variantId } = c.req.valid('param' as never) as z.infer<
-      typeof variantParamsSchema
-    >
-    const body = c.req.valid('json' as never) as z.infer<
-      typeof setVariantBaseImageSchema
-    >
-
-    const image = await getImageById(imageId)
-    if (!image) return c.json({ error: 'Image not found' }, 404)
-    try {
-      ensureCanReadImage(user.id, {
-        visibility: image.visibility as Visibility,
-        createdBy: image.createdBy
-      })
-    } catch {
-      return c.json({ error: 'Image not found' }, 404)
-    }
-
-    const variant = await getImageVariantForImage({ imageId, variantId })
-    if (!variant) return c.json({ error: 'Image variant not found' }, 404)
-
-    if (
-      !canUserMutateImageVariant({
-        userId: user.id,
-        imageCreatedBy: image.createdBy ?? '',
-        variant
-      })
-    ) {
-      return c.json({ error: 'Image variant not found' }, 404)
-    }
-
-    const updated = await setImageVariantBaseImageId({
-      variantId,
-      baseImageId: body.baseImageId
-    })
-    if (!updated) return c.json({ error: 'Image variant not found' }, 404)
-    return c.json(updated)
   }
 )
 
@@ -699,7 +703,7 @@ registerRoute(
     summary: 'Create image setup sandbox',
     tags: ['images'],
     security: [{ bearerAuth: [] }],
-    request: { json: variantIdInputSchema },
+    request: { json: createSetupSandboxSchema },
     responses: {
       200: setupSandboxSchema,
       404: z.object({ error: z.string() }),
@@ -707,12 +711,12 @@ registerRoute(
     }
   },
   '/:imageId/setup-sandbox',
-  zValidator('json', variantIdInputSchema),
+  zValidator('json', createSetupSandboxSchema),
   async c => {
     const user = c.get('user')
     const imageId = c.req.param('imageId')
     const body = c.req.valid('json' as never) as z.infer<
-      typeof variantIdInputSchema
+      typeof createSetupSandboxSchema
     >
     const variantId = body.variantId
     const image = await getImageById(imageId)
@@ -730,7 +734,8 @@ registerRoute(
         imageId,
         variantId,
         userId: user.id,
-        region: user.defaultRegion
+        region: user.defaultRegion,
+        sshPublicKeys: body.sshPublicKeys
       })
       return c.json(created)
     } catch (err) {
@@ -741,69 +746,17 @@ registerRoute(
   }
 )
 
-// Snapshot setup sandbox into baseImageId
-registerRoute(
-  app,
-  {
-    method: 'post',
-    path: `${BASE}/:imageId/setup-sandbox/:sandboxId/snapshot`,
-    summary: 'Snapshot setup sandbox',
-    tags: ['images'],
-    security: [{ bearerAuth: [] }],
-    request: { params: setupSandboxParamsSchema },
-    responses: {
-      200: setupSandboxSnapshotSchema,
-      404: z.object({ error: z.string() }),
-      400: z.object({ error: z.string() })
-    }
-  },
-  '/:imageId/setup-sandbox/:sandboxId/snapshot',
-  zValidator('param', setupSandboxParamsSchema),
-  async c => {
-    const user = c.get('user')
-    const { imageId, sandboxId } = c.req.valid('param' as never) as z.infer<
-      typeof setupSandboxParamsSchema
-    >
-    const image = await getImageById(imageId)
-    if (!image) return c.json({ error: 'Image not found' }, 404)
-    try {
-      ensureCanReadImage(user.id, {
-        visibility: image.visibility as Visibility,
-        createdBy: image.createdBy
-      })
-    } catch {
-      return c.json({ error: 'Image not found' }, 404)
-    }
-    try {
-      const session = getImageSetupSandboxSession({ sandboxId })
-      if (!session || session.imageId !== imageId || session.userId !== user.id) {
-        return c.json({ error: 'Setup sandbox not found' }, 404)
-      }
-
-      const result = await snapshotSetupSandbox({
-        userId: user.id,
-        sandboxId
-      })
-      return c.json(result)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Snapshot failed'
-      return c.json({ error: message }, 400)
-    }
-  }
-)
-
-// Terminate setup sandbox
 registerRoute(
   app,
   {
     method: 'delete',
     path: `${BASE}/:imageId/setup-sandbox/:sandboxId`,
-    summary: 'Terminate setup sandbox',
+    summary: 'Close setup sandbox',
     tags: ['images'],
     security: [{ bearerAuth: [] }],
     request: { params: setupSandboxParamsSchema },
     responses: {
-      200: z.object({ ok: z.boolean() }),
+      200: closeSetupSandboxSchema,
       404: z.object({ error: z.string() }),
       400: z.object({ error: z.string() })
     }
@@ -831,13 +784,13 @@ registerRoute(
         return c.json({ error: 'Setup sandbox not found' }, 404)
       }
 
-      await terminateSetupSandbox({
+      const result = await closeSetupSandbox({
         userId: user.id,
         sandboxId
       })
-      return c.json({ ok: true })
+      return c.json(result)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Terminate failed'
+      const message = err instanceof Error ? err.message : 'Close failed'
       return c.json({ error: message }, 400)
     }
   }
@@ -939,134 +892,6 @@ registerRoute(
       const message = e instanceof Error ? e.message : 'Secret upsert failed'
       return c.json({ error: message }, 400)
     }
-  }
-)
-
-// List file secret bindings
-registerRoute(
-  app,
-  {
-    method: 'get',
-    path: `${BASE}/:imageId/file-secrets`,
-    summary: 'List file secret bindings',
-    tags: ['images'],
-    security: [{ bearerAuth: [] }],
-    responses: {
-      200: z.object({ data: z.array(fileSecretSchema) }),
-      404: z.object({ error: z.string() }),
-      500: z.object({ error: z.string() })
-    }
-  },
-  '/:imageId/file-secrets',
-  async c => {
-    const user = c.get('user')
-    const imageId = c.req.param('imageId')
-
-    const existing = await getImageById(imageId)
-    if (!existing) return c.json({ error: 'Image not found' }, 404)
-    try {
-      ensureCanWriteImage(user.id, { createdBy: existing.createdBy })
-    } catch {
-      return c.json({ error: 'Image not found' }, 404)
-    }
-
-    try {
-      const secrets = await listFileSecrets(imageId)
-      return c.json({ data: secrets })
-    } catch (e) {
-      if (isMissingTableError(e, 'file_secrets')) {
-        return c.json(
-          {
-            error:
-              'Database schema is missing "file_secrets". Run `bun run db:migrate` in `agent-manager` (and ensure DATABASE_URL points to the right DB).'
-          },
-          500
-        )
-      }
-      return c.json({ error: 'Failed to list file secrets' }, 500)
-    }
-  }
-)
-
-// Upsert file secret binding (by path)
-registerRoute(
-  app,
-  {
-    method: 'put',
-    path: `${BASE}/:imageId/file-secrets`,
-    summary: 'Upsert file secret binding',
-    tags: ['images'],
-    security: [{ bearerAuth: [] }],
-    request: { json: upsertFileSecretBindingSchema },
-    responses: {
-      200: fileSecretSchema,
-      400: z.object({ error: z.string() }),
-      404: z.object({ error: z.string() })
-    }
-  },
-  '/:imageId/file-secrets',
-  zValidator('json', upsertFileSecretBindingSchema),
-  async c => {
-    const user = c.get('user')
-    const imageId = c.req.param('imageId')
-    const body = c.req.valid('json' as never) as z.infer<
-      typeof upsertFileSecretBindingSchema
-    >
-
-    const existing = await getImageById(imageId)
-    if (!existing) return c.json({ error: 'Image not found' }, 404)
-    try {
-      ensureCanWriteImage(user.id, { createdBy: existing.createdBy })
-    } catch {
-      return c.json({ error: 'Image not found' }, 404)
-    }
-
-    try {
-      const row = await upsertFileSecret({
-        imageId,
-        path: body.path,
-        modalSecretName: body.modalSecretName
-      })
-      if (!row) return c.json({ error: 'Image not found' }, 404)
-      return c.json(row)
-    } catch (e) {
-      const message =
-        e instanceof Error ? e.message : 'Failed to upsert file secret'
-      return c.json({ error: message }, 400)
-    }
-  }
-)
-
-// Delete file secret binding
-registerRoute(
-  app,
-  {
-    method: 'delete',
-    path: `${BASE}/:imageId/file-secrets/:fileSecretId`,
-    summary: 'Delete file secret binding',
-    tags: ['images'],
-    security: [{ bearerAuth: [] }],
-    responses: {
-      200: z.object({ ok: z.boolean() }),
-      404: z.object({ error: z.string() })
-    }
-  },
-  '/:imageId/file-secrets/:fileSecretId',
-  async c => {
-    const user = c.get('user')
-    const imageId = c.req.param('imageId')
-    const fileSecretId = c.req.param('fileSecretId')
-
-    const existing = await getImageById(imageId)
-    if (!existing) return c.json({ error: 'Image not found' }, 404)
-    try {
-      ensureCanWriteImage(user.id, { createdBy: existing.createdBy })
-    } catch {
-      return c.json({ error: 'Image not found' }, 404)
-    }
-
-    const ok = await deleteFileSecret({ imageId, fileSecretId })
-    return c.json({ ok })
   }
 )
 

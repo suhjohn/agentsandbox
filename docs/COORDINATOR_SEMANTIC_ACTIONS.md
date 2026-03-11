@@ -133,12 +133,9 @@ export type UiContextSnapshot = {
   readonly settingsImageCanEdit: boolean;
   readonly settingsImageArchived: boolean;
   readonly settingsImageBuildRunning: boolean;
-  readonly settingsImageSecretTabKeys: readonly string[];
-  readonly settingsImageActiveSecretCanSave: boolean;
   readonly activeImageId: string | null;
   readonly hasDirtyImageDraft: boolean;
   readonly isBusy: boolean;
-  readonly activeSecretTabKey: string | null;
 };
 ```
 
@@ -600,112 +597,6 @@ Params:
 Result:
 ```json
 { "deleted": true, "redirectedTo": "/settings/images" }
-```
-
-### `settings.image_detail.secret.add_tab`
-Params: `{}`
-
-`canRun`:
-- detail route
-- editable
-- not busy
-
-Result:
-```json
-{ "added": true, "activeSecretTabKey": "new:1" }
-```
-
-### `settings.image_detail.secret.select_tab`
-Params:
-```json
-{ "tabKey": "string" }
-```
-
-`canRun`:
-- detail route
-- tab exists
-
-Result:
-```json
-{ "selected": true, "activeSecretTabKey": "..." }
-```
-
-### `settings.image_detail.secret.set_name`
-Params:
-```json
-{ "modalSecretName": "string" }
-```
-
-`canRun`:
-- detail route
-- active secret tab exists
-- not busy
-
-Result:
-```json
-{ "updated": true }
-```
-
-### `settings.image_detail.secret.set_path`
-Params:
-```json
-{ "path": "string" }
-```
-
-`canRun`:
-- detail route
-- active secret tab exists
-- not busy
-
-Result:
-```json
-{ "updated": true }
-```
-
-### `settings.image_detail.secret.set_env`
-Params:
-```json
-{ "envText": "string" }
-```
-
-`canRun`:
-- detail route
-- active secret tab exists
-- not busy
-
-Result:
-```json
-{ "updated": true }
-```
-
-### `settings.image_detail.secret.save`
-Params: `{}`
-
-`canRun`:
-- detail route
-- active secret tab exists
-- secret save control enabled
-- not busy
-
-Result:
-```json
-{ "saved": true, "bindingId": "string|null" }
-```
-
-### `settings.image_detail.secret.delete_binding`
-Params:
-```json
-{ "tabKey": "string", "confirm": true }
-```
-
-`canRun`:
-- detail route
-- tab exists
-- represents persisted binding or pending delete dialog is open
-
-Result:
-```json
-{ "deleted": true }
 ```
 
 ## 5.6 Workspace Panels

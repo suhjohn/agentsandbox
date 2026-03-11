@@ -1,39 +1,13 @@
-import { createHash } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, closeDb } from "../src/db";
-import {
-  globalSettings,
-  images,
-  imageVariants,
-  imageVariantBuilds,
-} from "../src/db/schema";
-import { runModalImageBuild, type BuildChunk } from "../src/services/build";
+import { globalSettings, images, imageVariants } from "../src/db/schema";
 import { log } from "../src/log";
+import { DEFAULT_VARIANT_HEAD_IMAGE_REF } from "../src/services/image.service";
 
 const GLOBAL_SETTINGS_ID = "default";
 const IMAGE_NAME = "Default Coordinator";
 const IMAGE_DESCRIPTION =
   "Prebuilt default image for coordinator agents. No setup script. No run script.";
-
-function buildInputHash(input: {
-  readonly imageId: string;
-  readonly variantId: string;
-  readonly setupScript: string;
-  readonly baseImageId: string | null;
-}) {
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        imageId: input.imageId,
-        variantId: input.variantId,
-        setupScript: input.setupScript,
-        baseImageId: input.baseImageId,
-        fileSecrets: [],
-        environmentSecretNames: [],
-      }),
-    )
-    .digest("hex");
-}
 
 async function ensureGlobalSettingsRow() {
   await db
@@ -71,19 +45,14 @@ async function getCurrentDefaultImage() {
   return existing[0] ?? null;
 }
 
-async function getVariantWithHeadImage(variantId: string | null) {
+async function getVariant(variantId: string | null) {
   if (!variantId) return null;
   const rows = await db
     .select({
       id: imageVariants.id,
-      headBuildId: imageVariants.headBuildId,
-      headImageId: imageVariantBuilds.outputImageId,
+      headImageId: imageVariants.headImageId,
     })
     .from(imageVariants)
-    .leftJoin(
-      imageVariantBuilds,
-      eq(imageVariantBuilds.id, imageVariants.headBuildId),
-    )
     .where(eq(imageVariants.id, variantId))
     .limit(1);
   return rows[0] ?? null;
@@ -110,7 +79,7 @@ async function createDefaultCoordinatorImageRecord() {
       name: "Default",
       scope: "shared",
       ownerUserId: null,
-      baseImageId: null,
+      headImageId: DEFAULT_VARIANT_HEAD_IMAGE_REF,
     })
     .returning({ id: imageVariants.id });
   if (!variant) throw new Error("Failed to create default image variant");
@@ -124,96 +93,6 @@ async function createDefaultCoordinatorImageRecord() {
     .where(eq(images.id, image.id));
 
   return { imageId: image.id, variantId: variant.id };
-}
-
-async function buildDefaultCoordinatorImage(input: {
-  readonly imageId: string;
-  readonly variantId: string;
-}) {
-  let logs = "";
-  const onChunk = (chunk: BuildChunk) => {
-    if (!chunk.text) return;
-    logs += chunk.text;
-    process.stdout.write(chunk.text);
-  };
-
-  const inputHash = buildInputHash({
-    imageId: input.imageId,
-    variantId: input.variantId,
-    setupScript: "",
-    baseImageId: null,
-  });
-
-  const [build] = await db
-    .insert(imageVariantBuilds)
-    .values({
-      imageId: input.imageId,
-      variantId: input.variantId,
-      requestedByUserId: null,
-      status: "running",
-      inputHash,
-      inputPayload: {
-        imageId: input.imageId,
-        variantId: input.variantId,
-        setupScript: "",
-        baseImageId: null,
-        fileSecrets: [],
-        environmentSecretNames: [],
-      },
-      logs: "",
-      outputImageId: null,
-      errorMessage: null,
-      finishedAt: null,
-    })
-    .returning({ id: imageVariantBuilds.id });
-  if (!build) throw new Error("Failed to create default image build row");
-
-  try {
-    const { builtImageId } = await runModalImageBuild({
-      imageId: input.imageId,
-      setupScript: "",
-      fileSecrets: [],
-      environmentSecretNames: [],
-      baseImageId: null,
-      onChunk,
-    });
-
-    await db
-      .update(imageVariantBuilds)
-      .set({
-        status: "succeeded",
-        logs,
-        outputImageId: builtImageId,
-        errorMessage: null,
-        finishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(imageVariantBuilds.id, build.id));
-
-    await db
-      .update(imageVariants)
-      .set({
-        headBuildId: build.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(imageVariants.id, input.variantId));
-
-    return builtImageId;
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : String(error);
-    await db
-      .update(imageVariantBuilds)
-      .set({
-        status: "failed",
-        logs,
-        errorMessage,
-        finishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(imageVariantBuilds.id, build.id));
-    throw error;
-  }
 }
 
 async function findReusableUnownedDefaultImage() {
@@ -234,18 +113,31 @@ async function findReusableUnownedDefaultImage() {
   return rows[0] ?? null;
 }
 
+async function ensureVariantHeadImageId(variantId: string) {
+  const variant = await getVariant(variantId);
+  if (variant?.headImageId?.trim()) return variant.headImageId.trim();
+
+  await db
+    .update(imageVariants)
+    .set({
+      headImageId: DEFAULT_VARIANT_HEAD_IMAGE_REF,
+      updatedAt: new Date(),
+    })
+    .where(eq(imageVariants.id, variantId));
+
+  return DEFAULT_VARIANT_HEAD_IMAGE_REF;
+}
+
 async function main() {
   await ensureGlobalSettingsRow();
 
   const current = await getCurrentDefaultImage();
-  if (current && current.deletedAt == null) {
-    const variant = await getVariantWithHeadImage(current.defaultVariantId);
-    if (variant?.headImageId) {
-      console.log(
-        `Default coordinator image already configured: ${current.id} (${variant.headImageId})`,
-      );
-      return;
-    }
+  if (current && current.deletedAt == null && current.defaultVariantId) {
+    const headImageId = await ensureVariantHeadImageId(current.defaultVariantId);
+    console.log(
+      `Default coordinator image already configured: ${current.id} (${headImageId})`,
+    );
+    return;
   }
 
   const reusable = await findReusableUnownedDefaultImage();
@@ -254,13 +146,7 @@ async function main() {
       ? { imageId: reusable.id, variantId: reusable.defaultVariantId }
       : await createDefaultCoordinatorImageRecord();
 
-  const currentVariant = await getVariantWithHeadImage(target.variantId);
-  const builtImageId =
-    currentVariant?.headImageId ??
-    (await buildDefaultCoordinatorImage({
-      imageId: target.imageId,
-      variantId: target.variantId,
-    }));
+  const headImageId = await ensureVariantHeadImageId(target.variantId);
 
   await db
     .update(globalSettings)
@@ -273,11 +159,11 @@ async function main() {
   log.info("default_coordinator_image.ready", {
     imageId: target.imageId,
     variantId: target.variantId,
-    builtImageId,
+    headImageId,
   });
   console.log(`Default coordinator image ready: ${target.imageId}`);
   console.log(`Default variant: ${target.variantId}`);
-  console.log(`Built image id: ${builtImageId}`);
+  console.log(`Head image id: ${headImageId}`);
 }
 
 try {

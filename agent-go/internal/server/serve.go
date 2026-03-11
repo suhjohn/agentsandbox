@@ -71,8 +71,6 @@ type serveConfig struct {
 	DefaultWorkingDir       string
 	CORSAllowedOrigins      []string
 	AgentManagerBaseURL     string
-	AgentManagerAPIKey      string
-	AgentManagerAuthToken   string
 }
 
 func fail(status int, message string) error {
@@ -215,8 +213,6 @@ func parseServeConfig(args []string) (serveConfig, error) {
 		workingDirDefault = workspacesDefault
 	}
 	managerBaseURL := strings.TrimSpace(os.Getenv("AGENT_MANAGER_BASE_URL"))
-	managerAPIKey := strings.TrimSpace(os.Getenv("AGENT_MANAGER_API_KEY"))
-	managerAuthToken := strings.TrimSpace(os.Getenv("AGENT_MANAGER_AUTH_TOKEN"))
 	internalAuthSecret := strings.TrimSpace(os.Getenv("AGENT_INTERNAL_AUTH_SECRET"))
 	allowedOriginsRaw := strings.TrimSpace(os.Getenv("AGENT_ALLOWED_ORIGINS"))
 	piDir := strings.TrimSpace(os.Getenv("PI_CODING_AGENT_DIR"))
@@ -234,8 +230,6 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	fs.StringVar(&cfg.DefaultWorkingDir, "working-dir", workingDirDefault, "Default working directory for agent and terminal")
 	fs.StringVar(&cfg.PIDir, "pi-dir", piDir, "PI runtime/config directory")
 	fs.StringVar(&cfg.AgentManagerBaseURL, "agent-manager-base-url", managerBaseURL, "Manager base URL for session sync")
-	fs.StringVar(&cfg.AgentManagerAPIKey, "agent-manager-api-key", managerAPIKey, "Manager API key")
-	fs.StringVar(&cfg.AgentManagerAuthToken, "agent-manager-auth-token", managerAuthToken, "Manager bearer auth token")
 	fs.StringVar(&cfg.AgentInternalAuthSecret, "agent-internal-auth-secret", internalAuthSecret, "Shared manager/runtime secret for internal auth")
 	fs.StringVar(&allowedOriginsRaw, "allowed-origins", allowedOriginsRaw, "Comma-separated browser origins allowed for CORS and /terminal (overrides AGENT_MANAGER_BASE_URL-derived defaults when set)")
 

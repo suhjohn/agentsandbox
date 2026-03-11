@@ -13,8 +13,6 @@ if (!env.SANDBOX_SIGNING_SECRET)
 if (!env.SANDBOX_TOKEN_ENCRYPTION_SECRET)
   env.SANDBOX_TOKEN_ENCRYPTION_SECRET =
     "dev-sandbox-token-encryption-secret-generate-openapi-000000000000";
-if (!env.AGENT_MANAGER_API_KEY)
-  env.AGENT_MANAGER_API_KEY = "dev-agent-manager-api-key-generate-openapi";
 if (!env.OPENAI_API_KEY)
   env.OPENAI_API_KEY = "dev-openai-key-generate-openapi";
 if (!env.ALLOWED_DOMAINS) env.ALLOWED_DOMAINS = "company.com";

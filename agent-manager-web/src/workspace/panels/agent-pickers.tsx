@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { PickerPopover, type PickerItem } from "@/components/ui/picker-popover";
 import { StatusBadge } from "./components";
-import { getAgents, type GetAgents200 } from "@/api/generated/agent-manager";
 import {
-  getSession,
-  getSessionId,
-  type GetSessionId200,
+  getAgents,
+  getSession as getManagerSession,
+  type GetAgents200,
   type GetSession200,
   type GetSessionParams,
-} from "@/api/generated/agent";
+} from "@/api/generated/agent-manager";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -65,34 +64,7 @@ function unwrapAgents(value: unknown): GetAgents200 | null {
 function unwrapSessions(value: unknown): GetSession200 | null {
   if (typeof value !== "object" || value === null) return null;
   const v = value as Record<string, unknown>;
-  if (typeof v.data === "object" && v.data !== null) {
-    const d = v.data as Record<string, unknown>;
-    if (Array.isArray(d.sessions)) return d as GetSession200;
-  }
-  if (Array.isArray(v.sessions)) return v as GetSession200;
-  return null;
-}
-
-function unwrapSession(value: unknown): GetSessionId200 | null {
-  if (typeof value !== "object" || value === null) return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v.data === "object" && v.data !== null) {
-    const d = v.data as Record<string, unknown>;
-    if (
-      typeof d.id === "string" &&
-      typeof d.agentId === "string" &&
-      Array.isArray(d.messages)
-    ) {
-      return d as GetSessionId200;
-    }
-  }
-  if (
-    typeof v.id === "string" &&
-    typeof v.agentId === "string" &&
-    Array.isArray((v as { messages?: unknown }).messages)
-  ) {
-    return v as GetSessionId200;
-  }
+  if (Array.isArray(v.data)) return v as GetSession200;
   return null;
 }
 
@@ -248,15 +220,13 @@ type SessionOption = {
 type SessionPickerProps = {
   readonly agentId: string;
   readonly value: string;
+  readonly valueTitle?: string | null;
+  readonly valueHarness?: string | null;
   readonly onChange: (next: {
     readonly sessionId: string;
     readonly sessionTitle?: string | null;
     readonly sessionHarness?: string | null;
   }) => void;
-  readonly access: {
-    readonly agentApiUrl: string;
-    readonly agentAuthToken: string;
-  } | null;
   readonly disabled?: boolean;
   readonly onOpenChange?: (open: boolean) => void;
 };
@@ -274,31 +244,26 @@ export function SessionPicker(props: SessionPickerProps) {
     queryKey: [
       "sessionPicker",
       props.agentId,
-      props.access?.agentApiUrl ?? null,
       debouncedQuery.trim(),
     ],
-    enabled: open && Boolean(props.agentId) && Boolean(props.access),
+    enabled: open && Boolean(props.agentId),
     retry: false,
     refetchOnWindowFocus: false,
     staleTime: 10_000,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }) => {
-      if (!props.access) throw new Error("Missing runtime access");
-
       const params: GetSessionParams = {
         limit: 20,
         cursor: pageParam ?? undefined,
+        agentId: props.agentId,
+        archived: "false",
         q: debouncedQuery.trim() || undefined,
       };
 
-      const result = await getSession(params, {
-        signal,
-        baseUrl: props.access.agentApiUrl,
-        agentAuthToken: props.access.agentAuthToken,
-      } as unknown as RequestInit);
+      const result = await getManagerSession(params, { signal });
 
       const parsed = unwrapSessions(result);
-      const sessions = parsed?.sessions ?? [];
+      const sessions = parsed?.data ?? [];
       const normalized: SessionOption[] = sessions.map((session) => ({
         id: session.id,
         harness: session.harness,
@@ -316,38 +281,6 @@ export function SessionPicker(props: SessionPickerProps) {
     for (const page of pages) out.push(...page.items);
     return out;
   }, [sessionsQuery.data?.pages]);
-
-  const currentSessionQuery = useQuery({
-    queryKey: [
-      "agentRuntime",
-      props.agentId,
-      "session",
-      props.value,
-      props.access?.agentApiUrl ?? null,
-    ],
-    enabled: Boolean(
-      props.agentId &&
-      props.value.trim().length > 0 &&
-      props.access?.agentApiUrl &&
-      props.access?.agentAuthToken,
-    ),
-    staleTime: 10_000,
-    refetchOnWindowFocus: false,
-    retry: false,
-    queryFn: async ({ signal }) => {
-      if (!props.access) {
-        throw new Error("Missing runtime access");
-      }
-      const response = await getSessionId(props.value, {
-        signal,
-        baseUrl: props.access.agentApiUrl,
-        agentAuthToken: props.access.agentAuthToken,
-      } as unknown as RequestInit);
-      const session = unwrapSession(response);
-      if (!session) throw new Error("Unexpected response shape (getSessionId).");
-      return session;
-    },
-  });
 
   const manualSessionId = useMemo(() => {
     const candidate = debouncedQuery.trim();
@@ -367,12 +300,13 @@ export function SessionPicker(props: SessionPickerProps) {
     [items],
   );
 
-  const currentItem = currentSessionQuery.data
+  const currentItem =
+    props.value.trim().length > 0
     ? {
-        id: currentSessionQuery.data.id,
-        harness: currentSessionQuery.data.harness,
-        title: currentSessionQuery.data.title ?? null,
-        updatedAt: currentSessionQuery.data.updatedAt ?? null,
+        id: props.value,
+        harness: props.valueHarness?.trim() || "session",
+        title: props.valueTitle?.trim() || null,
+        updatedAt: null,
       }
     : null;
 
@@ -437,13 +371,7 @@ export function SessionPicker(props: SessionPickerProps) {
       }
       loading={open && sessionsQuery.isLoading}
       loadingMore={sessionsQuery.isFetchingNextPage}
-      error={
-        open && !props.access
-          ? "Missing runtime access"
-          : sessionsQuery.isError
-            ? toErrorMessage(sessionsQuery.error)
-            : null
-      }
+      error={sessionsQuery.isError ? toErrorMessage(sessionsQuery.error) : null}
       hasMore={sessionsQuery.hasNextPage}
       onLoadMore={() => {
         if (sessionsQuery.hasNextPage) void sessionsQuery.fetchNextPage();

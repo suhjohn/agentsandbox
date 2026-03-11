@@ -31,6 +31,8 @@ RUN set -eux; \
   iptables \
   jq \
   openbox \
+  openssh-client \
+  openssh-server \
   procps \
   python-is-python3 \
   python3 \
@@ -41,8 +43,11 @@ RUN set -eux; \
   novnc \
   x11vnc \
   xvfb; \
+  if ! getent group agent >/dev/null 2>&1; then groupadd --gid 1000 agent; fi; \
+  if ! id -u agent >/dev/null 2>&1; then useradd --uid 1000 --gid agent --home-dir /home/agent --shell /bin/bash agent; fi; \
   ln -sfn /usr/bin/fdfind /usr/local/bin/fd; \
   mkdir -p /home/agent/workspaces /tmp/.X11-unix /etc/apt/keyrings; \
+  chown -R agent:agent /home/agent; \
   chmod 0777 /home/agent/workspaces; \
   chmod 1777 /tmp/.X11-unix; \
   rm -rf /var/lib/apt/lists/*

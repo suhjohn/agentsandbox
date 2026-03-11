@@ -12,7 +12,12 @@ import {
   ensureAgentSandbox,
   getSandboxAgentToken
 } from './sandbox.service'
-import { getImageById, getImageByIdIncludingArchived, resolveImageVariantForUser } from './image.service'
+import {
+  DEFAULT_VARIANT_HEAD_IMAGE_REF,
+  getImageById,
+  getImageByIdIncludingArchived,
+  resolveImageVariantForUser
+} from './image.service'
 import { DEFAULT_REGION } from '../utils/region'
 
 type DbAgent = typeof agents.$inferSelect
@@ -244,10 +249,8 @@ export async function createSessionBootstrap (input: {
   if (!variant) {
     throw new HTTPException(404, { message: 'Image variant not found' })
   }
-  const effectiveCurrentImageId = variant.headImageId?.trim() || ''
-  if (!effectiveCurrentImageId) {
-    throw new HTTPException(409, { message: 'Image is not built yet' })
-  }
+  const effectiveCurrentImageId =
+    variant.headImageId?.trim() || DEFAULT_VARIANT_HEAD_IMAGE_REF
 
   let parentAgentId: string | null = null
   if (body.parentAgentId) {

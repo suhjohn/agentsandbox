@@ -2,25 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import {
-  ArrowLeft,
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  Lock,
-  Loader2,
-  Plus,
-  X,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Bot
-} from 'lucide-react'
+import { ArrowLeft, Copy, Loader2, Bot } from 'lucide-react'
 
 import { useAuth } from '../lib/auth'
 import {
   useGetImagesImageId,
-  useGetImagesImageIdFileSecrets,
   useGetImagesImageIdEnvironmentSecrets,
   usePostImagesImageIdModalSecrets,
   usePutImagesImageIdEnvironmentSecrets,
@@ -28,14 +14,12 @@ import {
   useGetImagesImageIdVariantsVariantIdBuilds,
   getGetImagesQueryKey,
   getGetImagesImageIdQueryKey,
-  getGetImagesImageIdFileSecretsQueryKey,
   getGetImagesImageIdEnvironmentSecretsQueryKey,
   getGetImagesImageIdVariantsQueryKey,
   getGetImagesImageIdVariantsVariantIdBuildsQueryKey,
   type GetImagesImageId200,
   type GetImagesImageIdVariants200DataItem,
   type GetImagesImageIdVariantsVariantIdBuilds200DataItem,
-  type GetImagesImageIdFileSecrets200DataItem,
   type GetImagesImageIdEnvironmentSecrets200DataItem,
   type GetImagesImageId200Visibility
 } from '@/api/generated/agent-manager'
@@ -52,6 +36,15 @@ import {
 } from '@/components/ui/dialog'
 import Editor from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
+import {
+  VariantCombobox,
+  type VariantOption
+} from '@/components/ui/variant-combobox'
+import {
+  ImageIdCombobox,
+  type ImageIdOption
+} from '@/components/ui/image-id-combobox'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { parseDotEnv } from '@/lib/dotenv'
 import { TerminalPanel } from '@/components/terminal-panel'
 import { requestTerminalConnect } from '@/lib/terminal-connect'
@@ -73,9 +66,9 @@ import {
 type Image = GetImagesImageId200
 type ImageVariant = GetImagesImageIdVariants200DataItem
 type ImageVariantBuild = GetImagesImageIdVariantsVariantIdBuilds200DataItem
-type FileSecretBinding = GetImagesImageIdFileSecrets200DataItem
 type EnvironmentSecretBinding = GetImagesImageIdEnvironmentSecrets200DataItem
 type ImageVisibility = GetImagesImageId200Visibility
+type VariantScope = 'shared' | 'personal'
 type SetupTerminalConnection = {
   readonly wsUrl: string
   readonly authToken: string
@@ -119,31 +112,12 @@ function buildCoordinatorSessionTitle (repository: string): string {
   return `Setup script: ${clipped || 'repository'}`
 }
 
-function isFilePathWithFilename (value: string): boolean {
-  const trimmed = value.trim()
-  if (trimmed.length === 0) return false
-  if (!trimmed.startsWith('~/')) return false
-  if (trimmed.endsWith('/')) return false
-  const lastSegment = trimmed.split('/').pop() ?? ''
-  return lastSegment.length > 0 && lastSegment !== '.' && lastSegment !== '..'
-}
-
 type ImageDraft = {
   readonly name: string
   readonly description: string
   readonly visibility: ImageVisibility
   readonly setupScript: string
   readonly runScript: string
-}
-
-type SecretTabDraft = {
-  readonly key: string
-  readonly fileSecretId: string | null
-  readonly initialPath: string
-  readonly initialModalSecretName: string
-  readonly path: string
-  readonly modalSecretName: string
-  readonly envText: string
 }
 
 function toDraft (image: Image): ImageDraft {
@@ -203,16 +177,6 @@ export function SettingsImageDetailPage () {
 
   const [initial, setInitial] = useState<ImageDraft | null>(null)
   const [draft, setDraft] = useState<ImageDraft | null>(null)
-
-  const [localSecretTabKeys, setLocalSecretTabKeys] = useState<
-    readonly string[]
-  >([])
-  const [secretTabs, setSecretTabs] = useState<Record<string, SecretTabDraft>>(
-    {}
-  )
-  const [activeSecretTabKey, setActiveSecretTabKey] = useState<string | null>(
-    null
-  )
   const [buildLogs, setBuildLogs] = useState<
     Array<{
       readonly source: 'stdout' | 'stderr' | 'status' | 'error'
@@ -225,13 +189,7 @@ export function SettingsImageDetailPage () {
   const [setupSandboxId, setSetupSandboxId] = useState<string | null>(null)
   const [setupTerminalConnection, setSetupTerminalConnection] =
     useState<SetupTerminalConnection | null>(null)
-  const buildAbortRef = useRef<AbortController | null>(null)
   const setupTerminalReconnectInFlightRef = useRef(false)
-  const [pendingDeleteSecretBinding, setPendingDeleteSecretBinding] = useState<{
-    readonly key: string
-    readonly fileSecretId: string
-    readonly label: string
-  } | null>(null)
   const [pendingDeleteVariant, setPendingDeleteVariant] = useState<{
     readonly variantId: string
     readonly label: string
@@ -239,18 +197,14 @@ export function SettingsImageDetailPage () {
   const [showArchiveConfirmDialog, setShowArchiveConfirmDialog] =
     useState(false)
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
-  const [showBuildHistory, setShowBuildHistory] = useState(false)
   const [showCoordinatorPromptDialog, setShowCoordinatorPromptDialog] =
     useState(false)
   const [coordinatorRepositoryInput, setCoordinatorRepositoryInput] =
     useState('')
-  const [latestSnapshotImageByVariantId, setLatestSnapshotImageByVariantId] =
-    useState<Record<string, string>>({})
   const [environmentModalSecretName, setEnvironmentModalSecretName] =
     useState('')
   const [environmentContents, setEnvironmentContents] = useState('')
   const [environmentDraftTouched, setEnvironmentDraftTouched] = useState(false)
-  const nextLocalSecretKey = useRef(1)
 
   const imageQuery = useGetImagesImageId(imageId, {
     query: {
@@ -264,18 +218,6 @@ export function SettingsImageDetailPage () {
   const canEdit = Boolean(auth.user && image && !isArchived)
   const canDeleteArchivedImage = Boolean(auth.user && image && isArchived)
 
-  const fileSecretsQuery = useGetImagesImageIdFileSecrets(imageId, {
-    query: {
-      enabled:
-        !!auth.user &&
-        imageId.length > 0 &&
-        imageQuery.isSuccess &&
-        !!image &&
-        !isArchived,
-      refetchOnWindowFocus: false,
-      retry: false
-    }
-  })
   const environmentSecretsQuery = useGetImagesImageIdEnvironmentSecrets(
     imageId,
     {
@@ -339,6 +281,16 @@ export function SettingsImageDetailPage () {
     )
   }, [auth.user?.id, image?.createdBy, variants])
 
+  const variantOptions = useMemo((): readonly VariantOption[] => {
+    return visibleVariants.map(v => ({
+      id: v.id,
+      name: v.name,
+      scope: v.scope as VariantScope,
+      ownerUserId: v.ownerUserId ?? null,
+      isDefault: v.id === image?.defaultVariantId
+    }))
+  }, [visibleVariants, image?.defaultVariantId])
+
   useEffect(() => {
     if (visibleVariants.length === 0) {
       setSelectedVariantId(null)
@@ -362,6 +314,45 @@ export function SettingsImageDetailPage () {
     () => visibleVariants.find(v => v.id === selectedVariantId) ?? null,
     [selectedVariantId, visibleVariants]
   )
+  const selectedVariantHeadImageId =
+    typeof selectedVariant?.headImageId === 'string' &&
+    selectedVariant.headImageId.trim().length > 0
+      ? selectedVariant.headImageId
+      : undefined
+
+  const imageIdOptions = useMemo((): readonly ImageIdOption[] => {
+    const currentHeadId = selectedVariant?.headImageId
+    const seen = new Set<string>()
+    const options: ImageIdOption[] = []
+
+    // Add current head image first if it exists
+    if (currentHeadId && currentHeadId.trim().length > 0) {
+      seen.add(currentHeadId)
+      options.push({
+        id: currentHeadId,
+        updatedAt: selectedVariant?.updatedAt ?? new Date().toISOString(),
+        isCurrent: true
+      })
+    }
+
+    // Add successful build outputs (these are previous head images)
+    for (const build of variantBuilds) {
+      if (
+        build.status === 'succeeded' &&
+        build.outputImageId &&
+        !seen.has(build.outputImageId)
+      ) {
+        seen.add(build.outputImageId)
+        options.push({
+          id: build.outputImageId,
+          updatedAt: build.startedAt,
+          isCurrent: false
+        })
+      }
+    }
+
+    return options
+  }, [selectedVariant?.headImageId, selectedVariant?.updatedAt, variantBuilds])
 
   const isImageOwner = Boolean(
     auth.user && image && auth.user.id === image.createdBy
@@ -371,7 +362,7 @@ export function SettingsImageDetailPage () {
   const canMutateSelectedVariant = useMemo(() => {
     if (!auth.user || !image || !selectedVariant) return false
     if (auth.user.id === image.createdBy) return true
-    if (selectedVariant.scope !== 'private') return false
+    if (selectedVariant.scope !== 'personal') return false
     return selectedVariant.ownerUserId === auth.user.id
   }, [auth.user, image, selectedVariant])
 
@@ -383,8 +374,22 @@ export function SettingsImageDetailPage () {
     if (selectedVariant.scope === 'shared') {
       return 'Only the image owner can modify shared variants'
     }
-    return 'You can only modify your own private variants'
+    return 'You can only modify your own personal variants'
   }, [auth.user, canMutateSelectedVariant, image, selectedVariant])
+
+  const selectedVariantScope = (selectedVariant?.scope as VariantScope | undefined) ?? null
+  const canChangeSelectedVariantScope = Boolean(
+    auth.user && image && auth.user.id === image.createdBy && selectedVariant
+  )
+  const variantScopeChangeReason = useMemo((): string | null => {
+    if (!auth.user) return 'Sign in to change variant visibility'
+    if (!image) return 'Loading...'
+    if (!selectedVariant) return 'Select a variant'
+    if (auth.user.id !== image.createdBy) {
+      return 'Only the image owner can change personal/shared status'
+    }
+    return null
+  }, [auth.user, image, selectedVariant])
 
   const connectSetupSandboxTerminal = useCallback(
     async (sandboxId: string): Promise<SetupTerminalConnection> => {
@@ -401,10 +406,6 @@ export function SettingsImageDetailPage () {
     [auth.accessToken, auth.baseUrl]
   )
 
-  const serverSecretBindings = useMemo(() => {
-    const value = fileSecretsQuery.data?.data
-    return Array.isArray(value) ? (value as readonly FileSecretBinding[]) : []
-  }, [fileSecretsQuery.data])
   const environmentSecretBindings = useMemo(() => {
     const value = environmentSecretsQuery.data?.data
     return Array.isArray(value)
@@ -426,143 +427,11 @@ export function SettingsImageDetailPage () {
     )
   }, [environmentDraftTouched, primaryEnvironmentSecret?.modalSecretName])
 
-  const secretTabKeys = useMemo(() => {
-    return [...serverSecretBindings.map(b => b.id), ...localSecretTabKeys]
-  }, [serverSecretBindings, localSecretTabKeys])
-
-  useEffect(() => {
-    setSecretTabs(prev => {
-      const next: Record<string, SecretTabDraft> = { ...prev }
-      const serverIds = new Set(serverSecretBindings.map(b => b.id))
-
-      for (const binding of serverSecretBindings) {
-        const existing = next[binding.id]
-        if (!existing) {
-          next[binding.id] = {
-            key: binding.id,
-            fileSecretId: binding.id,
-            initialPath: binding.path,
-            initialModalSecretName: binding.modalSecretName,
-            path: binding.path,
-            modalSecretName: binding.modalSecretName,
-            envText: ''
-          }
-          continue
-        }
-
-        const metaDirty =
-          existing.path.trim() !== existing.initialPath ||
-          existing.modalSecretName.trim() !== existing.initialModalSecretName
-        if (!metaDirty) {
-          next[binding.id] = {
-            ...existing,
-            initialPath: binding.path,
-            initialModalSecretName: binding.modalSecretName,
-            path: binding.path,
-            modalSecretName: binding.modalSecretName
-          }
-        }
-      }
-
-      for (const key of Object.keys(next)) {
-        const isLocal = key.startsWith('new:')
-        if (isLocal) continue
-        if (!serverIds.has(key)) {
-          delete next[key]
-        }
-      }
-
-      return next
-    })
-  }, [serverSecretBindings])
-
-  useEffect(() => {
-    if (activeSecretTabKey && secretTabKeys.includes(activeSecretTabKey)) return
-    setActiveSecretTabKey(secretTabKeys[0] ?? null)
-  }, [activeSecretTabKey, secretTabKeys])
-
-  const activeSecretTab = activeSecretTabKey
-    ? secretTabs[activeSecretTabKey] ?? null
-    : null
-
-  const activeDotEnvError = useMemo(() => {
-    if (!activeSecretTab) return null
-    if (activeSecretTab.envText.trim().length === 0) return null
-    const parsed = parseDotEnv(activeSecretTab.envText)
-    return parsed.error
-  }, [activeSecretTab?.envText])
-
   const environmentContentsError = useMemo(() => {
     if (environmentContents.trim().length === 0) return null
     const parsed = parseDotEnv(environmentContents)
     return parsed.error
   }, [environmentContents])
-
-  const isSecretTabChanged = (tab: SecretTabDraft): boolean => {
-    const path = tab.path.trim()
-    const name = tab.modalSecretName.trim()
-    return (
-      tab.fileSecretId === null ||
-      path !== tab.initialPath ||
-      name !== tab.initialModalSecretName ||
-      tab.envText.trim().length > 0
-    )
-  }
-
-  const updateSecretTab = useCallback(
-    (key: string, updater: (prev: SecretTabDraft) => SecretTabDraft) => {
-      setSecretTabs(prev => {
-        const current = prev[key]
-        if (!current) return prev
-        const next = updater(current)
-        return { ...prev, [key]: next }
-      })
-    },
-    []
-  )
-
-  const addSecretTab = useCallback(() => {
-    const key = `new:${nextLocalSecretKey.current++}`
-    setLocalSecretTabKeys(prev => [...prev, key])
-    setSecretTabs(prev => ({
-      ...prev,
-      [key]: {
-        key,
-        fileSecretId: null,
-        initialPath: '',
-        initialModalSecretName: '',
-        path: '',
-        modalSecretName: '',
-        envText: ''
-      }
-    }))
-    setActiveSecretTabKey(key)
-    return key
-  }, [])
-
-  const removeLocalSecretTab = useCallback((key: string) => {
-    setLocalSecretTabKeys(prev => prev.filter(k => k !== key))
-    setSecretTabs(prev => {
-      if (!(key in prev)) return prev
-      const next = { ...prev }
-      delete next[key]
-      return next
-    })
-    setActiveSecretTabKey(prev => (prev === key ? null : prev))
-  }, [])
-
-  const requestRemoveSecretTab = useCallback(
-    (key: string) => {
-      if (key.startsWith('new:')) {
-        removeLocalSecretTab(key)
-        return
-      }
-      const tab = secretTabs[key]
-      const label = tab?.path.trim().length ? tab.path.trim() : key
-      setPendingDeleteSecretBinding({ key, fileSecretId: key, label })
-    },
-    [removeLocalSecretTab, secretTabs]
-  )
 
   useEffect(() => {
     if (!image) return
@@ -654,9 +523,6 @@ export function SettingsImageDetailPage () {
   const buildStreamMutation = useMutation({
     mutationFn: async () => {
       if (!selectedVariantId) throw new Error('Select a variant first.')
-      buildAbortRef.current?.abort()
-      const abort = new AbortController()
-      buildAbortRef.current = abort
       setBuildLogs([])
 
       const safeParse = (input: string): unknown => {
@@ -681,7 +547,6 @@ export function SettingsImageDetailPage () {
       await auth.api.buildImageStream({
         imageId,
         variantId: selectedVariantId,
-        signal: abort.signal,
         onEvent: event => {
           const data = safeParse(event.data)
           if (event.event === 'log') {
@@ -746,9 +611,6 @@ export function SettingsImageDetailPage () {
           { limit: 20 }
         )
       })
-    },
-    onSettled: () => {
-      buildAbortRef.current = null
     }
   })
 
@@ -889,162 +751,6 @@ export function SettingsImageDetailPage () {
     }
   })
 
-  const deleteSecretBindingMutation = useMutation({
-    mutationFn: async (input: {
-      readonly key: string
-      readonly fileSecretId: string
-    }) => auth.api.deleteFileSecretBinding(imageId, input.fileSecretId),
-    onSuccess: async (_, input) => {
-      toast.success('Binding deleted')
-      setPendingDeleteSecretBinding(prev =>
-        prev?.key === input.key ? null : prev
-      )
-      setSecretTabs(prev => {
-        const next = { ...prev }
-        delete next[input.key]
-        return next
-      })
-      setActiveSecretTabKey(prev => (prev === input.key ? null : prev))
-      await queryClient.invalidateQueries({
-        queryKey: getGetImagesImageIdFileSecretsQueryKey(imageId)
-      })
-    },
-    onError: err => {
-      const msg =
-        err instanceof Error ? err.message : 'Failed to delete binding'
-      toast.error(msg)
-    }
-  })
-
-  const saveSecretMutation = useMutation({
-    mutationFn: async (input: {
-      readonly key: string
-      readonly fileSecretId: string | null
-      readonly initialPath: string
-      readonly initialModalSecretName: string
-      readonly path: string
-      readonly modalSecretName: string
-      readonly envText: string
-    }): Promise<{
-      readonly binding: FileSecretBinding | null
-      readonly effectiveKey: string
-      readonly didSaveBinding: boolean
-      readonly didSaveValues: boolean
-    }> => {
-      const path = input.path.trim()
-      const modalSecretName = input.modalSecretName.trim()
-      if (modalSecretName.length === 0)
-        throw new Error('Secret name is required')
-
-      const bindingDirty =
-        input.fileSecretId === null ||
-        path !== input.initialPath ||
-        modalSecretName !== input.initialModalSecretName
-
-      let binding: FileSecretBinding | null = null
-      let effectiveKey = input.key
-      if (bindingDirty) {
-        if (path.length === 0) throw new Error('Filepath is required')
-        if (!isFilePathWithFilename(path)) {
-          throw new Error('File path must include a filename')
-        }
-
-        binding = await auth.api.upsertFileSecretBinding(imageId, {
-          path,
-          modalSecretName
-        })
-        effectiveKey = binding.id
-
-        if (input.fileSecretId && input.fileSecretId !== binding.id) {
-          try {
-            await auth.api.deleteFileSecretBinding(imageId, input.fileSecretId)
-          } catch {
-            // best-effort
-          }
-        }
-      }
-
-      let env: Record<string, string> | null = null
-      const envText = input.envText.trim()
-      if (envText.length > 0) {
-        const parsed = parseDotEnv(input.envText)
-        if (parsed.error) throw new Error(parsed.error)
-        env = parsed.env
-      }
-
-      if (env) {
-        await auth.api.upsertModalSecretValues(imageId, {
-          name: modalSecretName,
-          env
-        })
-      }
-
-      return {
-        binding,
-        effectiveKey,
-        didSaveBinding: binding !== null,
-        didSaveValues: env !== null
-      }
-    },
-    onSuccess: async (data, input) => {
-      if (data.didSaveBinding || data.didSaveValues) toast.success('Saved')
-
-      if (data.didSaveBinding) {
-        await queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdFileSecretsQueryKey(imageId)
-        })
-      }
-
-      if (data.didSaveBinding) {
-        setLocalSecretTabKeys(prev => prev.filter(k => k !== input.key))
-        setActiveSecretTabKey(data.effectiveKey)
-      }
-
-      setSecretTabs(prev => {
-        const next: Record<string, SecretTabDraft> = { ...prev }
-        const baseKey =
-          input.key in next
-            ? input.key
-            : data.effectiveKey in next
-            ? data.effectiveKey
-            : null
-        if (!baseKey) return prev
-        const current = next[baseKey]
-        if (!current) return prev
-
-        let tab = current
-        if (data.binding) {
-          tab = {
-            ...tab,
-            key: data.effectiveKey,
-            fileSecretId: data.effectiveKey,
-            initialPath: data.binding.path,
-            initialModalSecretName: data.binding.modalSecretName,
-            path: data.binding.path,
-            modalSecretName: data.binding.modalSecretName
-          }
-        }
-
-        if (data.didSaveValues) {
-          tab = {
-            ...tab,
-            envText: ''
-          }
-        }
-
-        if (data.binding && baseKey !== data.effectiveKey) {
-          delete next[baseKey]
-        }
-        next[data.effectiveKey] = tab
-        return next
-      })
-    },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Save failed'
-      toast.error(msg)
-    }
-  })
-
   const upsertEnvironmentSecretBindingMutation =
     usePutImagesImageIdEnvironmentSecrets()
   const upsertEnvironmentSecretValuesMutation =
@@ -1170,7 +876,9 @@ export function SettingsImageDetailPage () {
   const createVariantMutation = useMutation({
     mutationFn: async () =>
       auth.api.createImageVariant(imageId, {
-        scope: 'private'
+        ...(selectedVariantHeadImageId
+          ? { headImageId: selectedVariantHeadImageId }
+          : {})
       }),
     onSuccess: async created => {
       setSelectedVariantId(created.id)
@@ -1186,6 +894,32 @@ export function SettingsImageDetailPage () {
     },
     onError: err => {
       const msg = err instanceof Error ? err.message : 'Create variant failed'
+      toast.error(msg)
+    }
+  })
+
+  const updateVariantScopeMutation = useMutation({
+    mutationFn: async (scope: VariantScope) => {
+      if (!selectedVariantId) throw new Error('Select a variant first.')
+      return auth.api.updateImageVariant(imageId, selectedVariantId, { scope })
+    },
+    onSuccess: async updated => {
+      toast.success(
+        updated.scope === 'shared'
+          ? 'Variant is now shared'
+          : 'Variant is now personal'
+      )
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
+        }),
+        queryClient.invalidateQueries({
+          queryKey: getGetImagesImageIdQueryKey(imageId)
+        })
+      ])
+    },
+    onError: err => {
+      const msg = err instanceof Error ? err.message : 'Update variant failed'
       toast.error(msg)
     }
   })
@@ -1239,32 +973,6 @@ export function SettingsImageDetailPage () {
     }
   })
 
-  const setBaseImageMutation = useMutation({
-    mutationFn: async (baseImageId: string | null) => {
-      if (!selectedVariantId) throw new Error('Select a variant first.')
-      return auth.api.setImageVariantBaseImage(imageId, selectedVariantId, {
-        baseImageId
-      })
-    },
-    onSuccess: async () => {
-      toast.success('Base image updated')
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
-        }),
-        queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
-        }),
-        queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() })
-      ])
-    },
-    onError: err => {
-      const msg =
-        err instanceof Error ? err.message : 'Failed to update base image'
-      toast.error(msg)
-    }
-  })
-
   const createSetupSandboxMutation = useMutation({
     mutationFn: async () => {
       if (!selectedVariantId) throw new Error('Select a variant first.')
@@ -1297,20 +1005,18 @@ export function SettingsImageDetailPage () {
     }
   })
 
-  const snapshotSetupSandboxMutation = useMutation({
+  const closeSetupSandboxMutation = useMutation({
     mutationFn: async () => {
       if (!setupSandboxId) throw new Error('Start a setup sandbox first.')
-      return auth.api.snapshotImageSetupSandbox({
+      return auth.api.closeImageSetupSandbox({
         imageId,
         sandboxId: setupSandboxId
       })
     },
-    onSuccess: async result => {
-      setLatestSnapshotImageByVariantId(prev => ({
-        ...prev,
-        [result.variantId]: result.baseImageId
-      }))
-      toast.success('Base image updated')
+    onSuccess: async () => {
+      setSetupSandboxId(null)
+      setSetupTerminalConnection(null)
+      toast.success('Head image updated')
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: getGetImagesImageIdQueryKey(imageId)
@@ -1318,26 +1024,15 @@ export function SettingsImageDetailPage () {
         queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
         queryClient.invalidateQueries({
           queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
+        }),
+        queryClient.invalidateQueries({
+          queryKey: getGetImagesImageIdVariantsVariantIdBuildsQueryKey(
+            imageId,
+            selectedVariantId ?? '',
+            { limit: 20 }
+          )
         })
       ])
-    },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Snapshot failed'
-      toast.error(msg)
-    }
-  })
-
-  const terminateSetupSandboxMutation = useMutation({
-    mutationFn: async () => {
-      if (!setupSandboxId) return { ok: true }
-      return auth.api.terminateImageSetupSandbox({
-        imageId,
-        sandboxId: setupSandboxId
-      })
-    },
-    onSuccess: () => {
-      setSetupSandboxId(null)
-      setSetupTerminalConnection(null)
     },
     onError: err => {
       const msg =
@@ -1348,7 +1043,7 @@ export function SettingsImageDetailPage () {
 
   const reconnectSetupSandboxTerminal = useCallback(() => {
     if (!setupSandboxId) return
-    if (terminateSetupSandboxMutation.isPending) return
+    if (closeSetupSandboxMutation.isPending) return
     if (setupTerminalReconnectInFlightRef.current) return
     setupTerminalReconnectInFlightRef.current = true
     void connectSetupSandboxTerminal(setupSandboxId)
@@ -1368,8 +1063,8 @@ export function SettingsImageDetailPage () {
       })
   }, [
     connectSetupSandboxTerminal,
-    setupSandboxId,
-    terminateSetupSandboxMutation.isPending
+    closeSetupSandboxMutation.isPending,
+    setupSandboxId
   ])
 
   const onBuildClick = useCallback(() => {
@@ -1418,7 +1113,7 @@ export function SettingsImageDetailPage () {
   useEffect(() => {
     return () => {
       if (!setupSandboxId) return
-      void auth.api.terminateImageSetupSandbox({
+      void auth.api.closeImageSetupSandbox({
         imageId,
         sandboxId: setupSandboxId
       })
@@ -1428,16 +1123,13 @@ export function SettingsImageDetailPage () {
   const isBusy =
     buildStreamMutation.isPending ||
     cloneMutation.isPending ||
-    saveSecretMutation.isPending ||
     saveEnvironmentSecretMutation.isPending ||
-    deleteSecretBindingMutation.isPending ||
     createVariantMutation.isPending ||
+    updateVariantScopeMutation.isPending ||
     deleteVariantMutation.isPending ||
     setDefaultVariantMutation.isPending ||
-    setBaseImageMutation.isPending ||
     createSetupSandboxMutation.isPending ||
-    snapshotSetupSandboxMutation.isPending ||
-    terminateSetupSandboxMutation.isPending ||
+    closeSetupSandboxMutation.isPending ||
     archiveMutation.isPending ||
     unarchiveMutation.isPending ||
     deleteMutation.isPending
@@ -1445,23 +1137,6 @@ export function SettingsImageDetailPage () {
     initial && draft
       ? Object.keys(buildPatch(initial, draft)).length > 0
       : false
-  const canSaveActiveSecretTab = (() => {
-    if (!activeSecretTab || !canEdit || isBusy) return false
-    const path = activeSecretTab.path.trim()
-    const name = activeSecretTab.modalSecretName.trim()
-    const bindingDirty =
-      activeSecretTab.fileSecretId === null ||
-      path !== activeSecretTab.initialPath ||
-      name !== activeSecretTab.initialModalSecretName
-    const hasEnvText = activeSecretTab.envText.trim().length > 0
-    const hasSomethingToSave = isSecretTabChanged(activeSecretTab)
-    if (!hasSomethingToSave) return false
-    if (name.length === 0) return false
-    if (bindingDirty && path.length === 0) return false
-    if (bindingDirty && !isFilePathWithFilename(path)) return false
-    if (hasEnvText && activeDotEnvError) return false
-    return true
-  })()
 
   useEffect(() => {
     return registerSettingsImageDetailRuntimeController({
@@ -1472,10 +1147,7 @@ export function SettingsImageDetailPage () {
         isArchived,
         isBusy,
         hasDirtyDraft,
-        isBuildRunning: buildStreamMutation.isPending,
-        secretTabKeys,
-        activeSecretTabKey,
-        activeSecretTabCanSave: canSaveActiveSecretTab
+        isBuildRunning: buildStreamMutation.isPending
       }),
       setName: async name => {
         if (!draft) throw new Error('Image detail draft is not ready')
@@ -1548,11 +1220,9 @@ export function SettingsImageDetailPage () {
         return { buildStarted: true as const }
       },
       stopBuild: async () => {
-        if (!buildStreamMutation.isPending || !buildAbortRef.current) {
-          throw new Error('No active build stream to stop')
-        }
-        buildAbortRef.current.abort()
-        return { buildStopped: true as const }
+        throw new Error(
+          'Stopping image builds from the settings UI is not supported'
+        )
       },
       archive: async () => {
         await archiveMutation.mutateAsync()
@@ -1564,114 +1234,15 @@ export function SettingsImageDetailPage () {
       delete: async () => {
         await deleteMutation.mutateAsync()
         return { deleted: true as const, redirectedTo: '/settings/images' }
-      },
-      addSecretTab: async () => {
-        const key = addSecretTab()
-        return {
-          added: true as const,
-          activeSecretTabKey: key
-        }
-      },
-      selectSecretTab: async tabKey => {
-        if (!secretTabKeys.includes(tabKey)) {
-          throw new Error(`Secret tab not found: ${tabKey}`)
-        }
-        setActiveSecretTabKey(tabKey)
-        return {
-          selected: true as const,
-          activeSecretTabKey: tabKey
-        }
-      },
-      setSecretName: async modalSecretName => {
-        if (!activeSecretTabKey || !activeSecretTab) {
-          throw new Error('No active secret tab')
-        }
-        updateSecretTab(activeSecretTabKey, prev => ({
-          ...prev,
-          modalSecretName
-        }))
-        return {
-          updated: true as const,
-          activeSecretTabKey
-        }
-      },
-      setSecretPath: async path => {
-        if (!activeSecretTabKey || !activeSecretTab) {
-          throw new Error('No active secret tab')
-        }
-        updateSecretTab(activeSecretTabKey, prev => ({
-          ...prev,
-          path
-        }))
-        return {
-          updated: true as const,
-          activeSecretTabKey
-        }
-      },
-      setSecretEnv: async envText => {
-        if (!activeSecretTabKey || !activeSecretTab) {
-          throw new Error('No active secret tab')
-        }
-        updateSecretTab(activeSecretTabKey, prev => ({
-          ...prev,
-          envText
-        }))
-        return {
-          updated: true as const,
-          activeSecretTabKey
-        }
-      },
-      saveSecret: async () => {
-        if (!activeSecretTabKey || !activeSecretTab) {
-          throw new Error('No active secret tab')
-        }
-        if (!canSaveActiveSecretTab) {
-          throw new Error('Active secret tab cannot be saved right now')
-        }
-        const result = await saveSecretMutation.mutateAsync({
-          key: activeSecretTab.key,
-          fileSecretId: activeSecretTab.fileSecretId,
-          initialPath: activeSecretTab.initialPath,
-          initialModalSecretName: activeSecretTab.initialModalSecretName,
-          path: activeSecretTab.path,
-          modalSecretName: activeSecretTab.modalSecretName,
-          envText: activeSecretTab.envText
-        })
-        return {
-          saved: true as const,
-          bindingId: result.binding?.id ?? result.effectiveKey ?? null,
-          activeSecretTabKey: result.effectiveKey
-        }
-      },
-      deleteSecretBinding: async tabKey => {
-        const targetKey = tabKey.trim()
-        if (targetKey.length === 0) throw new Error('tabKey is required')
-        if (targetKey.startsWith('new:')) {
-          removeLocalSecretTab(targetKey)
-          return { deleted: true as const }
-        }
-        const tab = secretTabs[targetKey]
-        if (!tab) throw new Error(`Secret tab not found: ${targetKey}`)
-        await deleteSecretBindingMutation.mutateAsync({
-          key: targetKey,
-          fileSecretId: tab.fileSecretId ?? targetKey
-        })
-        return { deleted: true as const }
       }
     })
   }, [
-    activeSecretTab,
-    activeSecretTabKey,
-    activeDotEnvError,
-    addSecretTab,
     archiveMutation,
     autosaveImageMutation,
     buildStreamMutation,
     canEdit,
-    canSaveActiveSecretTab,
     cloneMutation,
     deleteMutation,
-    deleteSecretBindingMutation,
     draft,
     hasDirtyDraft,
     image,
@@ -1681,14 +1252,9 @@ export function SettingsImageDetailPage () {
     isBusy,
     isScriptDirty,
     nameValidationError,
-    removeLocalSecretTab,
-    saveSecretMutation,
     saveRunScriptMutation,
     saveSetupScriptMutation,
-    secretTabKeys,
-    secretTabs,
-    selectedVariantId,
-    updateSecretTab
+    selectedVariantId
   ])
 
   if (!auth.user) {
@@ -1711,10 +1277,6 @@ export function SettingsImageDetailPage () {
   const draftValue = draft ?? null
   const initialValue = initial ?? null
   const selectedCurrentImageId = selectedVariant?.headImageId ?? null
-  const selectedSnapshottedImageId = selectedVariantId
-    ? latestSnapshotImageByVariantId[selectedVariantId] ?? null
-    : null
-  const selectedBaseImageId = selectedVariant?.baseImageId ?? null
 
   const pageTitle = (
     <div className='flex items-center gap-2 min-w-0'>
@@ -1968,111 +1530,6 @@ export function SettingsImageDetailPage () {
           </SettingsPanel>
         </SettingsSection>
 
-        <SettingsSection
-          title={
-            <div className='flex items-center gap-2'>
-              <p>Setup Script</p>
-            </div>
-          }
-          description={
-            <div>Shell commands that run during build inside the sandbox.</div>
-          }
-          action={
-            <div>
-              <Button
-                variant='ghost'
-                disabled={!canEdit || writeWithCoordinatorMutation.isPending}
-                onClick={() => setShowCoordinatorPromptDialog(true)}
-              >
-                <Bot className='h-4 w-4' />
-                Write with Coordinator
-              </Button>
-            </div>
-          }
-        >
-          <SettingsPanel>
-            {!draftValue || !initialValue ? (
-              <SettingsPanelBody className='text-sm text-text-secondary'>
-                Loading...
-              </SettingsPanelBody>
-            ) : (
-              <div className='overflow-hidden h-[400px] relative'>
-                <Editor
-                  height='100%'
-                  defaultLanguage='shell'
-                  value={draftValue.setupScript}
-                  onChange={value =>
-                    setDraft(prev =>
-                      prev ? { ...prev, setupScript: value ?? '' } : prev
-                    )
-                  }
-                  theme='vs-dark'
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    readOnly: isBusy,
-                    padding: { top: 12, bottom: 12 }
-                  }}
-                />
-                {!draftValue.setupScript && (
-                  <div className='absolute top-3 left-14 text-text-tertiary text-[13px] pointer-events-none select-none'>
-                    # Install dependencies, configure environment, etc.
-                  </div>
-                )}
-              </div>
-            )}
-          </SettingsPanel>
-        </SettingsSection>
-        <SettingsSection
-          title={
-            <div className='flex items-center gap-2'>
-              <p>Run Script</p>
-            </div>
-          }
-          description={
-            <div>
-              Shell commands that run each time an agent sandbox starts from
-              this image.
-            </div>
-          }
-        >
-          <SettingsPanel>
-            {!draftValue || !initialValue ? (
-              <SettingsPanelBody className='text-sm text-text-secondary'>
-                Loading...
-              </SettingsPanelBody>
-            ) : (
-              <div className='overflow-hidden h-[300px] relative'>
-                <Editor
-                  height='100%'
-                  defaultLanguage='shell'
-                  value={draftValue.runScript}
-                  onChange={value =>
-                    setDraft(prev =>
-                      prev ? { ...prev, runScript: value ?? '' } : prev
-                    )
-                  }
-                  theme='vs-dark'
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    readOnly: isBusy,
-                    padding: { top: 12, bottom: 12 }
-                  }}
-                />
-                {!draftValue.runScript && (
-                  <div className='absolute top-3 left-14 text-text-tertiary text-[13px] pointer-events-none select-none'>
-                    # Prepare runtime state before agent-server starts.
-                  </div>
-                )}
-              </div>
-            )}
-          </SettingsPanel>
-        </SettingsSection>
         <Dialog
           open={showCoordinatorPromptDialog}
           onOpenChange={open => {
@@ -2134,285 +1591,6 @@ export function SettingsImageDetailPage () {
             </form>
           </DialogContent>
         </Dialog>
-
-        <SettingsSection
-          title='Secret files'
-          description={
-            <>
-              Bind Modal secrets to file paths. Each entry writes a secret file
-              at the specified path. Values are stored in Modal and are never
-              displayed here after saving.
-            </>
-          }
-        >
-          <SettingsPanel>
-            <SettingsPanelBody className='p-0'>
-              <div className='flex items-center gap-2 px-0 py-0 border-b border-border'>
-                <div className='flex-1 overflow-x-auto'>
-                  <div className='flex items-center min-w-max'>
-                    {secretTabKeys.map(key => {
-                      const tab = secretTabs[key]
-                      const rawLabel = tab?.path.trim().length
-                        ? tab.path.trim()
-                        : key.startsWith('new:')
-                        ? 'New'
-                        : key
-                      const parts = rawLabel.split('/').filter(Boolean)
-                      const label =
-                        rawLabel === 'New'
-                          ? 'New'
-                          : parts.length >= 2
-                          ? `…/${parts.slice(-2).join('/')}`
-                          : rawLabel
-                      const isActive = key === activeSecretTabKey
-                      const isMetaDirty = tab
-                        ? tab.path.trim() !== tab.initialPath ||
-                          tab.modalSecretName.trim() !==
-                            tab.initialModalSecretName
-                        : false
-
-                      return (
-                        <div
-                          key={key}
-                          className={cn(
-                            'group flex items-start transition-colors max-w-[240px]',
-                            isActive
-                              ? 'border-border bg-surface-2 text-text-primary'
-                              : 'border-transparent text-text-tertiary hover:text-text-secondary hover:bg-surface-2/50'
-                          )}
-                          title={rawLabel}
-                        >
-                          <button
-                            type='button'
-                            className='min-w-0 flex-1 flex items-start gap-1 px-3 py-1.5 text-sm text-left'
-                            onClick={() => setActiveSecretTabKey(key)}
-                            disabled={isBusy}
-                          >
-                            <span className='line-clamp-2 min-w-0 break-all leading-4'>
-                              {label}
-                            </span>
-                            {isMetaDirty ? (
-                              <span className='ml-1 text-text-tertiary'>*</span>
-                            ) : null}
-                          </button>
-                          <button
-                            type='button'
-                            className={cn(
-                              'h-6 w-6 text-text-tertiary hover:text-text-secondary hover:bg-surface-2/70',
-                              'opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100'
-                            )}
-                            disabled={isBusy}
-                            onClick={e => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              requestRemoveSecretTab(key)
-                            }}
-                            title={
-                              key.startsWith('new:')
-                                ? 'Close tab'
-                                : 'Delete secret file binding'
-                            }
-                          >
-                            <X className='h-4 w-4 mx-auto' />
-                          </button>
-                        </div>
-                      )
-                    })}
-                    <Button
-                      type='button'
-                      variant='icon'
-                      size='icon'
-                      className='h-8 w-8'
-                      disabled={!canEdit || isBusy}
-                      onClick={addSecretTab}
-                      title='Add secret file'
-                    >
-                      <Plus className='h-4 w-4' />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <Dialog
-                open={pendingDeleteSecretBinding !== null}
-                onOpenChange={open => {
-                  if (open) return
-                  setPendingDeleteSecretBinding(null)
-                }}
-              >
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Delete secret file binding?</DialogTitle>
-                    <DialogDescription>
-                      This removes the file binding for{' '}
-                      <span className='font-mono'>
-                        {pendingDeleteSecretBinding?.label ?? ''}
-                      </span>
-                      . The Modal secret values are not deleted.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      disabled={isBusy}
-                      onClick={() => setPendingDeleteSecretBinding(null)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type='button'
-                      variant='destructive'
-                      disabled={!pendingDeleteSecretBinding || isBusy}
-                      onClick={() => {
-                        if (!pendingDeleteSecretBinding) return
-                        deleteSecretBindingMutation.mutate({
-                          key: pendingDeleteSecretBinding.key,
-                          fileSecretId: pendingDeleteSecretBinding.fileSecretId
-                        })
-                      }}
-                    >
-                      {deleteSecretBindingMutation.isPending ? (
-                        <Loader2 className='h-4 w-4 animate-spin' />
-                      ) : null}
-                      Delete
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-              {!activeSecretTab ? (
-                <div className='w-full text-center text-sm text-text-secondary py-4'>
-                  {fileSecretsQuery.isLoading
-                    ? 'Loading...'
-                    : 'No secret files yet. Add one to get started.'}
-                </div>
-              ) : (
-                <SettingsList className='rounded-none border-0'>
-                  <SettingsRow
-                    disabled={
-                      !canEdit ||
-                      isBusy ||
-                      activeSecretTab.fileSecretId !== null
-                    }
-                    className='items-start sm:items-center flex-col sm:flex-row'
-                    left={
-                      <SettingsRowLeft
-                        title='Modal secret name'
-                        description='Name of the Modal secret used for this file binding.'
-                      />
-                    }
-                    right={
-                      <div className='w-full sm:w-[420px]'>
-                        <Input
-                          value={activeSecretTab.modalSecretName}
-                          onChange={e =>
-                            updateSecretTab(activeSecretTab.key, prev => ({
-                              ...prev,
-                              modalSecretName: e.target.value
-                            }))
-                          }
-                          disabled={
-                            !canEdit ||
-                            isBusy ||
-                            activeSecretTab.fileSecretId !== null
-                          }
-                          placeholder='modal-secret-name'
-                        />
-                      </div>
-                    }
-                  />
-
-                  <SettingsRow
-                    disabled={!canEdit || isBusy}
-                    className='items-start sm:items-center flex-col sm:flex-row'
-                    left={
-                      <SettingsRowLeft
-                        title='File path'
-                        description='Full file path including filename, such as ~/.env.production or ~/workspaces/app/.env.test. Must start with ~/ under the sandbox home.'
-                      />
-                    }
-                    right={
-                      <div className='w-full sm:w-[420px]'>
-                        <Input
-                          value={activeSecretTab.path}
-                          onChange={e =>
-                            updateSecretTab(activeSecretTab.key, prev => ({
-                              ...prev,
-                              path: e.target.value
-                            }))
-                          }
-                          disabled={!canEdit || isBusy}
-                          placeholder='e.g. ~/workspaces/monorepo/backend/.env.production'
-                        />
-                      </div>
-                    }
-                  />
-
-                  <SettingsRow
-                    disabled={!canEdit || isBusy}
-                    className='items-start flex-col sm:flex-row'
-                    left={
-                      <SettingsRowLeft
-                        title='Contents'
-                        description='Key-value pairs written to the secret file. Clears after save for security reasons. You can see the keys on Modal - Secrets.'
-                      />
-                    }
-                    right={
-                      <div className='w-full sm:w-[420px]'>
-                        <Textarea
-                          value={activeSecretTab.envText}
-                          onChange={e =>
-                            updateSecretTab(activeSecretTab.key, prev => ({
-                              ...prev,
-                              envText: e.target.value
-                            }))
-                          }
-                          disabled={!canEdit || isBusy}
-                          minRows={6}
-                          placeholder={`# Example\nFOO=bar\nAPI_KEY="..."`}
-                          aria-invalid={Boolean(activeDotEnvError)}
-                        />
-                        {activeDotEnvError ? (
-                          <div className='text-xs text-destructive'>
-                            {activeDotEnvError}
-                          </div>
-                        ) : null}
-                      </div>
-                    }
-                  />
-                </SettingsList>
-              )}
-            </SettingsPanelBody>
-            {activeSecretTab ? (
-              <div className='flex items-center justify-end gap-2 flex-wrap px-4 py-3'>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  disabled={!canSaveActiveSecretTab}
-                  onClick={() =>
-                    saveSecretMutation.mutate({
-                      key: activeSecretTab.key,
-                      fileSecretId: activeSecretTab.fileSecretId,
-                      initialPath: activeSecretTab.initialPath,
-                      initialModalSecretName:
-                        activeSecretTab.initialModalSecretName,
-                      path: activeSecretTab.path,
-                      modalSecretName: activeSecretTab.modalSecretName,
-                      envText: activeSecretTab.envText
-                    })
-                  }
-                  title='Save file path and secret values'
-                >
-                  {saveSecretMutation.isPending ? (
-                    <Loader2 className='h-4 w-4 animate-spin' />
-                  ) : null}
-                  Save
-                </Button>
-              </div>
-            ) : null}
-          </SettingsPanel>
-        </SettingsSection>
 
         <SettingsSection
           title='Secret environment'
@@ -2509,97 +1687,24 @@ export function SettingsImageDetailPage () {
 
         <SettingsSection
           title='Image'
-          description='Manage image variants, base images, and builds for this image.'
+          description='Manage image variants, current images, and builds for this image.'
         >
           <SettingsPanel>
-            <div className='flex items-center gap-2 border-b border-border'>
-              <div className='flex-1 overflow-x-auto'>
-                <div className='flex items-center min-w-max'>
-                  {visibleVariants.map(variant => {
-                    const rawLabel = variant.name
-                    const label =
-                      rawLabel.length > 28
-                        ? `${rawLabel.slice(0, 25)}...`
-                        : rawLabel
-                    const isActive = variant.id === selectedVariantId
-                    const isDefault = variant.id === image?.defaultVariantId
-                    const isPrivate = variant.scope === 'private'
-                    const isOwnVariant = variant.ownerUserId === auth.user?.id
-                    return (
-                      <div
-                        key={variant.id}
-                        className={cn(
-                          'group flex items-center transition-colors max-w-[280px] truncate',
-                          isActive
-                            ? 'border-border bg-surface-2 text-text-primary'
-                            : 'border-transparent text-text-tertiary hover:text-text-secondary hover:bg-surface-2/50'
-                        )}
-                        title={`${rawLabel}${
-                          isPrivate ? ' (private)' : ' (shared)'
-                        }${isDefault ? ' - default' : ''}`}
-                      >
-                        <button
-                          type='button'
-                          className='min-w-0 flex-1 flex items-center gap-1.5 px-3 py-1.5 text-sm truncate text-left'
-                          disabled={!canEdit || isBusy}
-                          onClick={() => setSelectedVariantId(variant.id)}
-                        >
-                          {isPrivate ? (
-                            <Lock className='h-3 w-3 shrink-0 text-text-tertiary' />
-                          ) : null}
-                          <span className='truncate'>{label}</span>
-                          {isPrivate && isOwnVariant ? (
-                            <span className='text-xs text-text-tertiary'>
-                              (yours)
-                            </span>
-                          ) : null}
-                          {isDefault ? (
-                            <span className='text-xs text-text-tertiary'>
-                              ★
-                            </span>
-                          ) : null}
-                        </button>
-                        <button
-                          type='button'
-                          className={cn(
-                            'h-6 w-6 text-text-tertiary hover:text-text-secondary hover:bg-surface-2/70',
-                            'opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100',
-                            isDefault && 'cursor-not-allowed opacity-50'
-                          )}
-                          disabled={!canEdit || isBusy || isDefault}
-                          onClick={e => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            if (isDefault) return
-                            setPendingDeleteVariant({
-                              variantId: variant.id,
-                              label: rawLabel
-                            })
-                          }}
-                          title={
-                            isDefault
-                              ? 'Cannot delete default variant'
-                              : 'Delete variant'
-                          }
-                        >
-                          <X className='h-4 w-4 mx-auto' />
-                        </button>
-                      </div>
-                    )
-                  })}
-                  <Button
-                    type='button'
-                    variant='icon'
-                    size='icon'
-                    className='h-8 w-8'
-                    disabled={!canEdit || isBusy}
-                    onClick={() => createVariantMutation.mutate()}
-                    title='Create private variant'
-                  >
-                    <Plus className='h-4 w-4' />
-                  </Button>
-                </div>
-              </div>
+            <div className='flex items-center gap-2 border-b border-border px-4 py-3'>
+              <span className='text-sm text-text-secondary'>Variant:</span>
+              <VariantCombobox
+                value={selectedVariantId}
+                onChange={setSelectedVariantId}
+                variants={variantOptions}
+                currentUserId={auth.user?.id ?? null}
+                disabled={!canEdit || isBusy}
+                onDelete={(variantId, variantName) => {
+                  setPendingDeleteVariant({ variantId, label: variantName })
+                }}
+                onCreate={() => createVariantMutation.mutate()}
+                canCreate={canEdit && !isBusy}
+                canDelete={variant => canEdit && !isBusy && !variant.isDefault}
+              />
             </div>
             <Dialog
               open={pendingDeleteVariant !== null}
@@ -2653,6 +1758,38 @@ export function SettingsImageDetailPage () {
                 className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
                 left={
                   <SettingsRowLeft
+                    title='Variant visibility'
+                    description='Toggle whether this variant is personal to you or shared across the image.'
+                  />
+                }
+                right={
+                  <ToggleGroup
+                    type='single'
+                    value={selectedVariantScope ?? undefined}
+                    onValueChange={value => {
+                      if (value) {
+                        void updateVariantScopeMutation.mutateAsync(
+                          value as VariantScope
+                        )
+                      }
+                    }}
+                    disabled={!canChangeSelectedVariantScope || isBusy}
+                    size='sm'
+                    title={
+                      !canChangeSelectedVariantScope
+                        ? variantScopeChangeReason ?? undefined
+                        : undefined
+                    }
+                  >
+                    <ToggleGroupItem value='personal'>Personal</ToggleGroupItem>
+                    <ToggleGroupItem value='shared'>Shared</ToggleGroupItem>
+                  </ToggleGroup>
+                }
+              />
+              <SettingsRow
+                className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
+                left={
+                  <SettingsRowLeft
                     title='Default variant'
                     description='The variant used when no variant is specified.'
                   />
@@ -2684,150 +1821,29 @@ export function SettingsImageDetailPage () {
                 className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
                 left={
                   <SettingsRowLeft
-                    title='Head Image Id'
-                    description={"Image we'll use when creating the agent."}
+                    title='Current Image'
+                    description='Image ref used for builds, setup sandboxes, and new agent sandboxes.'
                   />
                 }
                 right={
-                  <div className='flex w-full sm:w-[420px] items-center justify-between gap-2 border border-border bg-surface-2 px-3 py-2'>
-                    <div className='truncate text-xs font-mono text-text-secondary'>
-                      {selectedCurrentImageId ?? 'Not built yet'}
-                    </div>
-                    {selectedCurrentImageId ? (
-                      <Button
-                        variant='ghost'
-                        size='icon'
-                        className='h-7 w-7 shrink-0'
-                        onClick={() =>
-                          void onCopy(
-                            selectedCurrentImageId,
-                            'selected image id'
-                          )
-                        }
-                        title='Copy selected variant image id'
-                      >
-                        <Copy className='h-4 w-4' />
-                      </Button>
-                    ) : null}
-                  </div>
+                  <ImageIdCombobox
+                    value={selectedCurrentImageId ?? null}
+                    options={imageIdOptions}
+                    disabled={!canEdit || isBusy}
+                    placeholder='No image selected'
+                    className='w-full sm:w-[320px]'
+                    onCopy={id => void onCopy(id, 'image id')}
+                    readOnly
+                  />
                 }
               />
               <div>
-                <SettingsRow
-                  className='items-start flex-col sm:flex-row'
-                  left={
-                    <SettingsRowLeft
-                      title='Base Image'
-                      description='Image used as the starting point for building.'
-                    />
-                  }
-                  right={
-                    <div className='flex flex-col gap-1 w-full sm:w-[420px]'>
-                      {(() => {
-                        const options: Array<{
-                          readonly value: string | null
-                          readonly label: string
-                          readonly detail: string
-                        }> = [
-                          {
-                            value: null,
-                            label: '$AGENT_BASE_IMAGE_REF',
-                            detail: 'Default'
-                          },
-                          {
-                            value: 'ghcr.io/suhjohn/agentsandbox:latest',
-                            label: 'ghcr.io/suhjohn/agentsandbox:latest',
-                            detail: 'Registry'
-                          }
-                        ]
-
-                        if (
-                          selectedBaseImageId &&
-                          !options.some(
-                            opt => opt.value === selectedBaseImageId
-                          )
-                        ) {
-                          options.push({
-                            value: selectedBaseImageId,
-                            label: selectedBaseImageId,
-                            detail: 'Base image'
-                          })
-                        }
-
-                        if (
-                          selectedSnapshottedImageId &&
-                          !options.some(
-                            opt => opt.value === selectedSnapshottedImageId
-                          )
-                        ) {
-                          options.push({
-                            value: selectedSnapshottedImageId,
-                            label: selectedSnapshottedImageId,
-                            detail: 'Extended image'
-                          })
-                        }
-
-                        return options
-                      })().map(opt => {
-                        const isSelected = selectedBaseImageId === opt.value
-                        return (
-                          <button
-                            key={opt.value ?? '__default__'}
-                            type='button'
-                            className={cn(
-                              'flex items-center gap-2 px-3 py-2 text-left text-xs border transition-colors',
-                              isSelected
-                                ? 'border-ring bg-surface-2 text-text-primary'
-                                : 'border-border text-text-secondary hover:bg-surface-2/50',
-                              (!canMutateSelectedVariant || isBusy) &&
-                                'opacity-50 cursor-not-allowed'
-                            )}
-                            disabled={!canMutateSelectedVariant || isBusy}
-                            onClick={() => {
-                              if (isSelected) return
-                              setBaseImageMutation.mutate(opt.value)
-                            }}
-                          >
-                            <div
-                              className={cn(
-                                'h-3.5 w-3.5 rounded-full border-2 shrink-0',
-                                isSelected
-                                  ? 'border-ring bg-ring'
-                                  : 'border-text-tertiary'
-                              )}
-                            />
-                            <span className='font-mono truncate'>
-                              {opt.label}
-                            </span>
-                            <span className='text-text-tertiary ml-auto shrink-0'>
-                              {opt.detail}
-                            </span>
-                            {isSelected && opt.value ? (
-                              <Button
-                                variant='ghost'
-                                size='icon'
-                                className='h-6 w-6 shrink-0 -mr-1'
-                                onClick={e => {
-                                  e.stopPropagation()
-                                  void onCopy(opt.value!, 'base image')
-                                }}
-                                title='Copy'
-                              >
-                                <Copy className='h-3.5 w-3.5' />
-                              </Button>
-                            ) : null}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  }
-                />
                 <SettingsRow
                   className='items-start sm:items-center flex-col sm:flex-row'
                   left={
                     <SettingsRowLeft
                       title='Extend'
-                      description='Open a live shell to make manual changes (e.g. Codex auth). Snapshot updates the base image.'
+                      description='Open a live shell to make manual changes. Closing the sandbox snapshots and updates the current image.'
                     />
                   }
                   right={
@@ -2850,24 +1866,12 @@ export function SettingsImageDetailPage () {
                             variant='secondary'
                             size='sm'
                             disabled={!canEdit || isBusy}
-                            onClick={() =>
-                              snapshotSetupSandboxMutation.mutate()
-                            }
+                            onClick={() => closeSetupSandboxMutation.mutate()}
                           >
-                            {snapshotSetupSandboxMutation.isPending ? (
+                            {closeSetupSandboxMutation.isPending ? (
                               <Loader2 className='h-4 w-4 animate-spin' />
                             ) : null}
-                            Snapshot
-                          </Button>
-                          <Button
-                            variant='ghost'
-                            size='sm'
-                            disabled={!canEdit || isBusy}
-                            onClick={() =>
-                              terminateSetupSandboxMutation.mutate()
-                            }
-                          >
-                            Close
+                            Close and Save
                           </Button>
                         </>
                       )}
@@ -2884,192 +1888,7 @@ export function SettingsImageDetailPage () {
                   </div>
                 ) : null}
               </div>
-              <SettingsRow
-                className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
-                left={
-                  <SettingsRowLeft
-                    title='Build'
-                    description='Run the setup script to create a new image.'
-                  />
-                }
-                right={
-                  <div className='flex items-center gap-2'>
-                    <Button
-                      variant='secondary'
-                      disabled={
-                        !canMutateSelectedVariant ||
-                        isBusy ||
-                        saveSetupScriptMutation.isPending ||
-                        !selectedVariantId
-                      }
-                      onClick={onBuildClick}
-                      title={
-                        !canMutateSelectedVariant
-                          ? variantMutabilityReason ?? undefined
-                          : undefined
-                      }
-                    >
-                      {buildStreamMutation.isPending ? (
-                        <Loader2 className='h-4 w-4 animate-spin' />
-                      ) : null}
-                      Build
-                    </Button>
-                    {buildStreamMutation.isPending ? (
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        onClick={() => buildAbortRef.current?.abort()}
-                      >
-                        Cancel
-                      </Button>
-                    ) : null}
-                  </div>
-                }
-              />
             </SettingsList>
-            {/* Build History */}
-            <div className=''>
-              <button
-                type='button'
-                className='w-full flex items-center justify-between px-4 py-2 text-sm text-text-secondary hover:bg-surface-2/50'
-                onClick={() => setShowBuildHistory(prev => !prev)}
-              >
-                <span>Build History ({variantBuilds.length})</span>
-                {showBuildHistory ? (
-                  <ChevronUp className='h-4 w-4' />
-                ) : (
-                  <ChevronDown className='h-4 w-4' />
-                )}
-              </button>
-              {showBuildHistory ? (
-                <div className='px-4 pb-4'>
-                  {variantBuildsQuery.isLoading ? (
-                    <div className='text-sm text-text-tertiary py-2'>
-                      Loading...
-                    </div>
-                  ) : variantBuilds.length === 0 ? (
-                    <div className='text-sm text-text-tertiary py-2'>
-                      No builds yet. Run your first build above.
-                    </div>
-                  ) : (
-                    <div className='border border-border rounded overflow-hidden'>
-                      <table className='w-full text-xs'>
-                        <thead className='bg-surface-2'>
-                          <tr>
-                            <th className='text-left px-3 py-2 font-medium text-text-secondary'>
-                              Status
-                            </th>
-                            <th className='text-left px-3 py-2 font-medium text-text-secondary'>
-                              Started
-                            </th>
-                            <th className='text-left px-3 py-2 font-medium text-text-secondary'>
-                              Input Image
-                            </th>
-                            <th className='text-left px-3 py-2 font-medium text-text-secondary'>
-                              Output Image
-                            </th>
-                            <th className='text-left px-3 py-2 font-medium text-text-secondary'>
-                              Error
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {variantBuilds.map(build => (
-                            <tr
-                              key={build.id}
-                              className='border-t border-border'
-                            >
-                              <td className='px-3 py-2'>
-                                <div className='flex items-center gap-1.5'>
-                                  {build.status === 'succeeded' ? (
-                                    <CheckCircle2 className='h-3.5 w-3.5 text-green-500' />
-                                  ) : build.status === 'failed' ? (
-                                    <XCircle className='h-3.5 w-3.5 text-destructive' />
-                                  ) : (
-                                    <Clock className='h-3.5 w-3.5 text-text-tertiary animate-pulse' />
-                                  )}
-                                  <span
-                                    className={cn(
-                                      build.status === 'succeeded' &&
-                                        'text-green-600',
-                                      build.status === 'failed' &&
-                                        'text-destructive',
-                                      build.status === 'running' &&
-                                        'text-text-tertiary'
-                                    )}
-                                  >
-                                    {build.status}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className='px-3 py-2 text-text-secondary'>
-                                {new Date(build.startedAt).toLocaleString()}
-                              </td>
-                              <td className='px-3 py-2'>
-                                {build.baseImageId ? (
-                                  <button
-                                    type='button'
-                                    className='font-mono text-text-secondary hover:text-text-primary truncate max-w-[200px] block'
-                                    onClick={() =>
-                                      void onCopy(
-                                        build.baseImageId!,
-                                        'input image id'
-                                      )
-                                    }
-                                    title={build.baseImageId}
-                                  >
-                                    {build.baseImageId.slice(0, 20)}
-                                    {build.baseImageId.length > 20 ? '...' : ''}
-                                  </button>
-                                ) : (
-                                  <span className='text-text-tertiary'>
-                                    Default
-                                  </span>
-                                )}
-                              </td>
-                              <td className='px-3 py-2'>
-                                {build.outputImageId ? (
-                                  <button
-                                    type='button'
-                                    className='font-mono text-text-secondary hover:text-text-primary truncate max-w-[200px] block'
-                                    onClick={() =>
-                                      void onCopy(
-                                        build.outputImageId!,
-                                        'output image id'
-                                      )
-                                    }
-                                    title={build.outputImageId}
-                                  >
-                                    {build.outputImageId.slice(0, 20)}...
-                                  </button>
-                                ) : (
-                                  <span className='text-text-tertiary'>-</span>
-                                )}
-                              </td>
-                              <td className='px-3 py-2'>
-                                {build.errorMessage ? (
-                                  <span
-                                    className='text-destructive truncate max-w-[200px] block'
-                                    title={build.errorMessage}
-                                  >
-                                    {build.errorMessage.slice(0, 50)}
-                                    {build.errorMessage.length > 50
-                                      ? '...'
-                                      : ''}
-                                  </span>
-                                ) : (
-                                  <span className='text-text-tertiary'>-</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
             {buildLogs.length > 0 ? (
               <div className='border-t border-border px-3 py-2'>
                 <div className='flex items-center justify-between mb-2'>
@@ -3082,6 +1901,126 @@ export function SettingsImageDetailPage () {
                 </pre>
               </div>
             ) : null}
+          </SettingsPanel>
+        </SettingsSection>
+
+        <SettingsSection
+          title={
+            <div className='flex items-center gap-2'>
+              <p>Setup Script</p>
+            </div>
+          }
+          description={
+            <div>
+              Every 30 minutes, we will create a new head image id for all
+              variants by running this script.
+            </div>
+          }
+          action={
+            <div className='flex items-center gap-2'>
+              <Button
+                variant='secondary'
+                disabled={
+                  !canMutateSelectedVariant ||
+                  isBusy ||
+                  saveSetupScriptMutation.isPending ||
+                  !selectedVariantId
+                }
+                onClick={onBuildClick}
+                title={
+                  !canMutateSelectedVariant
+                    ? variantMutabilityReason ?? undefined
+                    : 'Run the setup script to create a new image'
+                }
+              >
+                {buildStreamMutation.isPending ? (
+                  <Loader2 className='h-4 w-4 animate-spin' />
+                ) : null}
+                Build
+              </Button>
+            </div>
+          }
+        >
+          <SettingsPanel>
+            {!draftValue || !initialValue ? (
+              <SettingsPanelBody className='text-sm text-text-secondary'>
+                Loading...
+              </SettingsPanelBody>
+            ) : (
+              <div className='overflow-hidden h-[400px] relative'>
+                <Editor
+                  height='100%'
+                  defaultLanguage='shell'
+                  value={draftValue.setupScript}
+                  onChange={value =>
+                    setDraft(prev =>
+                      prev ? { ...prev, setupScript: value ?? '' } : prev
+                    )
+                  }
+                  theme='vs-dark'
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    lineNumbers: 'on',
+                    scrollBeyondLastLine: false,
+                    readOnly: isBusy,
+                    padding: { top: 12, bottom: 12 }
+                  }}
+                />
+                {!draftValue.setupScript && (
+                  <div className='absolute top-3 left-14 text-text-tertiary text-[13px] pointer-events-none select-none'>
+                    # Install dependencies, configure environment, etc.
+                  </div>
+                )}
+              </div>
+            )}
+          </SettingsPanel>
+        </SettingsSection>
+        <SettingsSection
+          title={
+            <div className='flex items-center gap-2'>
+              <p>Run Script</p>
+            </div>
+          }
+          description={
+            <div>
+              Every time we start a new agent sandbox, we will run this script.
+            </div>
+          }
+        >
+          <SettingsPanel>
+            {!draftValue || !initialValue ? (
+              <SettingsPanelBody className='text-sm text-text-secondary'>
+                Loading...
+              </SettingsPanelBody>
+            ) : (
+              <div className='overflow-hidden h-[300px] relative'>
+                <Editor
+                  height='100%'
+                  defaultLanguage='shell'
+                  value={draftValue.runScript}
+                  onChange={value =>
+                    setDraft(prev =>
+                      prev ? { ...prev, runScript: value ?? '' } : prev
+                    )
+                  }
+                  theme='vs-dark'
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    lineNumbers: 'on',
+                    scrollBeyondLastLine: false,
+                    readOnly: isBusy,
+                    padding: { top: 12, bottom: 12 }
+                  }}
+                />
+                {!draftValue.runScript && (
+                  <div className='absolute top-3 left-14 text-text-tertiary text-[13px] pointer-events-none select-none'>
+                    # Prepare runtime state before agent-server starts.
+                  </div>
+                )}
+              </div>
+            )}
           </SettingsPanel>
         </SettingsSection>
 

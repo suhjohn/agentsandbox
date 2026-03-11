@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { HTTPException } from 'hono/http-exception'
 import { sign } from 'hono/jwt'
 import { ModalClient, Sandbox } from 'modal'
@@ -14,12 +14,14 @@ import {
 import { env } from '../env'
 import {
   canUserAccessImageVariant,
+  createImageVariantBuild,
+  DEFAULT_VARIANT_HEAD_IMAGE_REF,
   getImageById,
   getImageByIdIncludingArchived,
   getImageVariantForImage,
   listEnvironmentSecrets,
   resolveImageVariantForUser,
-  setImageVariantBaseImageId
+  setImageVariantHeadImageId
 } from './image.service'
 import { withLock } from './lock.service'
 import { getRedisClient } from './redis.service'
@@ -56,14 +58,25 @@ export type AgentRuntimeAccess = {
   readonly agentAuthExpiresInSeconds: number
 }
 
+export type SetupSandboxSshAccess = {
+  readonly username: string
+  readonly host: string
+  readonly port: number
+  readonly hostPublicKey: string
+  readonly hostKeyFingerprint: string
+  readonly knownHostsLine: string
+}
+
 export type CreateSetupSandboxResult = {
   readonly sandboxId: string
   readonly variantId: string
-  readonly baseImageId: string | null
+  readonly headImageId: string
+  readonly ssh: SetupSandboxSshAccess | null
 }
 
-export type SetupSandboxSnapshotResult = {
+export type CloseSetupSandboxResult = {
   readonly baseImageId: string
+  readonly headImageId: string
   readonly variantId: string
 }
 
@@ -227,6 +240,8 @@ const SETUP_SERVER_COMMAND = [
   '/opt/agentsandbox/agent-go/build-artifacts/agent-server',
   'serve'
 ] as const
+const SETUP_SSH_USERNAME = 'agent'
+const SETUP_SSH_PORT = 22
 const SETUP_TERMINAL_PORT = 8080
 const SETUP_TIMEOUT_MS = 60 * 60 * 1000
 const SETUP_IDLE_TIMEOUT_MS = 60 * 60 * 1000
@@ -384,6 +399,14 @@ async function sleepMs (ms: number): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, ms))
 }
 
+async function safeTerminateSandbox (sandbox: Sandbox): Promise<void> {
+  try {
+    await sandbox.terminate()
+  } catch {
+    /* ignore cleanup failures */
+  }
+}
+
 async function withTimeout<T> (
   promise: Promise<T>,
   timeoutMs: number,
@@ -400,6 +423,210 @@ async function withTimeout<T> (
     return await Promise.race([promise, timeoutPromise])
   } finally {
     if (timer) clearTimeout(timer)
+  }
+}
+
+type SandboxExecResult = {
+  readonly exitCode: number
+  readonly stdout: string
+  readonly stderr: string
+}
+
+async function execSandboxCommand (input: {
+  readonly sandbox: Sandbox
+  readonly command: readonly string[]
+  readonly timeoutMs?: number
+}): Promise<SandboxExecResult> {
+  const proc = await input.sandbox.exec([...input.command], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+    ...(typeof input.timeoutMs === 'number'
+      ? { timeoutMs: input.timeoutMs }
+      : {})
+  })
+  const [stdout, stderr, exitCode] = await Promise.all([
+    proc.stdout.readText(),
+    proc.stderr.readText(),
+    proc.wait()
+  ])
+  return { exitCode, stdout, stderr }
+}
+
+function normalizeSetupSandboxSshKeys (
+  rawKeys: readonly string[] | null | undefined
+): readonly string[] {
+  if (!rawKeys) return []
+  const normalized: string[] = []
+  const seen = new Set<string>()
+  for (const rawKey of rawKeys) {
+    const key = rawKey.trim()
+    if (key.length === 0) continue
+    if (key.includes('\n') || key.includes('\r')) {
+      throw new Error('sshPublicKeys entries must be single-line public keys')
+    }
+    if (seen.has(key)) continue
+    seen.add(key)
+    normalized.push(key)
+  }
+  return normalized
+}
+
+async function waitForSetupSandboxTunnel (input: {
+  readonly sandboxId: string
+  readonly containerPort: number
+}): Promise<{ readonly host: string; readonly port: number }> {
+  const startedAt = Date.now()
+  const deadline = startedAt + SETUP_TUNNELS_READY_TIMEOUT_MS
+  let lastErr: unknown = null
+
+  while (Date.now() <= deadline) {
+    try {
+      const response = (await modalClient.cpClient.sandboxGetTunnels({
+        sandboxId: input.sandboxId,
+        timeout: SETUP_TUNNELS_RPC_TIMEOUT_SECONDS
+      })) as unknown as RawSandboxTunnelsResponse
+      const tunnel = (response.tunnels ?? []).find(
+        value => value.containerPort === input.containerPort
+      )
+      if (!tunnel) {
+        throw new Error(`Expected tunnel for port ${input.containerPort}`)
+      }
+      return { host: tunnel.host, port: tunnel.port }
+    } catch (err) {
+      lastErr = err
+      if (!isTransientSandboxLookupError(err)) throw err
+      if (Date.now() >= deadline) break
+      await sleepMs(SETUP_TUNNELS_RETRY_INTERVAL_MS)
+    }
+  }
+
+  throw new Error(
+    `Setup sandbox tunnel unavailable for port ${input.containerPort} after ${
+      Date.now() - startedAt
+    }ms: ${
+      lastErr instanceof Error
+        ? lastErr.message
+        : String(lastErr ?? 'unknown error')
+    }`
+  )
+}
+
+async function provisionSetupSandboxSshAccess (input: {
+  readonly sandbox: Sandbox
+  readonly publicKeys: readonly string[]
+}): Promise<Pick<
+  SetupSandboxSshAccess,
+  'hostPublicKey' | 'hostKeyFingerprint'
+>> {
+  const authorizedKeys = `${input.publicKeys.join('\n')}\n`
+  const script = [
+    'set -euo pipefail',
+    `if ! id -u ${shellQuote(SETUP_SSH_USERNAME)} >/dev/null 2>&1; then`,
+    `  echo "missing ssh user: ${SETUP_SSH_USERNAME}" >&2`,
+    '  exit 1',
+    'fi',
+    'SSH_HOME=/home/agent',
+    'SSH_DIR="${SSH_HOME}/.ssh"',
+    'HOST_DIR="${ROOT_DIR:-/home/agent/runtime}/ssh-hostkeys"',
+    'RUNTIME_DIR="${ROOT_DIR:-/home/agent/runtime}"',
+    'CONFIG_PATH="${RUNTIME_DIR}/run/sshd_config"',
+    'PID_PATH="${RUNTIME_DIR}/run/sshd.pid"',
+    'mkdir -p /run/sshd "${SSH_DIR}" "${HOST_DIR}" "${RUNTIME_DIR}/run"',
+    'chmod 755 "${SSH_HOME}"',
+    'chmod 700 "${SSH_DIR}" "${HOST_DIR}"',
+    'cat > "${SSH_DIR}/authorized_keys" <<\'__AUTHORIZED_KEYS__\'',
+    authorizedKeys.trimEnd(),
+    '__AUTHORIZED_KEYS__',
+    `chown -R ${shellQuote(SETUP_SSH_USERNAME)}:${shellQuote(SETUP_SSH_USERNAME)} "\${SSH_DIR}"`,
+    'chmod 600 "${SSH_DIR}/authorized_keys"',
+    'if [[ ! -f "${HOST_DIR}/ssh_host_ed25519_key" ]]; then',
+    '  ssh-keygen -q -t ed25519 -N "" -f "${HOST_DIR}/ssh_host_ed25519_key"',
+    'fi',
+    'cat > "${CONFIG_PATH}" <<EOF',
+    `Port ${SETUP_SSH_PORT}`,
+    'ListenAddress 0.0.0.0',
+    'Protocol 2',
+    'AddressFamily any',
+    'PasswordAuthentication no',
+    'KbdInteractiveAuthentication no',
+    'ChallengeResponseAuthentication no',
+    'UsePAM no',
+    'PermitRootLogin no',
+    'PubkeyAuthentication yes',
+    'AuthorizedKeysFile .ssh/authorized_keys',
+    `AllowUsers ${SETUP_SSH_USERNAME}`,
+    'HostKey ${HOST_DIR}/ssh_host_ed25519_key',
+    'PidFile ${PID_PATH}',
+    'PrintMotd no',
+    'Subsystem sftp internal-sftp',
+    'EOF',
+    'if [[ -f "${PID_PATH}" ]]; then',
+    '  old_pid="$(cat "${PID_PATH}" 2>/dev/null || true)"',
+    '  if [[ -n "${old_pid}" ]] && kill -0 "${old_pid}" 2>/dev/null; then',
+    '    kill "${old_pid}" 2>/dev/null || true',
+    '    sleep 0.2',
+    '  fi',
+    '  rm -f "${PID_PATH}"',
+    'fi',
+    '/usr/sbin/sshd -t -f "${CONFIG_PATH}"',
+    'nohup /usr/sbin/sshd -D -f "${CONFIG_PATH}" >/tmp/agent-manager-setup-sshd.log 2>&1 </dev/null &',
+    'for _ in $(seq 1 40); do',
+    `  if ss -tln | grep -qE '[:.]${SETUP_SSH_PORT}[[:space:]]'; then`,
+    '    break',
+    '  fi',
+    '  sleep 0.25',
+    'done',
+    `if ! ss -tln | grep -qE '[:.]${SETUP_SSH_PORT}[[:space:]]'; then`,
+    '  echo "sshd failed to start" >&2',
+    '  exit 1',
+    'fi',
+    'HOST_PUBLIC_KEY="$(cat "${HOST_DIR}/ssh_host_ed25519_key.pub")"',
+    'HOST_FINGERPRINT="$(ssh-keygen -lf "${HOST_DIR}/ssh_host_ed25519_key.pub" -E sha256 | awk \'{print $2}\')"',
+    'HOST_PUBLIC_KEY="${HOST_PUBLIC_KEY}" HOST_FINGERPRINT="${HOST_FINGERPRINT}" python3 - <<\'__PY__\'',
+    'import json',
+    'import os',
+    'print(json.dumps({',
+    '  "hostPublicKey": os.environ["HOST_PUBLIC_KEY"],',
+    '  "hostKeyFingerprint": os.environ["HOST_FINGERPRINT"],',
+    '}))',
+    '__PY__'
+  ].join('\n')
+
+  const result = await execSandboxCommand({
+    sandbox: input.sandbox,
+    command: ['bash', '-lc', script],
+    timeoutMs: 30_000
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Failed to provision setup sandbox SSH access (exit ${
+        result.exitCode
+      }): ${result.stderr.trim() || result.stdout.trim() || 'unknown error'}`
+    )
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(result.stdout.trim())
+  } catch {
+    throw new Error('Failed to parse setup sandbox SSH metadata')
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    Array.isArray(parsed) ||
+    typeof (parsed as { hostPublicKey?: unknown }).hostPublicKey !== 'string' ||
+    typeof (parsed as { hostKeyFingerprint?: unknown }).hostKeyFingerprint !==
+      'string'
+  ) {
+    throw new Error('Setup sandbox SSH metadata was incomplete')
+  }
+
+  return {
+    hostPublicKey: (parsed as { hostPublicKey: string }).hostPublicKey,
+    hostKeyFingerprint: (parsed as { hostKeyFingerprint: string })
+      .hostKeyFingerprint
   }
 }
 
@@ -1050,12 +1277,11 @@ export async function ensureAgentSandbox (input: {
                 variantId: agent.imageVariantId
               })
             : null
-        const baseImageId = baseVariant?.headImageId?.trim() || ''
-        if (baseImageId.length === 0)
-          throw new HTTPException(409, { message: 'Agent image is missing' })
+        const headImageId =
+          baseVariant?.headImageId?.trim() || DEFAULT_VARIANT_HEAD_IMAGE_REF
 
         const snapshotImageId = agent.snapshotImageId?.trim() ?? ''
-        candidateImageIds = [snapshotImageId, baseImageId].filter(
+        candidateImageIds = [snapshotImageId, headImageId].filter(
           v => v.length > 0
         )
       }
@@ -1239,6 +1465,7 @@ export async function createSetupSandbox (input: {
   readonly variantId: string
   readonly userId: string
   readonly region?: SandboxRegion
+  readonly sshPublicKeys?: readonly string[]
 }): Promise<CreateSetupSandboxResult> {
   const image = await getImageById(input.imageId)
   if (!image) throw new Error('Image not found')
@@ -1250,33 +1477,36 @@ export async function createSetupSandbox (input: {
   if (!variant || !canUserAccessImageVariant({ userId: input.userId, variant }))
     throw new Error('Image variant not found')
 
-  const explicitBaseImageSource =
-    typeof variant.baseImageId === 'string' ? variant.baseImageId.trim() : ''
-  const normalizedBaseImageSource =
-    explicitBaseImageSource.length > 0 ? explicitBaseImageSource : null
+  const currentHeadImageId =
+    typeof variant.headImageId === 'string' ? variant.headImageId.trim() : ''
+  const normalizedHeadImageId =
+    currentHeadImageId.length > 0
+      ? currentHeadImageId
+      : DEFAULT_VARIANT_HEAD_IMAGE_REF
+  const sshPublicKeys = normalizeSetupSandboxSshKeys(input.sshPublicKeys)
+  const shouldEnableSsh = sshPublicKeys.length > 0
 
   const app = await modalClient.apps.fromName(SETUP_APP_NAME, {
     createIfMissing: true
   })
 
-  const looksLikeModalImageId = normalizedBaseImageSource
-    ? /^im-[a-z0-9]+$/i.test(normalizedBaseImageSource)
+  const looksLikeModalImageId = normalizedHeadImageId
+    ? /^im-[a-z0-9]+$/i.test(normalizedHeadImageId)
     : false
   const explicitBaseImageId =
-    normalizedBaseImageSource && looksLikeModalImageId
-      ? normalizedBaseImageSource
+    normalizedHeadImageId && looksLikeModalImageId
+      ? normalizedHeadImageId
       : null
   const explicitBaseImageRef =
-    normalizedBaseImageSource && !looksLikeModalImageId
-      ? await resolveBaseImageRefForRegistry(normalizedBaseImageSource)
+    normalizedHeadImageId && !looksLikeModalImageId
+      ? await resolveBaseImageRefForRegistry(normalizedHeadImageId)
       : null
 
-  const defaultBaseImageRef = env.AGENT_BASE_IMAGE_REF.trim()
   const baseImageRef = explicitBaseImageRef
     ? explicitBaseImageRef
     : explicitBaseImageId
     ? null
-    : await resolveBaseImageRefForRegistry(defaultBaseImageRef)
+    : await resolveBaseImageRefForRegistry(DEFAULT_VARIANT_HEAD_IMAGE_REF)
   const modalImage = explicitBaseImageId
     ? await modalClient.images.fromId(explicitBaseImageId)
     : modalClient.images.fromRegistry(baseImageRef!)
@@ -1316,19 +1546,19 @@ export async function createSetupSandbox (input: {
         PORT: String(SETUP_TERMINAL_PORT),
         SECRET_SEED: env.SANDBOX_SIGNING_SECRET,
         AGENT_MANAGER_BASE_URL: agentManagerBaseUrl,
-        AGENT_MANAGER_API_KEY: env.AGENT_MANAGER_API_KEY,
         AGENT_ALLOWED_ORIGINS: buildAllowedOrigins(agentManagerBaseUrl),
         TERM: 'xterm-256color'
       },
       ...(namedSecret ? { secrets: [namedSecret] } : {}),
       encryptedPorts: [SETUP_TERMINAL_PORT],
+      ...(shouldEnableSsh ? { unencryptedPorts: [SETUP_SSH_PORT] } : {}),
       timeoutMs: SETUP_TIMEOUT_MS,
       idleTimeoutMs: SETUP_IDLE_TIMEOUT_MS,
       ...(regions ? { regions } : {})
     })
   } catch (err) {
-    const source = normalizedBaseImageSource
-      ? `baseImage=${normalizedBaseImageSource}`
+    const source = normalizedHeadImageId
+      ? `headImage=${normalizedHeadImageId}`
       : `baseImageRef=${baseImageRef ?? 'unknown'}`
     log.error('Setup sandbox create failed', {
       imageId: input.imageId,
@@ -1360,14 +1590,47 @@ export async function createSetupSandbox (input: {
     const exitCode = await probe.wait()
     if (exitCode !== 0) throw new Error(`startup probe exited ${exitCode}`)
   } catch (err) {
-    const source = normalizedBaseImageSource
-      ? `baseImage=${normalizedBaseImageSource}`
+    const source = normalizedHeadImageId
+      ? `headImage=${normalizedHeadImageId}`
       : `baseImageRef=${baseImageRef ?? 'unknown'}`
+    await safeTerminateSandbox(sandbox)
     throw new Error(
       `Setup sandbox failed to start from ${source}: ${
         err instanceof Error ? err.message : String(err)
       }`
     )
+  }
+
+  let sshAccess: SetupSandboxSshAccess | null = null
+  if (shouldEnableSsh) {
+    try {
+      const sshMetadata = await provisionSetupSandboxSshAccess({
+        sandbox,
+        publicKeys: sshPublicKeys
+      })
+      const tunnel = await waitForSetupSandboxTunnel({
+        sandboxId: sandbox.sandboxId,
+        containerPort: SETUP_SSH_PORT
+      })
+      sshAccess = {
+        username: SETUP_SSH_USERNAME,
+        host: tunnel.host,
+        port: tunnel.port,
+        hostPublicKey: sshMetadata.hostPublicKey,
+        hostKeyFingerprint: sshMetadata.hostKeyFingerprint,
+        knownHostsLine: `[${tunnel.host}]:${tunnel.port} ${sshMetadata.hostPublicKey}`
+      }
+    } catch (err) {
+      const source = normalizedHeadImageId
+        ? `headImage=${normalizedHeadImageId}`
+        : `baseImageRef=${baseImageRef ?? 'unknown'}`
+      await safeTerminateSandbox(sandbox)
+      throw new Error(
+        `Setup sandbox SSH bootstrap failed from ${source}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      )
+    }
   }
 
   IMAGE_SETUP_SANDBOXES.set(sandbox.sandboxId, {
@@ -1382,7 +1645,8 @@ export async function createSetupSandbox (input: {
   return {
     sandboxId: sandbox.sandboxId,
     variantId: input.variantId,
-    baseImageId: normalizedBaseImageSource
+    headImageId: normalizedHeadImageId,
+    ssh: sshAccess
   }
 }
 
@@ -1462,16 +1726,28 @@ export async function getSetupSandboxTerminalAccess (input: {
   }
 }
 
-export async function snapshotSetupSandbox (input: {
+export async function closeSetupSandbox (input: {
   readonly userId: string
   readonly sandboxId: string
-}): Promise<SetupSandboxSnapshotResult> {
+}): Promise<CloseSetupSandboxResult> {
   const sandboxId = input.sandboxId.trim()
   if (sandboxId.length === 0) throw new Error('sandboxId is required')
   const session = IMAGE_SETUP_SANDBOXES.get(sandboxId)
   if (!session)
     throw new HTTPException(404, { message: 'Setup sandbox not found' })
   IMAGE_SETUP_SANDBOXES.set(sandboxId, { ...session, updatedAt: Date.now() })
+
+  const variant = await getImageVariantForImage({
+    imageId: session.imageId,
+    variantId: session.variantId
+  })
+  if (!variant)
+    throw new Error('Image variant not found for setup sandbox session')
+
+  const baseImageId =
+    typeof variant.headImageId === 'string' && variant.headImageId.trim().length > 0
+      ? variant.headImageId.trim()
+      : DEFAULT_VARIANT_HEAD_IMAGE_REF
 
   const sandbox = await modalClient.sandboxes.fromId(session.sandboxId)
   const snapshot = await sandbox.snapshotFilesystem(SETUP_SNAPSHOT_TIMEOUT_MS)
@@ -1480,27 +1756,43 @@ export async function snapshotSetupSandbox (input: {
   if (snapshotImageId.length === 0)
     throw new Error('Snapshot did not return an image id.')
 
-  const updatedVariant = await setImageVariantBaseImageId({
+  const buildInputPayload = {
+    imageId: session.imageId,
     variantId: session.variantId,
-    baseImageId: snapshotImageId
+    source: 'setup-sandbox',
+    setupSandboxId: session.sandboxId,
+    baseImageId
+  } as const
+  const inputHash = createHash('sha256')
+    .update(JSON.stringify(buildInputPayload))
+    .digest('hex')
+
+  await createImageVariantBuild({
+    imageId: session.imageId,
+    variantId: session.variantId,
+    requestedByUserId: input.userId,
+    status: 'succeeded',
+    inputHash,
+    inputPayload: buildInputPayload as unknown as Record<string, unknown>,
+    logs: '',
+    outputImageId: snapshotImageId,
+    errorMessage: null,
+    finishedAt: new Date()
+  })
+
+  const updatedVariant = await setImageVariantHeadImageId({
+    variantId: session.variantId,
+    headImageId: snapshotImageId
   })
   if (!updatedVariant)
     throw new Error('Image variant not found for setup sandbox session')
 
-  return { baseImageId: snapshotImageId, variantId: session.variantId }
-}
-
-export async function terminateSetupSandbox (input: {
-  readonly userId: string
-  readonly sandboxId: string
-}): Promise<void> {
-  const sandboxId = input.sandboxId.trim()
-  if (sandboxId.length === 0) throw new Error('sandboxId is required')
-  const session = IMAGE_SETUP_SANDBOXES.get(sandboxId)
-  if (!session)
-    throw new HTTPException(404, { message: 'Setup sandbox not found' })
-
-  const sandbox = await modalClient.sandboxes.fromId(session.sandboxId)
-  await sandbox.terminate()
+  await safeTerminateSandbox(sandbox)
   IMAGE_SETUP_SANDBOXES.delete(session.sandboxId)
+
+  return {
+    baseImageId,
+    headImageId: snapshotImageId,
+    variantId: session.variantId
+  }
 }

@@ -27,7 +27,7 @@ type LogMeta = Readonly<Record<string, unknown>>;
 const REDACTED_VALUE = "[REDACTED]";
 
 const SENSITIVE_KEY_PATTERN =
-  /(?:^|[-_])(password|passwd|passphrase|secret|token|api[-_]?key|authorization|cookie|set-cookie|x-agent-auth|x-agent-manager-api-key)(?:$|[-_])/i;
+  /(?:^|[-_])(password|passwd|passphrase|secret|token|api[-_]?key|authorization|cookie|set-cookie|x-agent-auth)(?:$|[-_])/i;
 
 const SENSITIVE_QUERY_KEYS = new Set([
   "tkn",
@@ -40,7 +40,6 @@ const SENSITIVE_QUERY_KEYS = new Set([
   "authorization",
   "api_key",
   "x-agent-auth",
-  "x-agent-manager-api-key",
   "cookie",
   "set-cookie",
 ]);

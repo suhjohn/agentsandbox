@@ -13,6 +13,7 @@ import {
 } from './ui/dialog'
 import { Button } from './ui/button'
 import {
+  getChatRuntimeController,
   getActiveChatRuntimeController,
   registerDialogRuntimeController
 } from '@/coordinator-actions/runtime-bridge'
@@ -60,6 +61,7 @@ export function CoordinatorSessionDialog (props: {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<DialogMode>('conversation')
   const [isDraftingNewSession, setIsDraftingNewSession] = useState(false)
+  const [conversationViewKey, setConversationViewKey] = useState(0)
   const [sessionConfig, setSessionConfig] = useState<AgentSessionPanelConfig>({
     agentId: '',
     agentName: '',
@@ -69,15 +71,6 @@ export function CoordinatorSessionDialog (props: {
     sessionModelReasoningEffort: undefined,
     sessionHarness: undefined
   })
-
-  const setConfig = useCallback(
-    (
-      updater: (prev: AgentSessionPanelConfig) => AgentSessionPanelConfig
-    ): void => {
-      setSessionConfig(prev => updater(prev))
-    },
-    []
-  )
 
   const coordinatorAgentsQuery = useQuery({
     queryKey: ['coordinatorAgents', auth.user?.id ?? null],
@@ -114,18 +107,53 @@ export function CoordinatorSessionDialog (props: {
   })
 
   const sessions = sessionsQuery.data?.data ?? []
+  const selectedSessionId = sessionConfig.sessionId.trim()
   const selectedSession = useMemo(
-    () =>
-      sessions.find(session => session.id === sessionConfig.sessionId.trim()) ??
-      null,
-    [sessionConfig.sessionId, sessions]
+    () => sessions.find(session => session.id === selectedSessionId) ?? null,
+    [selectedSessionId, sessions]
   )
-  const activeSessionId = isDraftingNewSession
-    ? ''
-    : selectedSession?.id ??
-      (sessionConfig.sessionId.trim().length > 0
-        ? sessionConfig.sessionId.trim()
-        : sessions[0]?.id ?? '')
+  const activeSessionId =
+    selectedSessionId.length > 0
+      ? selectedSessionId
+      : isDraftingNewSession
+      ? ''
+      : sessions[0]?.id ?? ''
+
+  const startDraftSession = useCallback((title?: string): void => {
+    setSessionConfig(prev => ({
+      ...prev,
+      sessionId: '',
+      sessionTitle: title?.trim() ?? ''
+    }))
+    setIsDraftingNewSession(true)
+    setMode('conversation')
+    setConversationViewKey(prev => prev + 1)
+  }, [])
+
+  const setConfig = useCallback(
+    (
+      updater: (prev: AgentSessionPanelConfig) => AgentSessionPanelConfig
+    ): void => {
+      setSessionConfig(prev => {
+        const next = updater(prev)
+        const prevSessionId = prev.sessionId.trim()
+        const nextSessionId = next.sessionId.trim()
+
+        if (nextSessionId !== prevSessionId) {
+          setIsDraftingNewSession(nextSessionId.length === 0)
+          if (!(prevSessionId.length === 0 && nextSessionId.length > 0)) {
+            setConversationViewKey(current => current + 1)
+          }
+          if (prevSessionId.length === 0 && nextSessionId.length > 0) {
+            void queryClient.invalidateQueries({ queryKey: ['/session'] })
+          }
+        }
+
+        return next
+      })
+    },
+    [queryClient]
+  )
 
   useEffect(() => {
     if (!props.open) return
@@ -177,9 +205,13 @@ export function CoordinatorSessionDialog (props: {
     if (sessionsQuery.isLoading) return
 
     const nextSession =
-      sessions.find(session => session.id === sessionConfig.sessionId.trim()) ??
-      sessions[0] ??
-      null
+      selectedSessionId.length > 0
+        ? sessions.find(session => session.id === selectedSessionId) ?? null
+        : sessions[0] ?? null
+
+    if (selectedSessionId.length > 0 && !nextSession) {
+      return
+    }
 
     setSessionConfig(prev => {
       const nextSessionId = nextSession?.id ?? ''
@@ -200,7 +232,7 @@ export function CoordinatorSessionDialog (props: {
     isDraftingNewSession,
     props.open,
     selectedAgentId,
-    sessionConfig.sessionId,
+    selectedSessionId,
     sessions,
     sessionsQuery.isLoading
   ])
@@ -238,20 +270,29 @@ export function CoordinatorSessionDialog (props: {
     return { mode: 'sessions' as const }
   }, [])
 
+  const focusComposer = useCallback(async () => {
+    setMode('conversation')
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await new Promise<void>(resolve => window.setTimeout(resolve, 0))
+      const chatController = getChatRuntimeController('dialog')
+      if (!chatController) continue
+      try {
+        return await chatController.focusInput()
+      } catch {
+        // Wait for the conversation surface to finish mounting.
+      }
+    }
+    return { focused: false }
+  }, [])
+
   const draftNewSession = useCallback(async () => {
     if (selectedAgentId.length === 0) {
       throw new Error('Create a coordinator agent first.')
     }
 
-    setMode('conversation')
-    setIsDraftingNewSession(true)
-    setSessionConfig(prev => ({
-      ...prev,
-      sessionId: '',
-      sessionTitle: ''
-    }))
+    startDraftSession()
     return { drafted: true as const, mode: 'conversation' as const }
-  }, [selectedAgentId])
+  }, [selectedAgentId, startDraftSession])
 
   const listSessions = useCallback(
     async (input?: { readonly limit?: number; readonly cursor?: string }) => {
@@ -289,11 +330,9 @@ export function CoordinatorSessionDialog (props: {
       }
 
       const fallbackSelectedSessionId =
-        result.data.find(
-          session => session.id === sessionConfig.sessionId.trim()
-        )?.id ??
-        result.data[0]?.id ??
-        null
+        selectedSessionId.length > 0
+          ? selectedSessionId
+          : result.data[0]?.id ?? null
 
       return {
         sessions: result.data.map(session => ({
@@ -317,7 +356,7 @@ export function CoordinatorSessionDialog (props: {
       mode,
       queryClient,
       selectedAgentId,
-      sessionConfig.sessionId
+      selectedSessionId
     ]
   )
 
@@ -338,6 +377,7 @@ export function CoordinatorSessionDialog (props: {
       }))
       setIsDraftingNewSession(false)
       setMode('conversation')
+      setConversationViewKey(prev => prev + 1)
 
       return {
         selected: true as const,
@@ -354,13 +394,7 @@ export function CoordinatorSessionDialog (props: {
         throw new Error('Create a coordinator agent first.')
       }
 
-      setSessionConfig(prev => ({
-        ...prev,
-        sessionId: '',
-        sessionTitle: ''
-      }))
-      setIsDraftingNewSession(true)
-      setMode('conversation')
+      startDraftSession()
 
       return {
         created: true as const,
@@ -368,36 +402,26 @@ export function CoordinatorSessionDialog (props: {
         mode: 'conversation' as const
       }
     },
-    [selectedAgentId]
+    [selectedAgentId, startDraftSession]
   )
 
   const clearCurrentConversation = useCallback(async () => {
     const currentSession =
       sessions.find(session => session.id === activeSessionId) ?? null
     if (!currentSession) {
-      setIsDraftingNewSession(true)
-      setSessionConfig(prev => ({
-        ...prev,
-        sessionId: '',
-        sessionTitle: ''
-      }))
+      startDraftSession()
       return { cleared: true as const }
     }
 
     await archiveSessionMutation.mutateAsync(currentSession)
-    setMode('conversation')
-    setIsDraftingNewSession(true)
-    setSessionConfig(prev => ({
-      ...prev,
-      sessionId: '',
-      sessionTitle: ''
-    }))
+    startDraftSession()
     return { cleared: true as const }
-  }, [activeSessionId, archiveSessionMutation, sessions])
+  }, [activeSessionId, archiveSessionMutation, sessions, startDraftSession])
 
   useEffect(() => {
     return registerDialogRuntimeController({
       openSessionsList,
+      focusComposer,
       draftNewSession,
       listSessions,
       selectSession,
@@ -410,6 +434,7 @@ export function CoordinatorSessionDialog (props: {
     clearCurrentConversation,
     createSession,
     draftNewSession,
+    focusComposer,
     listSessions,
     openSessionsList,
     selectSession
@@ -529,37 +554,6 @@ export function CoordinatorSessionDialog (props: {
             </div>
           ) : mode === 'sessions' ? (
             <div className='h-full flex flex-col'>
-              <div className='border-b border-border px-4 py-3'>
-                <label className='flex flex-col gap-1'>
-                  <span className='text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary'>
-                    Coordinator Agent
-                  </span>
-                  <select
-                    className='h-9 rounded-md border border-border bg-surface-1 px-3 text-sm'
-                    value={selectedAgentId}
-                    onChange={event => {
-                      const nextAgent =
-                        coordinatorAgents.find(
-                          agent => agent.id === event.target.value
-                        ) ?? null
-                      setIsDraftingNewSession(false)
-                      setSessionConfig(prev => ({
-                        ...prev,
-                        agentId: nextAgent?.id ?? '',
-                        agentName: nextAgent?.name?.trim() ?? '',
-                        sessionId: '',
-                        sessionTitle: ''
-                      }))
-                    }}
-                  >
-                    {coordinatorAgents.map(agent => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name?.trim() || agent.id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
               <div className='h-full overflow-y-auto'>
                 {selectedAgentId.length === 0 || sessionsQuery.isLoading ? (
                   <div className='h-full grid place-items-center'>
@@ -625,6 +619,7 @@ export function CoordinatorSessionDialog (props: {
           ) : (
             <div className='h-full flex flex-col flex-1'>
               <AgentSessionPanel
+                key={`${selectedAgentId}:${conversationViewKey}`}
                 config={{
                   ...sessionConfig,
                   agentId: selectedAgentId,

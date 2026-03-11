@@ -13,7 +13,6 @@ const rawEnvSchema = z.object({
   // Optional public base URL to pass into Modal Function so they can call back into agent-manager.
   // For local, it'll be a Tailscale Funnel URL.
   SERVER_PUBLIC_URL: z.string().url().optional(),
-  AGENT_MANAGER_API_KEY: z.string().min(1),
   AGENT_BASE_IMAGE_REF: z
     .string()
     .default('ghcr.io/suhjohn/agentsandbox:latest'),
