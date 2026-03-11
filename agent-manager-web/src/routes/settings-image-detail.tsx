@@ -9,7 +9,8 @@ import {
   Loader2,
   Terminal,
   Key,
-  Check
+  Check,
+  Star
 } from 'lucide-react'
 
 import { useAuth } from '../lib/auth'
@@ -124,6 +125,13 @@ function unwrapImage (value: unknown): Image | null {
   return null
 }
 
+function parseSshPublicKeysDraft (value: string): readonly string[] {
+  return value
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+}
+
 export function SettingsImageDetailPage () {
   const auth = useAuth()
   const queryClient = useQueryClient()
@@ -159,10 +167,13 @@ export function SettingsImageDetailPage () {
   const [environmentContents, setEnvironmentContents] = useState('')
   const [environmentDraftTouched, setEnvironmentDraftTouched] = useState(false)
   const [variantNameDraft, setVariantNameDraft] = useState('')
-  const [extendMode, setExtendMode] = useState<'browser' | 'ssh' | 'api'>(
-    'browser'
+  const [extendMode, setExtendMode] = useState<'interactive' | 'api'>(
+    'interactive'
   )
-  const [sshPublicKey, setSshPublicKey] = useState('')
+  const [sshPublicKeysDraft, setSshPublicKeysDraft] = useState('')
+  const [setupAuthorizedPublicKeys, setSetupAuthorizedPublicKeys] = useState<
+    readonly string[]
+  >([])
   const [setupSshInfo, setSetupSshInfo] = useState<{
     readonly username: string
     readonly host: string
@@ -251,9 +262,10 @@ export function SettingsImageDetailPage () {
       name: v.name,
       scope: v.scope as VariantScope,
       ownerUserId: v.ownerUserId ?? null,
-      isDefault: v.id === image?.defaultVariantId
+      isDefault: v.id === image?.defaultVariantId,
+      isUserDefault: v.id === image?.userDefaultVariantId
     }))
-  }, [visibleVariants, image?.defaultVariantId])
+  }, [visibleVariants, image?.defaultVariantId, image?.userDefaultVariantId])
 
   useEffect(() => {
     if (visibleVariants.length === 0) {
@@ -939,7 +951,7 @@ export function SettingsImageDetailPage () {
   const clearUserDefaultVariantMutation = useMutation({
     mutationFn: async () => auth.api.clearUserImageDefaultVariant(imageId),
     onSuccess: async () => {
-      toast.success('Reverted to the image default variant')
+      toast.success('Cleared your default')
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: getGetImagesImageIdQueryKey(imageId)
@@ -954,58 +966,97 @@ export function SettingsImageDetailPage () {
       const msg =
         err instanceof Error
           ? err.message
-          : 'Failed to clear your default variant override'
+          : 'Failed to clear your default'
       toast.error(msg)
     }
   })
 
-  const createSetupSandboxMutation = useMutation({
-    mutationFn: async (input: {
-      readonly sshPublicKeys?: readonly string[]
+  const applySetupSandboxSshState = useCallback(
+    (input: {
+      readonly authorizedPublicKeys: readonly string[]
+      readonly ssh: {
+        readonly username: string
+        readonly host: string
+        readonly port: number
+        readonly knownHostsLine: string
+      } | null
     }) => {
-      if (!selectedVariantId) throw new Error('Select a variant first.')
-      return auth.api.createImageSetupSandbox({
-        imageId,
-        variantId: selectedVariantId,
-        sshPublicKeys: input.sshPublicKeys?.length
-          ? [...input.sshPublicKeys]
-          : undefined
-      })
-    },
-    onSuccess: async (result, input) => {
-      setSetupSandboxId(result.sandboxId)
-      // Store SSH info if available
-      if (result.ssh) {
+      setSetupAuthorizedPublicKeys([...input.authorizedPublicKeys])
+      if (input.ssh) {
         setSetupSshInfo({
-          username: result.ssh.username,
-          host: result.ssh.host,
-          port: result.ssh.port,
-          knownHostsLine: result.ssh.knownHostsLine
+          username: input.ssh.username,
+          host: input.ssh.host,
+          port: input.ssh.port,
+          knownHostsLine: input.ssh.knownHostsLine
         })
       } else {
         setSetupSshInfo(null)
       }
-      // Only connect terminal for browser mode
-      if (!input.sshPublicKeys?.length) {
-        try {
-          const terminalConnection = await connectSetupSandboxTerminal(
-            result.sandboxId
-          )
-          setSetupTerminalConnection(terminalConnection)
-        } catch (err) {
-          const msg =
-            err instanceof Error
-              ? err.message
-              : 'Failed to initialize terminal connection'
-          toast.error(msg)
-          setSetupTerminalConnection(null)
-        }
+    },
+    []
+  )
+
+  const createSetupSandboxMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedVariantId) throw new Error('Select a variant first.')
+      return auth.api.createImageSetupSandbox({
+        imageId,
+        variantId: selectedVariantId
+      })
+    },
+    onSuccess: async result => {
+      setSetupSandboxId(result.sandboxId)
+      applySetupSandboxSshState({
+        authorizedPublicKeys: result.authorizedPublicKeys,
+        ssh: result.ssh
+      })
+      try {
+        const terminalConnection = await connectSetupSandboxTerminal(
+          result.sandboxId
+        )
+        setSetupTerminalConnection(terminalConnection)
+      } catch (err) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Failed to initialize terminal connection'
+        toast.error(msg)
+        setSetupTerminalConnection(null)
       }
       toast.success('Setup sandbox ready')
     },
     onError: err => {
       const msg =
         err instanceof Error ? err.message : 'Failed to create setup sandbox'
+      toast.error(msg)
+    }
+  })
+
+  const upsertSetupSandboxSshMutation = useMutation({
+    mutationFn: async () => {
+      if (!setupSandboxId) throw new Error('Start a setup sandbox first.')
+      const sshPublicKeys = parseSshPublicKeysDraft(sshPublicKeysDraft)
+      if (sshPublicKeys.length === 0) {
+        throw new Error('Enter at least one SSH public key.')
+      }
+      return auth.api.upsertImageSetupSandboxSsh({
+        imageId,
+        sandboxId: setupSandboxId,
+        sshPublicKeys
+      })
+    },
+    onSuccess: result => {
+      applySetupSandboxSshState(result)
+      setSshPublicKeysDraft('')
+      toast.success(
+        result.ssh ? 'SSH access updated' : 'SSH public keys updated'
+      )
+    },
+    onError: err => {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Failed to configure setup sandbox SSH'
       toast.error(msg)
     }
   })
@@ -1021,6 +1072,8 @@ export function SettingsImageDetailPage () {
     onSuccess: async () => {
       setSetupSandboxId(null)
       setSetupTerminalConnection(null)
+      setSetupAuthorizedPublicKeys([])
+      setSshPublicKeysDraft('')
       setSetupSshInfo(null)
       toast.success('Draft image updated')
       await Promise.all([
@@ -1087,7 +1140,6 @@ export function SettingsImageDetailPage () {
       setSetupTerminalConnection(null)
       return
     }
-    if (setupSshInfo) return
     if (setupTerminalConnection) return
     void connectSetupSandboxTerminal(setupSandboxId)
       .then(terminalConnection => {
@@ -1104,7 +1156,6 @@ export function SettingsImageDetailPage () {
   }, [
     connectSetupSandboxTerminal,
     setupSandboxId,
-    setupSshInfo,
     setupTerminalConnection
   ])
 
@@ -1730,52 +1781,56 @@ export function SettingsImageDetailPage () {
                   </ToggleGroup>
                 </div>
                 <div className='flex items-center gap-2'>
-                  {isSelectedVariantUserDefault ? (
-                    <span className='text-xs text-text-tertiary bg-surface-2 px-2 py-1 rounded'>
-                      My default
-                    </span>
-                  ) : (
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      disabled={isBusy || !selectedVariantId}
-                      onClick={() => setUserDefaultVariantMutation.mutate()}
-                      title='Use this variant by default for your agents and sessions'
-                    >
-                      Set as my default
-                    </Button>
-                  )}
-                  {image?.userDefaultVariantId ? (
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      disabled={isBusy}
-                      onClick={() => clearUserDefaultVariantMutation.mutate()}
-                      title='Clear your personal override and use the image default again'
-                    >
-                      Use image default
-                    </Button>
-                  ) : null}
-                  {!isSelectedVariantGlobalDefault ? (
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      disabled={!isImageOwner || isBusy || !selectedVariantId}
-                      onClick={() => setImageDefaultVariantMutation.mutate()}
-                      title={
-                        !isImageOwner
-                          ? 'Only the image owner can set the image default'
-                          : 'Set this variant as the shared image default'
+                  <Button
+                    variant='ghost'
+                    size='sm'
+                    className='gap-1.5'
+                    disabled={isBusy || !selectedVariantId}
+                    onClick={() => {
+                      if (isSelectedVariantUserDefault) {
+                        clearUserDefaultVariantMutation.mutate()
+                      } else {
+                        setUserDefaultVariantMutation.mutate()
                       }
-                    >
-                      Set as image default
-                    </Button>
-                  ) : null}
-                  {isSelectedVariantGlobalDefault ? (
-                    <span className='text-xs text-text-tertiary bg-surface-2 px-2 py-1 rounded'>
-                      Image default
-                    </span>
-                  ) : null}
+                    }}
+                    title={
+                      isSelectedVariantUserDefault
+                        ? 'Click to unpin (follow image default)'
+                        : 'Click to pin as my default'
+                    }
+                  >
+                    <Star
+                      className={
+                        isSelectedVariantUserDefault
+                          ? 'h-3.5 w-3.5 text-blue-500 fill-blue-500'
+                          : 'h-3.5 w-3.5 text-blue-500'
+                      }
+                    />
+                    {isSelectedVariantUserDefault ? 'My default' : 'Set as my default'}
+                  </Button>
+                  <Button
+                    variant='ghost'
+                    size='sm'
+                    className='gap-1.5'
+                    disabled={!isImageOwner || isBusy || !selectedVariantId || isSelectedVariantGlobalDefault}
+                    onClick={() => setImageDefaultVariantMutation.mutate()}
+                    title={
+                      !isImageOwner
+                        ? 'Only the image owner can set the image default'
+                        : isSelectedVariantGlobalDefault
+                          ? 'This is the image default'
+                          : 'Set as image default'
+                    }
+                  >
+                    <Star
+                      className={
+                        isSelectedVariantGlobalDefault
+                          ? 'h-3.5 w-3.5 text-yellow-500 fill-yellow-500'
+                          : 'h-3.5 w-3.5 text-yellow-500'
+                      }
+                    />
+                    {isSelectedVariantGlobalDefault ? 'Image default' : 'Set as image default'}
+                  </Button>
                   {selectedVariant?.id && (
                     <Button
                       variant='ghost'
@@ -1905,48 +1960,35 @@ export function SettingsImageDetailPage () {
                     </div>
                   </div>
                   {!setupSandboxId && (
-                    <ToggleGroup
-                      type='single'
-                      value={extendMode}
-                      onValueChange={value => {
-                        if (value) {
-                          setExtendMode(value as 'browser' | 'ssh' | 'api')
-                        }
-                      }}
-                      size='sm'
-                    >
-                      <ToggleGroupItem value='browser'>
+                    <div className='inline-flex rounded-md border border-border bg-surface-2 p-1'>
+                      <Button
+                        type='button'
+                        variant={extendMode === 'interactive' ? 'secondary' : 'ghost'}
+                        size='sm'
+                        className='h-8'
+                        onClick={() => setExtendMode('interactive')}
+                      >
                         <Terminal className='h-3.5 w-3.5 mr-1.5' />
-                        Browser
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value='ssh'>
-                        <Key className='h-3.5 w-3.5 mr-1.5' />
-                        SSH
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value='api'>API</ToggleGroupItem>
-                    </ToggleGroup>
+                        Interactive
+                      </Button>
+                      <Button
+                        type='button'
+                        variant={extendMode === 'api' ? 'secondary' : 'ghost'}
+                        size='sm'
+                        className='h-8'
+                        onClick={() => setExtendMode('api')}
+                      >
+                        API
+                      </Button>
+                    </div>
                   )}
                 </div>
 
-                {/* SSH Public Key Input - shown when SSH mode and no active sandbox */}
-                {extendMode === 'ssh' && !setupSandboxId && (
-                  <div className='mt-3'>
-                    <label className='block text-xs font-medium text-text-secondary mb-1.5'>
-                      SSH Public Key
-                    </label>
-                    <Textarea
-                      value={sshPublicKey}
-                      onChange={e => setSshPublicKey(e.target.value)}
-                      placeholder='ssh-ed25519 AAAA... or ssh-rsa AAAA...'
-                      className='font-mono text-xs h-20 resize-none'
-                      disabled={!canEdit || isBusy}
-                    />
-                    <div className='text-xs text-text-tertiary mt-1'>
-                      Use an existing key or generate one with{' '}
-                      <code className='font-mono text-text-secondary'>
-                        ssh-keygen -t ed25519
-                      </code>
-                    </div>
+                {!setupSandboxId && extendMode === 'interactive' && (
+                  <div className='mt-3 text-xs text-text-tertiary'>
+                    Start one setup sandbox first. The browser terminal is
+                    available immediately, and SSH public keys can be added
+                    later if you need external access.
                   </div>
                 )}
 
@@ -1955,28 +1997,15 @@ export function SettingsImageDetailPage () {
                   {!setupSandboxId && extendMode !== 'api' ? (
                     <Button
                       variant='secondary'
-                      disabled={
-                        !canEdit ||
-                        isBusy ||
-                        !selectedVariantId ||
-                        (extendMode === 'ssh' && !sshPublicKey.trim())
-                      }
+                      disabled={!canEdit || isBusy || !selectedVariantId}
                       onClick={() => {
-                        const keys =
-                          extendMode === 'ssh' && sshPublicKey.trim()
-                            ? [sshPublicKey.trim()]
-                            : undefined
-                        createSetupSandboxMutation.mutate({
-                          sshPublicKeys: keys
-                        })
+                        createSetupSandboxMutation.mutate()
                       }}
                     >
                       {createSetupSandboxMutation.isPending ? (
                         <Loader2 className='h-4 w-4 animate-spin' />
                       ) : null}
-                      {extendMode === 'browser'
-                        ? 'Activate Shell'
-                        : 'Create SSH Sandbox'}
+                      Activate Shell
                     </Button>
                   ) : setupSandboxId ? (
                     <Button
@@ -2003,13 +2032,23 @@ export function SettingsImageDetailPage () {
                       </span>{' '}
                       with{' '}
                       <span className='font-mono text-text-primary'>
-                        {`{ variantId, sshPublicKeys[] }`}
+                        {`{ variantId }`}
+                      </span>
+                    </p>
+                    <p>
+                      Add SSH keys later with{' '}
+                      <span className='font-mono text-text-primary'>
+                        {`POST /images/:imageId/setup-sandbox/:sandboxId/ssh`}
+                      </span>{' '}
+                      and{' '}
+                      <span className='font-mono text-text-primary'>
+                        {`{ sshPublicKeys[] }`}
                       </span>
                     </p>
                     <p>
                       Returns{' '}
                       <span className='font-mono text-text-primary'>
-                        {`{ sandboxId, ssh: { username, host, port, knownHostsLine } }`}
+                        {`{ sandboxId, ssh, authorizedPublicKeys[] }`}
                       </span>
                     </p>
                     <p>
@@ -2018,6 +2057,68 @@ export function SettingsImageDetailPage () {
                       </span>{' '}
                       to close and persist changes.
                     </p>
+                  </div>
+                )}
+
+                {setupSandboxId && (
+                  <div className='mt-3 space-y-3'>
+                    <div>
+                      <div className='text-xs font-medium text-text-secondary'>
+                        SSH Access
+                      </div>
+                      <div className='mt-1 text-xs text-text-tertiary'>
+                        Browser terminal access is already live for this setup
+                        sandbox. Add public keys only if you also want SSH/SCP.
+                      </div>
+                    </div>
+                    <div className='rounded-md bg-surface-2 px-3 py-2'>
+                      <div className='text-xs text-text-tertiary mb-1'>
+                        Authorized public keys:
+                      </div>
+                      {setupAuthorizedPublicKeys.length > 0 ? (
+                        <pre className='whitespace-pre-wrap break-all text-xs font-mono text-text-primary'>
+                          {setupAuthorizedPublicKeys.join('\n')}
+                        </pre>
+                      ) : (
+                        <div className='text-xs text-text-tertiary'>
+                          No SSH public keys added yet.
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className='block text-xs font-medium text-text-secondary mb-1.5'>
+                        Add SSH Public Keys
+                      </label>
+                      <Textarea
+                        value={sshPublicKeysDraft}
+                        onChange={e => setSshPublicKeysDraft(e.target.value)}
+                        placeholder='ssh-ed25519 AAAA... one key per line'
+                        className='font-mono text-xs h-24 resize-none'
+                        disabled={!canEdit || isBusy}
+                      />
+                      <div className='mt-1 text-xs text-text-tertiary'>
+                        Paste one key per line. New keys are merged with the
+                        current authorized key list for this sandbox.
+                      </div>
+                    </div>
+                    <div className='flex items-center gap-2'>
+                      <Button
+                        variant='secondary'
+                        disabled={
+                          !canEdit ||
+                          isBusy ||
+                          parseSshPublicKeysDraft(sshPublicKeysDraft).length === 0
+                        }
+                        onClick={() => upsertSetupSandboxSshMutation.mutate()}
+                      >
+                        {upsertSetupSandboxSshMutation.isPending ? (
+                          <Loader2 className='h-4 w-4 animate-spin' />
+                        ) : (
+                          <Key className='h-4 w-4' />
+                        )}
+                        {setupSshInfo ? 'Add SSH Keys' : 'Enable SSH'}
+                      </Button>
+                    </div>
                   </div>
                 )}
 

@@ -37,7 +37,8 @@ import { upsertModalSecret } from '../services/modal-secret.service'
 import {
   closeSetupSandbox,
   createSetupSandbox,
-  getImageSetupSandboxSession
+  getImageSetupSandboxSession,
+  upsertSetupSandboxSshAccess
 } from '../services/sandbox.service'
 
 const app = new Hono<AppEnv>()
@@ -102,6 +103,10 @@ const createSetupSandboxSchema = z.object({
   sshPublicKeys: z.array(sshPublicKeySchema).max(20).optional()
 })
 
+const upsertSetupSandboxSshSchema = z.object({
+  sshPublicKeys: z.array(sshPublicKeySchema).min(1).max(20)
+})
+
 const variantIdInputSchema = z.object({
   variantId: z.string().uuid()
 })
@@ -159,6 +164,12 @@ const setupSandboxSchema = z.object({
   sandboxId: z.string(),
   variantId: z.string().uuid(),
   draftImageId: z.string(),
+  authorizedPublicKeys: z.array(z.string()).default([]),
+  ssh: setupSandboxSshSchema.nullable().optional()
+})
+
+const setupSandboxSshStatusSchema = z.object({
+  authorizedPublicKeys: z.array(z.string()).default([]),
   ssh: setupSandboxSshSchema.nullable().optional()
 })
 
@@ -836,6 +847,65 @@ registerRoute(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to create setup sandbox'
+      return c.json({ error: message }, 400)
+    }
+  }
+)
+
+registerRoute(
+  app,
+  {
+    method: 'post',
+    path: `${BASE}/:imageId/setup-sandbox/:sandboxId/ssh`,
+    summary: 'Add SSH public keys to setup sandbox',
+    tags: ['images'],
+    security: [{ bearerAuth: [] }],
+    request: {
+      params: setupSandboxParamsSchema,
+      json: upsertSetupSandboxSshSchema
+    },
+    responses: {
+      200: setupSandboxSshStatusSchema,
+      404: z.object({ error: z.string() }),
+      400: z.object({ error: z.string() })
+    }
+  },
+  '/:imageId/setup-sandbox/:sandboxId/ssh',
+  zValidator('param', setupSandboxParamsSchema),
+  zValidator('json', upsertSetupSandboxSshSchema),
+  async c => {
+    const user = c.get('user')
+    const { imageId, sandboxId } = c.req.valid('param' as never) as z.infer<
+      typeof setupSandboxParamsSchema
+    >
+    const body = c.req.valid('json' as never) as z.infer<
+      typeof upsertSetupSandboxSshSchema
+    >
+    const image = await getImageById(imageId)
+    if (!image) return c.json({ error: 'Image not found' }, 404)
+    try {
+      ensureCanReadImage(user.id, {
+        visibility: image.visibility as Visibility,
+        createdBy: image.createdBy
+      })
+    } catch {
+      return c.json({ error: 'Image not found' }, 404)
+    }
+    try {
+      const session = getImageSetupSandboxSession({ sandboxId })
+      if (!session || session.imageId !== imageId || session.userId !== user.id) {
+        return c.json({ error: 'Setup sandbox not found' }, 404)
+      }
+
+      const status = await upsertSetupSandboxSshAccess({
+        userId: user.id,
+        sandboxId,
+        sshPublicKeys: body.sshPublicKeys
+      })
+      return c.json(status)
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to configure setup sandbox SSH'
       return c.json({ error: message }, 400)
     }
   }

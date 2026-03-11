@@ -75,10 +75,16 @@ export type SetupSandboxSshAccess = {
   readonly knownHostsLine: string
 }
 
+export type SetupSandboxSshStatus = {
+  readonly authorizedPublicKeys: readonly string[]
+  readonly ssh: SetupSandboxSshAccess | null
+}
+
 export type CreateSetupSandboxResult = {
   readonly sandboxId: string
   readonly variantId: string
   readonly draftImageId: string
+  readonly authorizedPublicKeys: readonly string[]
   readonly ssh: SetupSandboxSshAccess | null
 }
 
@@ -104,6 +110,8 @@ type ImageSetupSandboxSession = {
   readonly imageId: string
   readonly variantId: string
   readonly userId: string
+  readonly sshAuthorizedPublicKeys: readonly string[]
+  readonly sshAccess: SetupSandboxSshAccess | null
   readonly createdAt: number
   readonly updatedAt: number
 }
@@ -464,6 +472,13 @@ function normalizeSetupSandboxSshKeys (
     normalized.push(key)
   }
   return normalized
+}
+
+function toSetupSandboxSshStatus (session: ImageSetupSandboxSession): SetupSandboxSshStatus {
+  return {
+    authorizedPublicKeys: [...session.sshAuthorizedPublicKeys],
+    ssh: session.sshAccess
+  }
 }
 
 async function waitForSetupSandboxTunnel (input: {
@@ -1480,6 +1495,57 @@ export function getImageSetupSandboxSession (input: {
   return IMAGE_SETUP_SANDBOXES.get(sandboxId) ?? null
 }
 
+export async function upsertSetupSandboxSshAccess (input: {
+  readonly userId: string
+  readonly sandboxId: string
+  readonly sshPublicKeys: readonly string[]
+}): Promise<SetupSandboxSshStatus> {
+  const sandboxId = input.sandboxId.trim()
+  if (sandboxId.length === 0) throw new Error('sandboxId is required')
+
+  const session = IMAGE_SETUP_SANDBOXES.get(sandboxId)
+  if (!session)
+    throw new HTTPException(404, { message: 'Setup sandbox not found' })
+  if (session.userId !== input.userId) {
+    throw new HTTPException(404, { message: 'Setup sandbox not found' })
+  }
+
+  const mergedPublicKeys = normalizeSetupSandboxSshKeys([
+    ...session.sshAuthorizedPublicKeys,
+    ...input.sshPublicKeys
+  ])
+  if (mergedPublicKeys.length === 0) {
+    throw new Error('At least one SSH public key is required')
+  }
+
+  const sandbox = await modalClient.sandboxes.fromId(session.sandboxId)
+  const sshMetadata = await provisionSetupSandboxSshAccess({
+    sandbox,
+    publicKeys: mergedPublicKeys
+  })
+  const tunnel = await waitForSetupSandboxTunnel({
+    sandboxId: sandbox.sandboxId,
+    containerPort: SETUP_SSH_PORT
+  })
+  const sshAccess = {
+    username: SETUP_SSH_USERNAME,
+    host: tunnel.host,
+    port: tunnel.port,
+    hostPublicKey: sshMetadata.hostPublicKey,
+    hostKeyFingerprint: sshMetadata.hostKeyFingerprint,
+    knownHostsLine: `[${tunnel.host}]:${tunnel.port} ${sshMetadata.hostPublicKey}`
+  } satisfies SetupSandboxSshAccess
+
+  const updatedSession: ImageSetupSandboxSession = {
+    ...session,
+    sshAuthorizedPublicKeys: mergedPublicKeys,
+    sshAccess,
+    updatedAt: Date.now()
+  }
+  IMAGE_SETUP_SANDBOXES.set(sandboxId, updatedSession)
+  return toSetupSandboxSshStatus(updatedSession)
+}
+
 export async function createSetupSandbox (input: {
   readonly imageId: string
   readonly variantId: string
@@ -1574,7 +1640,7 @@ export async function createSetupSandbox (input: {
       },
       ...(namedSecret ? { secrets: [namedSecret] } : {}),
       encryptedPorts: [SETUP_TERMINAL_PORT],
-      ...(shouldEnableSsh ? { unencryptedPorts: [SETUP_SSH_PORT] } : {}),
+      unencryptedPorts: [SETUP_SSH_PORT],
       timeoutMs: SETUP_TIMEOUT_MS,
       idleTimeoutMs: SETUP_IDLE_TIMEOUT_MS,
       ...(regions ? { regions } : {})
@@ -1661,6 +1727,8 @@ export async function createSetupSandbox (input: {
     imageId: input.imageId,
     variantId: input.variantId,
     userId: input.userId,
+    sshAuthorizedPublicKeys: [...sshPublicKeys],
+    sshAccess,
     createdAt: Date.now(),
     updatedAt: Date.now()
   })
@@ -1669,6 +1737,7 @@ export async function createSetupSandbox (input: {
     sandboxId: sandbox.sandboxId,
     variantId: input.variantId,
     draftImageId: normalizedDraftImageId,
+    authorizedPublicKeys: [...sshPublicKeys],
     ssh: sshAccess
   }
 }

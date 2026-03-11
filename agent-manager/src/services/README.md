@@ -307,6 +307,7 @@ createSetupSandbox(input: {
   readonly sandboxId: string
   readonly variantId: string
   readonly draftImageId: string
+  readonly authorizedPublicKeys: readonly string[]
   readonly ssh: {
     readonly username: string
     readonly host: string
@@ -321,9 +322,34 @@ createSetupSandbox(input: {
 Behavior:
 - Creates the setup sandbox from the selected variant `draftImageId`.
 - Continues to expose the existing setup terminal/API over encrypted port `8080`.
-- When `sshPublicKeys` is provided and non-empty, also exposes sandbox port `22` over a Modal unencrypted TCP tunnel, provisions `authorized_keys` for the `agent` user, starts `sshd`, and returns the tunnel host/port plus host verification material.
-- When `sshPublicKeys` is omitted or empty, no SSH tunnel is provisioned and `ssh` is returned as `null`.
-- Setup sandbox SSH access is creation-time only; callers are expected to terminate and recreate the setup sandbox to rotate keys or reissue access.
+- Always reserves sandbox port `22` for optional SSH access on the running setup sandbox.
+- When `sshPublicKeys` is provided and non-empty, provisions `authorized_keys` for the `root` user, starts `sshd`, and returns the tunnel host/port plus host verification material.
+- When `sshPublicKeys` is omitted or empty, the setup sandbox still starts normally, `authorizedPublicKeys` is empty, and `ssh` is returned as `null`.
+
+### `upsertSetupSandboxSshAccess(input)`
+
+```ts
+upsertSetupSandboxSshAccess(input: {
+  readonly userId: string
+  readonly sandboxId: string
+  readonly sshPublicKeys: readonly string[]
+}): Promise<{
+  readonly authorizedPublicKeys: readonly string[]
+  readonly ssh: {
+    readonly username: string
+    readonly host: string
+    readonly port: number
+    readonly hostPublicKey: string
+    readonly hostKeyFingerprint: string
+    readonly knownHostsLine: string
+  } | null
+}>
+```
+
+Behavior:
+- Looks up the live setup sandbox session for the caller.
+- Merges the provided SSH public keys with any keys already authorized for that sandbox.
+- Rewrites `authorized_keys`, starts or restarts `sshd`, and returns the current authorized key list plus SSH connection metadata.
 
 ### `closeSetupSandbox(input)`
 

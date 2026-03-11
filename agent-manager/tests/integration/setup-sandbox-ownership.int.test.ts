@@ -85,6 +85,8 @@ describe("setup sandbox ownership guard (integration)", () => {
       imageId: image.id,
       variantId,
       userId: owner.userId,
+      sshAuthorizedPublicKeys: [],
+      sshAccess: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -118,6 +120,8 @@ describe("setup sandbox ownership guard (integration)", () => {
       imageId: crypto.randomUUID(),
       variantId: crypto.randomUUID(),
       userId: owner.userId,
+      sshAuthorizedPublicKeys: [],
+      sshAccess: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
