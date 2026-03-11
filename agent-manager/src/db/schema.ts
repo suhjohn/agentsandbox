@@ -15,6 +15,11 @@ import type {
   MessageRole,
 } from "./enums";
 
+export type AgentType = "worker" | "coordinator";
+export type AgentVisibility = "private" | "shared";
+export const AGENT_TYPE_VALUES = ["worker", "coordinator"] as const;
+export const AGENT_VISIBILITY_VALUES = ["private", "shared"] as const;
+
 // ── Users ───────────────────────────────────────────────────────────────────
 
 export const users = pgTable(
@@ -48,6 +53,10 @@ export const globalSettings = pgTable("global_settings", {
     .$type<readonly string[]>()
     .notNull()
     .default(sql`'[]'::jsonb`),
+  defaultCoordinatorImageId: uuid("default_coordinator_image_id").references(
+    () => images.id,
+    { onDelete: "set null" },
+  ),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -239,6 +248,11 @@ export const agents = pgTable(
     sandboxAccessToken: text("sandbox_access_token"),
     runtimeInternalSecret: text("runtime_internal_secret"),
     region: text("region").default("us-west-2"),
+    type: text("type").$type<AgentType>().notNull().default("worker"),
+    visibility: text("visibility")
+      .$type<AgentVisibility>()
+      .notNull()
+      .default("private"),
     status: text("status").$type<AgentStatus>().notNull().default("active"),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -255,6 +269,8 @@ export const agents = pgTable(
     index("agents_image_idx").on(table.imageId),
     index("agents_image_variant_idx").on(table.imageVariantId),
     index("agents_parent_agent_id_idx").on(table.parentAgentId),
+    index("agents_type_idx").on(table.type),
+    index("agents_visibility_idx").on(table.visibility),
     index("agents_status_idx").on(table.status),
     index("agents_created_by_idx").on(table.createdBy),
   ],

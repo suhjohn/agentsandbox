@@ -1,29 +1,37 @@
 import { useMemo } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import {
-  usePostAgents,
-  type PostAgentsBody,
-  type PostAgents201,
-} from "@/api/generated/agent-manager";
+import { useAuth } from "@/lib/auth";
+import type { AgentType, AgentVisibility } from "@/lib/api";
 import type { PanelDefinition, PanelProps, PanelSettingsProps } from "./types";
 
 export interface CreateAgentPanelConfig {
   readonly imageId: string;
   readonly region: string;
   readonly parentAgentId: string;
+  readonly type: AgentType;
+  readonly visibility: AgentVisibility;
 }
 
 function deserializeCreateAgentConfig(raw: unknown): CreateAgentPanelConfig {
   if (typeof raw !== "object" || raw === null) {
-    return { imageId: "", region: "", parentAgentId: "" };
+    return {
+      imageId: "",
+      region: "",
+      parentAgentId: "",
+      type: "worker",
+      visibility: "private",
+    };
   }
   const v = raw as Record<string, unknown>;
   const imageId = typeof v.imageId === "string" ? v.imageId : "";
   const region = typeof v.region === "string" ? v.region : "";
   const parentAgentId = typeof v.parentAgentId === "string" ? v.parentAgentId : "";
-  return { imageId, region, parentAgentId };
+  const type = v.type === "coordinator" ? "coordinator" : "worker";
+  const visibility = v.visibility === "shared" ? "shared" : "private";
+  return { imageId, region, parentAgentId, type, visibility };
 }
 
 function toErrorMessage(value: unknown): string {
@@ -36,18 +44,7 @@ function toErrorMessage(value: unknown): string {
   return "Something went wrong.";
 }
 
-function unwrapCreatedAgent(value: unknown): PostAgents201 | null {
-  if (typeof value !== "object" || value === null) return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v.data === "object" && v.data !== null) {
-    const d = v.data as Record<string, unknown>;
-    if (typeof d.id === "string") return d as PostAgents201;
-  }
-  if (typeof v.id === "string") return v as PostAgents201;
-  return null;
-}
-
-function parseRegion(value: string): PostAgentsBody["region"] | undefined {
+function parseRegion(value: string): string | readonly string[] | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   const parts = trimmed
@@ -59,27 +56,58 @@ function parseRegion(value: string): PostAgentsBody["region"] | undefined {
 }
 
 export function CreateAgentPanel(props: PanelProps<CreateAgentPanelConfig>) {
-  const mutation = usePostAgents();
+  const auth = useAuth();
+  const mutation = useMutation({
+    mutationFn: async (input: {
+      readonly imageId: string;
+      readonly parentAgentId?: string;
+      readonly region?: string | readonly string[];
+      readonly type: AgentType;
+      readonly visibility: AgentVisibility;
+    }) => await auth.api.createAgent(input),
+  });
 
   const canCreate = useMemo(() => {
     if (mutation.isPending) return false;
     return props.config.imageId.trim().length > 0;
   }, [mutation.isPending, props.config.imageId]);
 
-  const createBody: PostAgentsBody | null = useMemo(() => {
+  const createBody: {
+    readonly imageId: string;
+    readonly parentAgentId?: string;
+    readonly region?: string | readonly string[];
+    readonly type: AgentType;
+    readonly visibility: AgentVisibility;
+  } | null = useMemo(() => {
     const imageId = props.config.imageId.trim();
     if (!imageId) return null;
 
     const parentAgentId = props.config.parentAgentId.trim();
 
-    const body: PostAgentsBody = { imageId };
+    const body: {
+      imageId: string;
+      parentAgentId?: string;
+      region?: string | readonly string[];
+      type: AgentType;
+      visibility: AgentVisibility;
+    } = {
+      imageId,
+      type: props.config.type,
+      visibility: props.config.visibility,
+    };
     if (parentAgentId) body.parentAgentId = parentAgentId;
 
     const region = parseRegion(props.config.region);
     if (region) body.region = region;
 
     return body;
-  }, [props.config.imageId, props.config.parentAgentId, props.config.region]);
+  }, [
+    props.config.imageId,
+    props.config.parentAgentId,
+    props.config.region,
+    props.config.type,
+    props.config.visibility,
+  ]);
 
   return (
     <div className="space-y-4">
@@ -131,6 +159,38 @@ export function CreateAgentPanel(props: PanelProps<CreateAgentPanelConfig>) {
               placeholder="parentAgentId"
             />
           </div>
+          <div className="space-y-1.5">
+            <div className="text-xs text-text-tertiary">Type</div>
+            <select
+              className="h-9 w-full rounded-md border border-border bg-surface-1 px-3 text-xs"
+              value={props.config.type}
+              onChange={(e) =>
+                props.setConfig((prev) => ({
+                  ...prev,
+                  type: e.target.value === "coordinator" ? "coordinator" : "worker",
+                }))
+              }
+            >
+              <option value="worker">worker</option>
+              <option value="coordinator">coordinator</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <div className="text-xs text-text-tertiary">Visibility</div>
+            <select
+              className="h-9 w-full rounded-md border border-border bg-surface-1 px-3 text-xs"
+              value={props.config.visibility}
+              onChange={(e) =>
+                props.setConfig((prev) => ({
+                  ...prev,
+                  visibility: e.target.value === "shared" ? "shared" : "private",
+                }))
+              }
+            >
+              <option value="private">private</option>
+              <option value="shared">shared</option>
+            </select>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -141,20 +201,17 @@ export function CreateAgentPanel(props: PanelProps<CreateAgentPanelConfig>) {
             onClick={async () => {
               if (!createBody) return;
               try {
-                const res = await mutation.mutateAsync({ data: createBody });
-                const created = unwrapCreatedAgent(res);
-                if (created) {
-                  props.runtime.replaceSelf("agent_detail", {
-                    agentId: created.id,
-                    agentName: created.name?.trim() || "",
-                    activeTab: "session_list",
-                    sessionLimit: 20,
-                    sessionId: "",
-                    sessionTitle: "",
-                    diffBasis: "repo_head",
-                    diffStyle: "split",
-                  });
-                }
+                const created = await mutation.mutateAsync(createBody);
+                props.runtime.replaceSelf("agent_detail", {
+                  agentId: created.id,
+                  agentName: created.name?.trim() || "",
+                  activeTab: "session_list",
+                  sessionLimit: 20,
+                  sessionId: "",
+                  sessionTitle: "",
+                  diffBasis: "repo_head",
+                  diffStyle: "split",
+                });
               } catch {
                 // Error state is rendered from `mutation.error`.
               }
@@ -211,6 +268,38 @@ function CreateAgentSettings(props: PanelSettingsProps<CreateAgentPanelConfig>) 
             placeholder="(optional)"
           />
         </div>
+        <div className="space-y-1.5">
+          <div className="text-xs text-text-tertiary">Default type</div>
+          <select
+            className="h-9 w-full rounded-md border border-border bg-surface-1 px-3 text-xs"
+            value={props.config.type}
+            onChange={(e) =>
+              props.setConfig((prev) => ({
+                ...prev,
+                type: e.target.value === "coordinator" ? "coordinator" : "worker",
+              }))
+            }
+          >
+            <option value="worker">worker</option>
+            <option value="coordinator">coordinator</option>
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-xs text-text-tertiary">Default visibility</div>
+          <select
+            className="h-9 w-full rounded-md border border-border bg-surface-1 px-3 text-xs"
+            value={props.config.visibility}
+            onChange={(e) =>
+              props.setConfig((prev) => ({
+                ...prev,
+                visibility: e.target.value === "shared" ? "shared" : "private",
+              }))
+            }
+          >
+            <option value="private">private</option>
+            <option value="shared">shared</option>
+          </select>
+        </div>
       </div>
     </div>
   );
@@ -219,8 +308,14 @@ function CreateAgentSettings(props: PanelSettingsProps<CreateAgentPanelConfig>) 
 export const createAgentPanelDefinition: PanelDefinition<CreateAgentPanelConfig> = {
   type: "agent_create",
   title: "Create Agent",
-  configVersion: 2,
-  defaultConfig: { imageId: "", region: "", parentAgentId: "" },
+  configVersion: 3,
+  defaultConfig: {
+    imageId: "",
+    region: "",
+    parentAgentId: "",
+    type: "worker",
+    visibility: "private",
+  },
   deserializeConfig: (raw) => deserializeCreateAgentConfig(raw),
   getTitle: () => "Create Agent",
   Component: CreateAgentPanel,

@@ -167,6 +167,14 @@ const sessionCursorSchema = z.object({
   id: z.string().min(1)
 })
 
+function buildReadableSessionCondition (userId: string) {
+  const trimmedUserId = userId.trim()
+  return or(
+    eq(agents.visibility, 'shared'),
+    eq(agents.createdBy, trimmedUserId)
+  )
+}
+
 function base64UrlEncode (text: string): string {
   return Buffer.from(text, 'utf8')
     .toString('base64')
@@ -234,12 +242,13 @@ registerRoute(
   '/',
   zValidator('query', listSessionsQuerySchema),
   async c => {
+    const user = c.get('user')
     const query = c.req.valid('query' as never) as z.infer<
       typeof listSessionsQuerySchema
     >
 
     const decodedCursor = query.cursor ? decodeCursor(query.cursor) : null
-    const conditions = []
+    const conditions = [buildReadableSessionCondition(user.id)]
 
     const agentIds = parseCommaSeparated(query.agentId)
     if (agentIds.length === 1) {
@@ -361,10 +370,11 @@ registerRoute(
   '/groups',
   zValidator('query', listSessionGroupsQuerySchema),
   async c => {
+    const user = c.get('user')
     const query = c.req.valid('query' as never) as z.infer<
       typeof listSessionGroupsQuerySchema
     >
-    const conditions = []
+    const conditions = [buildReadableSessionCondition(user.id)]
 
     const gAgentIds = parseCommaSeparated(query.agentId)
     if (gAgentIds.length === 1) {
@@ -506,6 +516,7 @@ registerRoute(
   zValidator('param', sessionIdParamsSchema),
   zValidator('json', upsertSessionContentSchema),
   async c => {
+    const user = c.get('user')
     const authMode = (c.get('authMode') ?? 'jwt') as
       | 'jwt'
       | 'runtime-internal'
@@ -532,6 +543,13 @@ registerRoute(
     if (!targetAgent) {
       return c.json({ error: 'Agent not found' }, 404)
     }
+    if (
+      authMode === 'jwt' &&
+      targetAgent.visibility !== 'shared' &&
+      targetAgent.createdBy !== user.id
+    ) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
     const existing = await db
       .select({
         id: sessions.id,
@@ -546,6 +564,12 @@ registerRoute(
     if (existingRow && authMode === 'jwt') {
       const existingAgent = await getAgentById(existingRow.agentId)
       if (!existingAgent) return c.json({ error: 'Session not found' }, 404)
+      if (
+        existingAgent.visibility !== 'shared' &&
+        existingAgent.createdBy !== user.id
+      ) {
+        return c.json({ error: 'Session not found' }, 404)
+      }
     }
     if (existingRow && existingRow.agentId !== body.agentId) {
       return c.json(
@@ -554,7 +578,7 @@ registerRoute(
       )
     }
 
-    const nextCreatedBy = existingRow?.createdBy ?? targetAgent.createdBy
+    const nextCreatedBy = existingRow?.createdBy ?? user.id
 
     const updateSet: Partial<typeof sessions.$inferInsert> = {
       agentId: body.agentId,

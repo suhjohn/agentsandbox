@@ -23,6 +23,7 @@ export function AgentBrowserPanel(props: PanelProps<AgentBrowserPanelConfig>) {
   const agentId =
     typeof props.config.agentId === "string" ? props.config.agentId.trim() : "";
   const { accessQuery, access } = useAgentRuntimeAccess(agentId, {
+    caller: "agent-browser-panel",
     enabled: agentId.length > 0,
     staleTime: 10_000,
   });

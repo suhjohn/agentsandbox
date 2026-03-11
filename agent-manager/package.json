@@ -13,6 +13,7 @@
     "test:modal:service-reads": "bun run src/coordinator/testAgent.ts",
     "openapi": "bun run scripts/generate-openapi.ts",
     "openapi:generate": "bun run scripts/generate-openapi.ts",
+    "coordinator:image:init": "bun run scripts/ensure-default-coordinator-image.ts",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bunx drizzle-kit migrate",
     "db:push": "bunx drizzle-kit push",

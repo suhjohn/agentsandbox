@@ -4404,6 +4404,39 @@
               "format": "uuid"
             },
             "required": false,
+            "name": "createdBy",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "worker",
+                "coordinator"
+              ]
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "private",
+                "shared"
+              ]
+            },
+            "required": false,
+            "name": "visibility",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
             "name": "parentAgentId",
             "in": "query"
           },
@@ -4515,6 +4548,20 @@
                             "type": [
                               "string",
                               "null"
+                            ]
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "worker",
+                              "coordinator"
+                            ]
+                          },
+                          "visibility": {
+                            "type": "string",
+                            "enum": [
+                              "private",
+                              "shared"
                             ]
                           },
                           "status": {
@@ -4645,6 +4692,20 @@
                                     "null"
                                   ]
                                 },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "worker",
+                                    "coordinator"
+                                  ]
+                                },
+                                "visibility": {
+                                  "type": "string",
+                                  "enum": [
+                                    "private",
+                                    "shared"
+                                  ]
+                                },
                                 "status": {
                                   "type": "string",
                                   "enum": [
@@ -4704,6 +4765,8 @@
                               "required": [
                                 "id",
                                 "name",
+                                "type",
+                                "visibility",
                                 "status",
                                 "createdBy",
                                 "createdByUser",
@@ -4716,6 +4779,8 @@
                         "required": [
                           "id",
                           "name",
+                          "type",
+                          "visibility",
                           "status",
                           "createdBy",
                           "createdByUser",
@@ -4768,6 +4833,20 @@
                   "variantId": {
                     "type": "string",
                     "format": "uuid"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "worker",
+                      "coordinator"
+                    ]
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "private",
+                      "shared"
+                    ]
                   },
                   "region": {
                     "anyOf": [
@@ -4870,6 +4949,20 @@
                         "null"
                       ]
                     },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "worker",
+                        "coordinator"
+                      ]
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "shared"
+                      ]
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -4929,6 +5022,8 @@
                   "required": [
                     "id",
                     "name",
+                    "type",
+                    "visibility",
                     "status",
                     "createdBy",
                     "createdByUser",
@@ -5004,6 +5099,30 @@
             },
             "required": false,
             "name": "archived",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "worker",
+                "coordinator"
+              ]
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "private",
+                "shared"
+              ]
+            },
+            "required": false,
+            "name": "visibility",
             "in": "query"
           }
         ],
@@ -5105,6 +5224,20 @@
                                     "null"
                                   ]
                                 },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "worker",
+                                    "coordinator"
+                                  ]
+                                },
+                                "visibility": {
+                                  "type": "string",
+                                  "enum": [
+                                    "private",
+                                    "shared"
+                                  ]
+                                },
                                 "status": {
                                   "type": "string",
                                   "enum": [
@@ -5164,6 +5297,8 @@
                               "required": [
                                 "id",
                                 "name",
+                                "type",
+                                "visibility",
                                 "status",
                                 "createdBy",
                                 "createdByUser",
@@ -5461,6 +5596,20 @@
                             "null"
                           ]
                         },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "worker",
+                            "coordinator"
+                          ]
+                        },
+                        "visibility": {
+                          "type": "string",
+                          "enum": [
+                            "private",
+                            "shared"
+                          ]
+                        },
                         "status": {
                           "type": "string",
                           "enum": [
@@ -5520,6 +5669,8 @@
                       "required": [
                         "id",
                         "name",
+                        "type",
+                        "visibility",
                         "status",
                         "createdBy",
                         "createdByUser",
@@ -5715,6 +5866,20 @@
                             "null"
                           ]
                         },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "worker",
+                            "coordinator"
+                          ]
+                        },
+                        "visibility": {
+                          "type": "string",
+                          "enum": [
+                            "private",
+                            "shared"
+                          ]
+                        },
                         "status": {
                           "type": "string",
                           "enum": [
@@ -5774,6 +5939,8 @@
                       "required": [
                         "id",
                         "name",
+                        "type",
+                        "visibility",
                         "status",
                         "createdBy",
                         "createdByUser",
@@ -5949,6 +6116,20 @@
                         "null"
                       ]
                     },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "worker",
+                        "coordinator"
+                      ]
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "shared"
+                      ]
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -6008,6 +6189,8 @@
                   "required": [
                     "id",
                     "name",
+                    "type",
+                    "visibility",
                     "status",
                     "createdBy",
                     "createdByUser",
@@ -6136,6 +6319,20 @@
                         "null"
                       ]
                     },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "worker",
+                        "coordinator"
+                      ]
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "shared"
+                      ]
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -6195,6 +6392,8 @@
                   "required": [
                     "id",
                     "name",
+                    "type",
+                    "visibility",
                     "status",
                     "createdBy",
                     "createdByUser",
@@ -6323,6 +6522,20 @@
                         "null"
                       ]
                     },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "worker",
+                        "coordinator"
+                      ]
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "private",
+                        "shared"
+                      ]
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -6382,6 +6595,8 @@
                   "required": [
                     "id",
                     "name",
+                    "type",
+                    "visibility",
                     "status",
                     "createdBy",
                     "createdByUser",
@@ -8923,10 +9138,18 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "defaultCoordinatorImageId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
                     }
                   },
                   "required": [
-                    "diffignore"
+                    "diffignore",
+                    "defaultCoordinatorImageId"
                   ]
                 }
               }
@@ -8956,11 +9179,15 @@
                       "type": "string",
                       "minLength": 1
                     }
+                  },
+                  "defaultCoordinatorImageId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
                   }
-                },
-                "required": [
-                  "diffignore"
-                ]
+                }
               }
             }
           }
@@ -8978,10 +9205,18 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "defaultCoordinatorImageId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
                     }
                   },
                   "required": [
-                    "diffignore"
+                    "diffignore",
+                    "defaultCoordinatorImageId"
                   ]
                 }
               }

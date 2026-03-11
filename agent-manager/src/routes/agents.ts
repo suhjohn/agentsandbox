@@ -38,7 +38,12 @@ import {
 import { withLock } from '../services/lock.service'
 import { getSandboxAgentToken } from '../services/sandbox.service'
 import { DEFAULT_REGION } from '../utils/region'
-import { agents } from '../db/schema'
+import {
+  agents,
+  AGENT_TYPE_VALUES,
+  AGENT_VISIBILITY_VALUES,
+  type AgentVisibility,
+} from '../db/schema'
 
 type DbAgent = typeof agents.$inferSelect // row returned from SELECT / .returning()
 
@@ -58,6 +63,8 @@ const createAgentSchema = z.object({
   parentAgentId: z.string().uuid().optional(),
   imageId: z.string().uuid(),
   variantId: z.string().uuid().optional(),
+  type: z.enum(AGENT_TYPE_VALUES).optional(),
+  visibility: z.enum(AGENT_VISIBILITY_VALUES).optional(),
   region: z
     .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
     .optional()
@@ -70,6 +77,9 @@ const listAgentsQuery = z.object({
   imageId: z.string().uuid().optional(),
   noImage: booleanQueryParam.optional(),
   archived: booleanQueryParam.optional(),
+  createdBy: z.string().uuid().optional(),
+  type: z.enum(AGENT_TYPE_VALUES).optional(),
+  visibility: z.enum(AGENT_VISIBILITY_VALUES).optional(),
   parentAgentId: z.string().uuid().optional(),
   q: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -79,7 +89,9 @@ const listAgentsQuery = z.object({
 const listAgentGroupsQuery = z.object({
   by: z.enum(['imageId', 'createdBy'] as const),
   previewN: z.coerce.number().int().min(5).max(50),
-  archived: booleanQueryParam.optional()
+  archived: booleanQueryParam.optional(),
+  type: z.enum(AGENT_TYPE_VALUES).optional(),
+  visibility: z.enum(AGENT_VISIBILITY_VALUES).optional()
 })
 
 const agentsHealthSchema = z.object({
@@ -103,6 +115,8 @@ const agentSchema = z.object({
   sandboxName: z.string().nullable().optional(),
   snapshotImageId: z.string().nullable().optional(),
   region: z.string().nullable().optional(),
+  type: z.enum(AGENT_TYPE_VALUES),
+  visibility: z.enum(AGENT_VISIBILITY_VALUES),
   status: z.enum(AGENT_STATUS_VALUES),
   createdBy: z.string().nullable(),
   createdByUser: z
@@ -206,6 +220,20 @@ async function getAuthorizedImage (imageId: string) {
 
 type RuntimeAccessPayload = z.infer<typeof agentRuntimeAccessSchema>
 
+function isReadableAgentByUser (
+  userId: string,
+  agent: { readonly createdBy: string | null | undefined; readonly visibility: AgentVisibility }
+): boolean {
+  return agent.visibility === 'shared' || agent.createdBy === userId
+}
+
+function isMutableAgentByUser (
+  userId: string,
+  agent: { readonly createdBy: string | null | undefined }
+): boolean {
+  return agent.createdBy === userId
+}
+
 async function buildRuntimeAccessPayload (input: {
   readonly userId: string
   readonly agentId: string
@@ -258,6 +286,7 @@ registerRoute(
   '/',
   zValidator('query', listAgentsQuery),
   async c => {
+    const user = c.get('user')
     const query = c.req.valid('query' as never) as z.infer<
       typeof listAgentsQuery
     >
@@ -267,10 +296,14 @@ registerRoute(
         400
       )
     const result = await listAgents({
+      viewerUserId: user.id,
       status: query.status as AgentStatus | undefined,
       imageId: query.imageId,
       noImage: query.noImage,
       archived: query.archived,
+      createdBy: query.createdBy,
+      type: query.type,
+      visibility: query.visibility,
       parentAgentId: query.parentAgentId,
       search: query.q?.trim() || undefined,
       limit: query.limit,
@@ -312,13 +345,17 @@ registerRoute(
   '/groups',
   zValidator('query', listAgentGroupsQuery),
   async c => {
+    const user = c.get('user')
     const query = c.req.valid('query' as never) as z.infer<
       typeof listAgentGroupsQuery
     >
     const result = await listAgentGroups({
+      viewerUserId: user.id,
       by: query.by,
       previewN: query.previewN,
-      archived: query.archived
+      archived: query.archived,
+      type: query.type,
+      visibility: query.visibility
     })
     return c.json({
       data: result.groups.map(g => ({
@@ -436,7 +473,9 @@ registerRoute(
       imageId: body.imageId,
       imageVariantId: variant.id,
       createdBy: user.id,
-      region
+      region,
+      type: body.type,
+      visibility: body.visibility
     })
     await ensureAgentSandbox({
       agentId: agent.id,
@@ -475,10 +514,20 @@ registerRoute(
   async c => {
     const user = c.get('user')
     const agentId = c.req.param('agentId')
+    const caller = (c.req.header('x-agent-access-caller') ?? '').trim() || null
     const existing = await getAgentById(agentId)
     if (!existing) {
       return c.json({ error: 'Agent not found' }, 404)
     }
+    if (!isReadableAgentByUser(user.id, existing)) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
+
+    log.info('agents.access.request', {
+      agentId,
+      userId: user.id,
+      caller
+    })
 
     try {
       const sandbox = await ensureAgentSandbox({ agentId })
@@ -553,6 +602,9 @@ registerRoute(
     }
     const existing = await getAgentById(agentId)
     if (!existing) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
+    if (!isMutableAgentByUser(user.id, existing)) {
       return c.json({ error: 'Agent not found' }, 404)
     }
     if (!existing.currentSandboxId) {
@@ -678,6 +730,10 @@ registerRoute(
     const body = c.req.valid('json' as never) as z.infer<
       typeof startAgentSessionSchema
     >
+    const existing = await getAgentById(agentId)
+    if (!existing || !isReadableAgentByUser(user.id, existing)) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
     const result = await startAgentSession({
       user,
       agentId,
@@ -709,6 +765,9 @@ registerRoute(
     if (!agent) {
       return c.json({ error: 'Agent not found' }, 404)
     }
+    if (!isReadableAgentByUser(user.id, agent)) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
     const hydrated = await toHydratedPublicAgent(
       { id: user.id, name: user.name },
       agent
@@ -738,6 +797,9 @@ registerRoute(
     const existing = await getAgentById(agentId)
     if (!existing)
       return c.json({ error: 'Agent not found' }, 404)
+    if (!isMutableAgentByUser(user.id, existing)) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
 
     if (existing.currentSandboxId) {
       try {
@@ -782,6 +844,9 @@ registerRoute(
     const agentId = c.req.param('agentId')
     const existing = await getAgentById(agentId)
     if (!existing) {
+      return c.json({ error: 'Agent not found' }, 404)
+    }
+    if (!isMutableAgentByUser(user.id, existing)) {
       return c.json({ error: 'Agent not found' }, 404)
     }
 

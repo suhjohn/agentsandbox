@@ -9,6 +9,9 @@ import { getUserById, updateUser } from "../services/user.service";
 import { registerRoute } from "../openapi/registry";
 import { DEFAULT_REGION, parseRegionText } from "../utils/region";
 import { parseWorkspaceKeybindings } from "../utils/workspace-keybindings";
+import { getOrCreateDefaultCoordinatorAgentForUser } from "../services/agent.service";
+import { ensureAgentSandbox } from "../services/sandbox.service";
+import { log } from "../log";
 import {
   buildGithubAvatarUrl,
   deleteAvatarPath,
@@ -156,6 +159,7 @@ registerRoute(
   "/me",
   (c) => {
     const user = c.get("user");
+    void warmDefaultCoordinatorSandbox(user.id);
     return c.json(user);
   },
 );
@@ -371,3 +375,26 @@ registerRoute(
 );
 
 export { app as userRoutes };
+
+async function warmDefaultCoordinatorSandbox(userId: string) {
+  try {
+    const agent = await getOrCreateDefaultCoordinatorAgentForUser({ userId });
+    if (!agent) return;
+    await ensureAgentSandbox({
+      agentId: agent.id,
+      waitForLock: false,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith("Failed to acquire lock:")) {
+      log.debug("users.me.default_coordinator_warmup_skipped_locked", {
+        userId,
+      });
+      return;
+    }
+    log.warn("users.me.default_coordinator_warmup_failed", {
+      userId,
+      error,
+    });
+  }
+}

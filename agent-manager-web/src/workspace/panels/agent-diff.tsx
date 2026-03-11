@@ -84,6 +84,7 @@ export function AgentDiffPanel(props: PanelProps<AgentDiffPanelConfig>) {
       ? config.diffStyle
       : readAgentDiffStylePreference();
   const { accessQuery, access } = useAgentRuntimeAccess(agentId, {
+    caller: "agent-diff-panel",
     enabled: agentId.length > 0,
     staleTime: 10_000,
   });

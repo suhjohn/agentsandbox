@@ -24,7 +24,6 @@ import { toast } from 'sonner'
 import {
   usePostAgentsAgentIdArchive,
   useGetAgentsAgentId,
-  useGetAgentsAgentIdAccess,
   useGetSession,
   type GetAgentsAgentId200,
   type GetAgentsAgentIdAccess200,
@@ -63,6 +62,7 @@ import {
   writeAgentDiffStylePreference,
   type AgentDiffPanelConfig
 } from './agent-diff'
+import { useAgentRuntimeAccess } from '../hooks/use-agent-runtime-access'
 import { useWorkspaceStore } from '../store'
 import { formatLastMessagePreview } from '@/utils/message-preview'
 import { normalizeHarnessId } from '@/harnesses/helpers'
@@ -212,27 +212,6 @@ function unwrapAgent (value: unknown): GetAgentsAgentId200 | null {
     if (typeof d.id === 'string') return d as GetAgentsAgentId200
   }
   if (typeof v.id === 'string') return v as GetAgentsAgentId200
-  return null
-}
-
-function unwrapAccess (value: unknown): GetAgentsAgentIdAccess200 | null {
-  if (typeof value !== 'object' || value === null) return null
-  const v = value as Record<string, unknown>
-  if (typeof v.data === 'object' && v.data !== null) {
-    const d = v.data as Record<string, unknown>
-    if (
-      typeof d.agentApiUrl === 'string' &&
-      typeof d.agentAuthToken === 'string'
-    ) {
-      return d as GetAgentsAgentIdAccess200
-    }
-  }
-  if (
-    typeof v.agentApiUrl === 'string' &&
-    typeof v.agentAuthToken === 'string'
-  ) {
-    return v as GetAgentsAgentIdAccess200
-  }
   return null
 }
 
@@ -524,17 +503,13 @@ function AgentDetailSessionListView (props: {
   const agentQuery = useGetAgentsAgentId(agentId, {
     query: { enabled: agentId.length > 0 }
   })
-  const accessQuery = useGetAgentsAgentIdAccess(agentId, {
-    query: {
-      enabled: agentId.length > 0,
-      staleTime: 10_000,
-      refetchOnWindowFocus: false,
-      retry: false
-    }
+  const { access } = useAgentRuntimeAccess(agentId, {
+    caller: 'agent-detail-session-list',
+    enabled: agentId.length > 0,
+    retry: false
   })
 
   const agent = unwrapAgent(agentQuery.data)
-  const access = unwrapAccess(accessQuery.data)
 
   const sessionsParams: GetSessionParams = useMemo(
     () => ({
@@ -669,16 +644,12 @@ function AgentDetailHeader (props: PanelHeaderProps<AgentDetailPanelConfig>) {
   const agentQuery = useGetAgentsAgentId(agentId, {
     query: { enabled: agentId.length > 0 }
   })
-  const accessQuery = useGetAgentsAgentIdAccess(agentId, {
-    query: {
-      enabled: agentId.length > 0,
-      staleTime: 10_000,
-      refetchOnWindowFocus: false,
-      retry: false
-    }
+  const { access } = useAgentRuntimeAccess(agentId, {
+    caller: 'agent-detail-header',
+    enabled: agentId.length > 0,
+    retry: false
   })
   const agent = unwrapAgent(agentQuery.data)
-  const access = unwrapAccess(accessQuery.data)
   const viewItems = AGENT_DETAIL_VIEW_ITEMS.map(item => ({
     id: item.id,
     title: item.label

@@ -190,6 +190,20 @@
       "when": 1773100800000,
       "tag": "0026_users_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1773162000000,
+      "tag": "0027_coordinator_agents",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1773165600000,
+      "tag": "0028_default_coordinator_image",
+      "breakpoints": true
     }
   ]
 }

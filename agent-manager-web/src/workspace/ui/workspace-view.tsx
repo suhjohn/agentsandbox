@@ -173,6 +173,13 @@ type UserListItem = {
   readonly avatar: string | null
 }
 
+type WorkspaceWindowTab = {
+  readonly id: string
+  readonly index: number
+  readonly name: string
+  readonly active: boolean
+}
+
 const SESSION_TIME_RANGE_OPTIONS: ReadonlyArray<{
   readonly value: SessionTimeRange
   readonly label: string
@@ -637,6 +644,27 @@ function SessionIdDisplay (props: { readonly sessionId: string }) {
   )
 }
 
+function areWorkspaceWindowTabsEqual (
+  left: readonly WorkspaceWindowTab[],
+  right: readonly WorkspaceWindowTab[]
+): boolean {
+  if (left === right) return true
+  if (left.length !== right.length) return false
+  for (let i = 0; i < left.length; i += 1) {
+    const a = left[i]
+    const b = right[i]
+    if (
+      a?.id !== b?.id ||
+      a?.index !== b?.index ||
+      a?.name !== b?.name ||
+      a?.active !== b?.active
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 export function WorkspaceView () {
   const auth = useAuth()
   const queryClient = useQueryClient()
@@ -751,19 +779,22 @@ export function WorkspaceView () {
   const closePaneShortcut = getPrefixShortcut('pane.close')
   const paneExpandShortcut = getPrefixShortcut('pane.zoom.toggle')
 
-  const windows = useWorkspaceSelector(state => {
-    const windowIds = Object.keys(state.windowsById)
-    return windowIds.map((windowId, index) => {
-      const window = state.windowsById[windowId]
-      const name = window?.name?.trim() ?? ''
-      return {
-        id: windowId,
-        index,
-        name: name.length > 0 ? name : `Window ${index + 1}`,
-        active: windowId === state.activeWindowId
-      }
-    })
-  })
+  const windows = useWorkspaceSelector<readonly WorkspaceWindowTab[]>(
+    state => {
+      const windowIds = Object.keys(state.windowsById)
+      return windowIds.map((windowId, index) => {
+        const window = state.windowsById[windowId]
+        const name = window?.name?.trim() ?? ''
+        return {
+          id: windowId,
+          index,
+          name: name.length > 0 ? name : `Window ${index + 1}`,
+          active: windowId === state.activeWindowId
+        }
+      })
+    },
+    areWorkspaceWindowTabsEqual
+  )
   const activeWindowRoot = useWorkspaceSelector(
     s => s.windowsById[s.activeWindowId]?.root ?? null
   )

@@ -40,22 +40,17 @@ import {
   ChevronsUpDown,
   Code,
   Columns2,
-  Columns3Icon,
   Copy,
-  GitCommit,
   GitCompare,
   Globe,
-  Rows,
   Rows2,
   Square,
-  TableColumnsSplit,
   Terminal
 } from 'lucide-react'
 import { Loader, SandboxLoader } from '@/components/loader'
 import { toast } from 'sonner'
 import {
   useGetAgentsAgentId,
-  useGetAgentsAgentIdAccess,
   putSessionId,
   type GetAgentsAgentIdAccess200
 } from '@/api/generated/agent-manager'
@@ -82,8 +77,10 @@ import type {
   ThinkingLevel
 } from '@/harnesses/types'
 import { useAuth } from '@/lib/auth'
+import { registerChatRuntimeController } from '@/coordinator-actions/runtime-bridge'
 import type { PanelProps } from './types'
 import { parseBody as parseBodyUtil } from './session-message-utils'
+import { useAgentRuntimeAccess } from '../hooks/use-agent-runtime-access'
 import { useWorkspaceStore } from '../store'
 import { listLeafIds } from '../layout'
 import {
@@ -126,6 +123,7 @@ const SESSION_STATUS_PROCESSING = 'processing'
 const SESSION_STATUS_INITIAL = 'initial'
 const SESSION_SENDER_QUERY_STALE_TIME_MS = 60_000
 const AGENT_UPLOAD_ENDPOINT = '/files/upload'
+const COORDINATOR_COMPOSE_EVENT = 'agent-manager-web:coordinator-compose'
 type SelectedThinkingLevel = string
 type SessionToolTab = 'terminal' | 'browser' | 'vscode' | 'diff'
 type UploadedFileResult = {
@@ -133,6 +131,22 @@ type UploadedFileResult = {
   readonly displayPath: string
   readonly filename: string
   readonly sizeBytes: number
+}
+type SessionComposerController = {
+  readonly focusInput: () => void
+  readonly composeText: (
+    text: string,
+    options?: { readonly replace?: boolean }
+  ) => void
+  readonly sendText: (text: string) => Promise<{
+    readonly accepted: boolean
+    readonly streamingStarted: boolean
+  }>
+}
+type AgentSessionPanelProps = PanelProps<AgentSessionPanelConfig> & {
+  readonly showToolOpenControls?: boolean
+  readonly chatControllerKind?: 'page' | 'dialog' | null
+  readonly allowCoordinatorComposeEvents?: boolean
 }
 
 type SessionStreamConfig = {
@@ -550,27 +564,6 @@ function subscribeSessionStream (
   return () => {
     connection.listeners.delete(listener)
   }
-}
-
-function unwrapAccess (value: unknown): GetAgentsAgentIdAccess200 | null {
-  if (typeof value !== 'object' || value === null) return null
-  const v = value as Record<string, unknown>
-  if (typeof v.data === 'object' && v.data !== null) {
-    const d = v.data as Record<string, unknown>
-    if (
-      typeof d.agentApiUrl === 'string' &&
-      typeof d.agentAuthToken === 'string'
-    ) {
-      return d as GetAgentsAgentIdAccess200
-    }
-  }
-  if (
-    typeof v.agentApiUrl === 'string' &&
-    typeof v.agentAuthToken === 'string'
-  ) {
-    return v as GetAgentsAgentIdAccess200
-  }
-  return null
 }
 
 function unwrapCreatedSession (value: unknown): PostSession201 | null {
@@ -1438,10 +1431,12 @@ function SessionComposer (props: {
   readonly onOptimisticSendingChange: (isSending: boolean) => void
   readonly onSendScrollRequest: () => void
   readonly inputRef: { current: HTMLTextAreaElement | null }
+  readonly workspaceStore: ReturnType<typeof useWorkspaceStore> | null
+  readonly showToolOpenControls: boolean
+  readonly controllerRef: { current: SessionComposerController | null }
 }) {
   const auth = useAuth()
   const queryClient = useQueryClient()
-  const workspaceStore = useWorkspaceStore()
 
   const [draft, setDraft] = useState('')
   const [copied, setCopied] = useState(false)
@@ -1513,6 +1508,8 @@ function SessionComposer (props: {
 
   const openToWindowSplit = useCallback(
     (activeTab: SessionToolTab, dir: 'row' | 'col') => {
+      const workspaceStore = props.workspaceStore
+      if (!workspaceStore) return
       const beforeState = workspaceStore.getState()
       const beforeWindow = beforeState.windowsById[beforeState.activeWindowId]
       if (!beforeWindow) return
@@ -1542,7 +1539,7 @@ function SessionComposer (props: {
         config: buildAgentDetailConfig(activeTab)
       })
     },
-    [buildAgentDetailConfig, workspaceStore]
+    [buildAgentDetailConfig, props.workspaceStore]
   )
 
   function ToolOpenMenuButton (tool: {
@@ -1696,9 +1693,18 @@ function SessionComposer (props: {
       )
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['agentRuntime', props.agentId, 'sessions']
-      })
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['agentRuntime', props.agentId, 'sessions']
+        }),
+        queryClient.invalidateQueries({ queryKey: ['/session'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['workspace', 'session-side-panel', 'sessions']
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['workspace', 'session-side-panel', 'session-groups']
+        })
+      ])
     }
   })
 
@@ -1797,7 +1803,7 @@ function SessionComposer (props: {
     [uploadDroppedFiles]
   )
 
-  async function ensureSessionId (): Promise<string> {
+  const ensureSessionId = useCallback(async (): Promise<string> => {
     if (props.sessionId.length > 0) return props.sessionId
     const created = unwrapCreatedSession(
       await createSessionMutation.mutateAsync({
@@ -1812,52 +1818,77 @@ function SessionComposer (props: {
       sessionTitle: created.title?.trim() || ''
     }))
     return created.id
-  }
+  }, [
+    createSessionMutation,
+    props.selectedModel,
+    props.selectedModelReasoningEffort,
+    props.sessionId,
+    props.setConfig
+  ])
+
+  const sendDraftText = useCallback(
+    async (rawText: string): Promise<void> => {
+      const text = rawText.trim()
+      if (text.length === 0) return
+
+      setDraft('')
+      props.onOptimisticSendingChange(true)
+
+      try {
+        const nextSessionId = await ensureSessionId()
+        const optimisticMessage = createOptimisticUserMessage({
+          agentId: props.agentId,
+          sessionId: nextSessionId,
+          text,
+          createdBy: auth.user?.id ?? null
+        })
+        applySessionPatchToWorkspaceCaches(queryClient, nextSessionId, {
+          status: SESSION_STATUS_PROCESSING,
+          updatedAt: optimisticMessage.createdAt,
+          lastMessageBody: toStoredMessageBody(optimisticMessage.body),
+          model: props.selectedModel.length > 0 ? props.selectedModel : null,
+          modelReasoningEffort:
+            props.selectedModelReasoningEffort.length > 0
+              ? props.selectedModelReasoningEffort
+              : null
+        })
+        props.onSendScrollRequest()
+        props.onOptimisticMessageChange(optimisticMessage)
+        await sendMutation.mutateAsync({ sessionId: nextSessionId, text })
+      } catch (err) {
+        props.onOptimisticMessageChange(null)
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['/session'] }),
+          queryClient.invalidateQueries({
+            queryKey: ['workspace', 'session-side-panel', 'sessions']
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['workspace', 'session-side-panel', 'session-groups']
+          })
+        ])
+        setDraft(text)
+        toast.error(toErrorMessage(err))
+      } finally {
+        props.onOptimisticSendingChange(false)
+      }
+    },
+    [
+      auth.user?.id,
+      createSessionMutation,
+      props.agentId,
+      props.onOptimisticMessageChange,
+      props.onOptimisticSendingChange,
+      props.onSendScrollRequest,
+      props.selectedModel,
+      props.selectedModelReasoningEffort,
+      ensureSessionId,
+      queryClient,
+      sendMutation
+    ]
+  )
 
   async function handleSend (): Promise<void> {
-    const text = draft.trim()
-    if (text.length === 0) return
-
-    setDraft('')
-    props.onOptimisticSendingChange(true)
-
-    try {
-      const nextSessionId = await ensureSessionId()
-      const optimisticMessage = createOptimisticUserMessage({
-        agentId: props.agentId,
-        sessionId: nextSessionId,
-        text,
-        createdBy: auth.user?.id ?? null
-      })
-      applySessionPatchToWorkspaceCaches(queryClient, nextSessionId, {
-        status: SESSION_STATUS_PROCESSING,
-        updatedAt: optimisticMessage.createdAt,
-        lastMessageBody: toStoredMessageBody(optimisticMessage.body),
-        model: props.selectedModel.length > 0 ? props.selectedModel : null,
-        modelReasoningEffort:
-          props.selectedModelReasoningEffort.length > 0
-            ? props.selectedModelReasoningEffort
-            : null
-      })
-      props.onSendScrollRequest()
-      props.onOptimisticMessageChange(optimisticMessage)
-      await sendMutation.mutateAsync({ sessionId: nextSessionId, text })
-    } catch (err) {
-      props.onOptimisticMessageChange(null)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['/session'] }),
-        queryClient.invalidateQueries({
-          queryKey: ['workspace', 'session-side-panel', 'sessions']
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ['workspace', 'session-side-panel', 'session-groups']
-        })
-      ])
-      setDraft(text)
-      toast.error(toErrorMessage(err))
-    } finally {
-      props.onOptimisticSendingChange(false)
-    }
+    await sendDraftText(draft)
   }
 
   const composerDisabled =
@@ -1866,30 +1897,64 @@ function SessionComposer (props: {
     createSessionMutation.isPending ||
     uploadingCount > 0
 
+  useEffect(() => {
+    props.controllerRef.current = {
+      focusInput: () => {
+        requestAnimationFrame(() => props.inputRef.current?.focus())
+      },
+      composeText: (text, options) => {
+        const trimmed = text.trim()
+        if (trimmed.length === 0) return
+        setDraft(prev => {
+          const current = prev.trim()
+          if (options?.replace === true || current.length === 0) return trimmed
+          return `${prev.trimEnd()} ${trimmed}`
+        })
+      },
+      sendText: async text => {
+        if (composerDisabled) {
+          throw new Error('Composer is busy')
+        }
+        if (text.trim().length === 0) {
+          return { accepted: false, streamingStarted: false }
+        }
+        await sendDraftText(text)
+        return { accepted: true, streamingStarted: true }
+      }
+    }
+    return () => {
+      if (props.controllerRef.current) {
+        props.controllerRef.current = null
+      }
+    }
+  }, [composerDisabled, props.controllerRef, props.inputRef, sendDraftText])
+
   return (
     <div className='mx-3 flex flex-col'>
-      <div className='w-full flex justify-end gap-1'>
-        <ToolOpenMenuButton
-          label='Terminal'
-          tab='terminal'
-          icon={<Terminal className='h-4 w-4' />}
-        />
-        <ToolOpenMenuButton
-          label='Browser'
-          tab='browser'
-          icon={<Globe className='h-4 w-4' />}
-        />
-        <ToolOpenMenuButton
-          label='VSCode'
-          tab='vscode'
-          icon={<Code className='h-4 w-4' />}
-        />
-        <ToolOpenMenuButton
-          label='Diff'
-          tab='diff'
-          icon={<GitCompare className='h-4 w-4' />}
-        />
-      </div>
+      {props.showToolOpenControls ? (
+        <div className='w-full flex justify-end gap-1 bg-surface-1 w-full'>
+          <ToolOpenMenuButton
+            label='Terminal'
+            tab='terminal'
+            icon={<Terminal className='h-4 w-4' />}
+          />
+          <ToolOpenMenuButton
+            label='Browser'
+            tab='browser'
+            icon={<Globe className='h-4 w-4' />}
+          />
+          <ToolOpenMenuButton
+            label='VSCode'
+            tab='vscode'
+            icon={<Code className='h-4 w-4' />}
+          />
+          <ToolOpenMenuButton
+            label='Diff'
+            tab='diff'
+            icon={<GitCompare className='h-4 w-4' />}
+          />
+        </div>
+      ) : null}
       <div
         className={cn(
           'relative bg-surface-4 transition-colors',
@@ -2024,7 +2089,14 @@ function SessionComposer (props: {
   )
 }
 
-export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
+function WorkspaceSessionComposer (
+  props: Omit<Parameters<typeof SessionComposer>[0], 'workspaceStore'>
+) {
+  const workspaceStore = useWorkspaceStore()
+  return <SessionComposer {...props} workspaceStore={workspaceStore} />
+}
+
+export function AgentSessionPanel (props: AgentSessionPanelProps) {
   const auth = useAuth()
   const queryClient = useQueryClient()
   const agentId =
@@ -2037,16 +2109,11 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
   const agentQuery = useGetAgentsAgentId(agentId, {
     query: { enabled: agentId.length > 0 }
   })
-  const accessQuery = useGetAgentsAgentIdAccess(agentId, {
-    query: {
-      enabled: agentId.length > 0,
-      staleTime: 10_000,
-      refetchOnWindowFocus: false,
-      retry: false
-    }
+  const { accessQuery, access } = useAgentRuntimeAccess(agentId, {
+    caller: 'agent-session-panel',
+    enabled: agentId.length > 0,
+    retry: false
   })
-
-  const access = unwrapAccess(accessQuery.data)
   const sessionQuery = useQuery({
     queryKey: [
       'agentRuntime',
@@ -2082,6 +2149,7 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
 
   const containerRef = useRef<HTMLDivElement>(null)
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const composerControllerRef = useRef<SessionComposerController | null>(null)
   const scrollParent = useScrollParent(containerRef)
 
   const [stream, setStream] = useState<StreamState>(INITIAL_STREAM_STATE)
@@ -2193,7 +2261,9 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
     () => (isWorking ? findRunStartTimestamp(messages) : null),
     [isWorking, messages]
   )
-  const workingLabel = `Working (${formatElapsed(runStartTimestamp)} • esc to interrupt)`
+  const workingLabel = `Working (${formatElapsed(
+    runStartTimestamp
+  )} • esc to interrupt)`
 
   useStickyScroll(
     scrollParent,
@@ -2324,6 +2394,73 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
   }, [access?.agentApiUrl, access?.agentAuthToken, sessionId])
 
   useEffect(() => {
+    if (!props.allowCoordinatorComposeEvents) return
+
+    const onCompose = (event: Event): void => {
+      const detail = (
+        event as CustomEvent<{
+          readonly text?: unknown
+          readonly replace?: unknown
+          readonly focus?: unknown
+          readonly send?: unknown
+        }>
+      ).detail
+      const text = typeof detail?.text === 'string' ? detail.text : ''
+      if (!text.trim()) return
+
+      const controller = composerControllerRef.current
+      if (!controller) return
+
+      if (detail?.send === true && stream.isRunning !== true) {
+        void controller.sendText(text)
+      } else {
+        controller.composeText(text, { replace: detail?.replace === true })
+      }
+
+      if (detail?.focus === true) {
+        controller.focusInput()
+      }
+    }
+
+    window.addEventListener(
+      COORDINATOR_COMPOSE_EVENT,
+      onCompose as EventListener
+    )
+    return () => {
+      window.removeEventListener(
+        COORDINATOR_COMPOSE_EVENT,
+        onCompose as EventListener
+      )
+    }
+  }, [props.allowCoordinatorComposeEvents, stream.isRunning])
+
+  useEffect(() => {
+    if (!props.chatControllerKind) return
+
+    return registerChatRuntimeController(props.chatControllerKind, {
+      sendMessage: async (text: string) => {
+        const controller = composerControllerRef.current
+        if (!controller) throw new Error('Composer is not ready')
+        return await controller.sendText(text)
+      },
+      stopStream: async () => {
+        await stopRun()
+        return { stopped: true }
+      },
+      isStreaming: () => stream.isRunning === true || isOptimisticSending,
+      hasConversation: () =>
+        sessionId.length > 0 || messages.length > 0 || isOptimisticSending
+    })
+  }, [
+    isOptimisticSending,
+    messages.length,
+    props.chatControllerKind,
+    sessionId.length,
+    stopRun,
+    stream.isRunning
+  ])
+
+  useEffect(() => {
     const handler = (event: Event) => {
       const detail = (
         event as CustomEvent<WorkspaceCancelStreamEventDetail | undefined>
@@ -2390,8 +2527,8 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
       tabIndex={-1}
       className={
         accessQuery.isLoading
-          ? 'h-full flex flex-col outline-none focus:outline-none focus-visible:outline-none'
-          : 'space-y-3 h-full flex flex-col outline-none focus:outline-none focus-visible:outline-none'
+          ? 'h-full flex-1 flex flex-col outline-none focus:outline-none focus-visible:outline-none'
+          : 'space-y-3 h-full flex-1 flex flex-col outline-none focus:outline-none focus-visible:outline-none'
       }
       onPointerDownCapture={e => {
         const target = e.target as HTMLElement | null
@@ -2474,39 +2611,84 @@ export function AgentSessionPanel (props: PanelProps<AgentSessionPanelConfig>) {
             )}
           </div>
           <div className='sticky bottom-0'>
-            <SessionComposer
-              key={`${agentId}:${sessionId}`}
-              agentId={agentId}
-              agentName={props.config.agentName}
-              sessionId={sessionId}
-              access={access}
-              harness={sessionHarness}
-              selectedModel={selectedSessionModel}
-              selectedModelReasoningEffort={selectedSessionModelReasoningEffort}
-              availableModels={availableModels}
-              availableThinkingLevels={availableThinkingLevels}
-              setConfig={props.setConfig}
-              runtime={props.runtime}
-              isSendingOptimistic={isOptimisticSending}
-              onSelectedModelChange={model => {
-                props.setConfig(prev => ({
-                  ...prev,
-                  sessionModel: model
-                }))
-              }}
-              onSelectedModelReasoningEffortChange={modelReasoningEffort => {
-                props.setConfig(prev => ({
-                  ...prev,
-                  sessionModelReasoningEffort: modelReasoningEffort
-                }))
-              }}
-              onOptimisticMessageChange={setOptimisticMessage}
-              onOptimisticSendingChange={setIsOptimisticSending}
-              onSendScrollRequest={() => {
-                setForceScrollToken(prev => prev + 1)
-              }}
-              inputRef={composerInputRef}
-            />
+            {props.showToolOpenControls === false ? (
+              <SessionComposer
+                key={`${agentId}:${sessionId}`}
+                agentId={agentId}
+                agentName={props.config.agentName}
+                sessionId={sessionId}
+                access={access}
+                harness={sessionHarness}
+                selectedModel={selectedSessionModel}
+                selectedModelReasoningEffort={
+                  selectedSessionModelReasoningEffort
+                }
+                availableModels={availableModels}
+                availableThinkingLevels={availableThinkingLevels}
+                setConfig={props.setConfig}
+                runtime={props.runtime}
+                isSendingOptimistic={isOptimisticSending}
+                onSelectedModelChange={model => {
+                  props.setConfig(prev => ({
+                    ...prev,
+                    sessionModel: model
+                  }))
+                }}
+                onSelectedModelReasoningEffortChange={modelReasoningEffort => {
+                  props.setConfig(prev => ({
+                    ...prev,
+                    sessionModelReasoningEffort: modelReasoningEffort
+                  }))
+                }}
+                onOptimisticMessageChange={setOptimisticMessage}
+                onOptimisticSendingChange={setIsOptimisticSending}
+                onSendScrollRequest={() => {
+                  setForceScrollToken(prev => prev + 1)
+                }}
+                inputRef={composerInputRef}
+                workspaceStore={null}
+                showToolOpenControls={false}
+                controllerRef={composerControllerRef}
+              />
+            ) : (
+              <WorkspaceSessionComposer
+                key={`${agentId}:${sessionId}`}
+                agentId={agentId}
+                agentName={props.config.agentName}
+                sessionId={sessionId}
+                access={access}
+                harness={sessionHarness}
+                selectedModel={selectedSessionModel}
+                selectedModelReasoningEffort={
+                  selectedSessionModelReasoningEffort
+                }
+                availableModels={availableModels}
+                availableThinkingLevels={availableThinkingLevels}
+                setConfig={props.setConfig}
+                runtime={props.runtime}
+                isSendingOptimistic={isOptimisticSending}
+                onSelectedModelChange={model => {
+                  props.setConfig(prev => ({
+                    ...prev,
+                    sessionModel: model
+                  }))
+                }}
+                onSelectedModelReasoningEffortChange={modelReasoningEffort => {
+                  props.setConfig(prev => ({
+                    ...prev,
+                    sessionModelReasoningEffort: modelReasoningEffort
+                  }))
+                }}
+                onOptimisticMessageChange={setOptimisticMessage}
+                onOptimisticSendingChange={setIsOptimisticSending}
+                onSendScrollRequest={() => {
+                  setForceScrollToken(prev => prev + 1)
+                }}
+                inputRef={composerInputRef}
+                showToolOpenControls
+                controllerRef={composerControllerRef}
+              />
+            )}
           </div>
         </div>
       )}

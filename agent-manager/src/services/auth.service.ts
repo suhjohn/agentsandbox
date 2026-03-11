@@ -12,6 +12,8 @@ import {
   isGithubAvatarPath,
   uploadGithubAvatar,
 } from './avatar.service'
+import { getOrCreateDefaultCoordinatorAgentForUser } from './agent.service'
+import { log } from '../log'
 
 type PersistedUser = NonNullable<Awaited<ReturnType<typeof getUserByEmail>>>
 
@@ -69,6 +71,7 @@ export async function registerUser(input: { name: string; email: string; passwor
 
   const passwordHash = await hashPassword(input.password)
   const user = await createUser({ name: input.name, email: input.email, passwordHash })
+  await ensureDefaultCoordinatorAgent(user.id)
 
   const [accessToken, refreshToken] = await Promise.all([
     generateToken(user.id),
@@ -91,6 +94,7 @@ export async function loginUser(input: { email: string; password: string }) {
   if (!valid) {
     throw new Error('Invalid credentials')
   }
+  await ensureDefaultCoordinatorAgent(user.id)
 
   const [accessToken, refreshToken] = await Promise.all([
     generateToken(user.id),
@@ -133,6 +137,7 @@ export async function loginWithGithub(input: {
   }
 
   user = await maybeSyncGithubAvatar(user, input.avatarUrl)
+  await ensureDefaultCoordinatorAgent(user.id)
 
   const [accessToken, refreshToken] = await Promise.all([
     generateToken(user.id),
@@ -174,4 +179,15 @@ async function maybeSyncGithubAvatar(
 
   const updated = await updateUser(user.id, { avatar: uploadedAvatar })
   return updated ?? user
+}
+
+async function ensureDefaultCoordinatorAgent(userId: string) {
+  try {
+    await getOrCreateDefaultCoordinatorAgentForUser({ userId })
+  } catch (error) {
+    log.warn('auth.ensure_default_coordinator_agent_failed', {
+      userId,
+      error,
+    })
+  }
 }

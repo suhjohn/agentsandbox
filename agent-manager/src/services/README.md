@@ -85,6 +85,8 @@ createAgent(input: {
   imageVariantId?: string | null
   createdBy: string
   region?: Region
+  type?: "worker" | "coordinator"
+  visibility?: "private" | "shared"
 })
 ```
 
@@ -92,7 +94,64 @@ Behavior:
 - Generates the agent `id` in application code as a UUIDv7 before inserting.
 - Derives the default agent `name` from that generated ID by seeding `unique-names-generator` with built-in adjective, color, and animal dictionaries, then normalizing spaces to `-`.
 - Retries creation when either the generated `id` or derived `name` collides with an existing row.
+- Defaults `type` to `"worker"` and `visibility` to `"private"` when callers omit them.
 - Persists a browser-facing sandbox access token separately from the runtime-internal secret used for manager/runtime traffic.
+
+### `getOrCreateDefaultCoordinatorAgentForUser(input)`
+
+```ts
+getOrCreateDefaultCoordinatorAgentForUser(input: {
+  readonly userId: string
+})
+```
+
+Behavior:
+- Resolves `global_settings.defaultCoordinatorImageId` as the bootstrap image source.
+- Reuses the user's latest non-archived root coordinator agent for that default image when one already exists.
+- Otherwise creates a new private `type: "coordinator"` agent for that user, seeded from the default image and its default variant.
+- Uses a per-user lock to avoid creating duplicate bootstrap coordinator agents during concurrent login or `/me` requests.
+
+### `listAgents(input)`
+
+```ts
+listAgents(input: {
+  viewerUserId: string
+  imageId?: string
+  noImage?: boolean
+  status?: AgentStatus
+  archived?: boolean
+  parentAgentId?: string
+  search?: string
+  createdBy?: string
+  type?: "worker" | "coordinator"
+  visibility?: "private" | "shared"
+  limit: number
+  cursor?: string
+})
+```
+
+Behavior:
+- Only returns agents visible to `viewerUserId`: the viewer's own agents plus any `visibility: "shared"` agents.
+- Supports app-level filtering on `type` and `visibility`.
+- Continues to exclude archived agents by default unless callers explicitly request them.
+
+### `listAgentGroups(input)`
+
+```ts
+listAgentGroups(input: {
+  viewerUserId: string
+  by: "imageId" | "createdBy"
+  previewN: number
+  archived?: boolean
+  type?: "worker" | "coordinator"
+  visibility?: "private" | "shared"
+})
+```
+
+Behavior:
+- Applies the same viewer visibility rule as `listAgents`.
+- Supports grouping only across the subset of agents visible to `viewerUserId`.
+- Supports app-level filtering on `type` and `visibility` before grouping.
 
 ### `setAgentSandbox(input)` / `getAgentRuntimeInternalSecret(id)` / `createAgentRuntimeInternalSecret(id)`
 
@@ -121,6 +180,7 @@ Behavior:
 - `loginUser` rejects accounts whose `passwordHash` is `NULL`; GitHub-only accounts cannot use password login until a local password is set by some future flow.
 - `loginWithGithub` accepts an optional `avatarUrl` and syncs the GitHub avatar into configured static-file storage when the user currently has no avatar or is still using a GitHub-managed avatar path.
 - New GitHub-created users are persisted with `passwordHash: null` instead of a random placeholder hash.
+- All three auth entrypoints best-effort call `getOrCreateDefaultCoordinatorAgentForUser` after the user record is resolved, using the configured global default coordinator image when available.
 
 ## avatar.service.ts
 
@@ -202,6 +262,7 @@ ensureAgentSandbox(input: {
   readonly agentId: string
   readonly imageId?: string
   readonly region?: SandboxRegion
+  readonly waitForLock?: boolean
 }): Promise<AgentSandboxResult>
 ```
 
@@ -218,3 +279,4 @@ Behavior:
 - Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).
 - Manager-side `/health` probes to `*.modal.host` sandbox tunnel URLs disable TLS certificate verification to avoid Bun-specific certificate validation failures on Modal tunnels.
 - Agent sandboxes receive a per-runtime opaque `AGENT_INTERNAL_AUTH_SECRET`; manager/runtime traffic uses that secret instead of the legacy manager API-key path.
+- `waitForLock: false` makes sandbox creation opportunistic: if the per-agent create lock is already held, the call fails immediately instead of waiting for the existing create/warmup flow.

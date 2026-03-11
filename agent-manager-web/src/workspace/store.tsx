@@ -1059,41 +1059,68 @@ export function useWorkspaceStore(): WorkspaceStore {
   return store;
 }
 
-export function useWorkspaceSelector<T>(selector: (state: WorkspaceState) => T): T {
+export function useWorkspaceSelector<T>(
+  selector: (state: WorkspaceState) => T,
+  isEqual?: (left: T, right: T) => boolean,
+): T {
   const store = useWorkspaceStore();
   const selectorRef = useRef(selector);
   selectorRef.current = selector;
+  const isEqualRef = useRef(isEqual);
+  isEqualRef.current = isEqual;
 
   const lastRef = useRef<{
     hasValue: boolean;
     state: WorkspaceState | null;
     selector: ((state: WorkspaceState) => T) | null;
+    isEqual: ((left: T, right: T) => boolean) | undefined;
     value: T;
   }>({
     hasValue: false,
     state: null,
     selector: null,
+    isEqual: undefined,
     value: undefined as T,
   });
 
   const getSnapshot = useCallback(() => {
     const state = store.getState();
     const activeSelector = selectorRef.current;
+    const activeIsEqual = isEqualRef.current;
     const cached = lastRef.current;
 
     if (
       cached.hasValue &&
       cached.state === state &&
-      cached.selector === activeSelector
+      cached.selector === activeSelector &&
+      cached.isEqual === activeIsEqual
     ) {
       return cached.value;
     }
 
     const value = activeSelector(state);
+    if (
+      cached.hasValue &&
+      cached.selector === activeSelector &&
+      cached.isEqual === activeIsEqual &&
+      activeIsEqual &&
+      activeIsEqual(cached.value, value)
+    ) {
+      lastRef.current = {
+        hasValue: true,
+        state,
+        selector: activeSelector,
+        isEqual: activeIsEqual,
+        value: cached.value,
+      };
+      return cached.value;
+    }
+
     lastRef.current = {
       hasValue: true,
       state,
       selector: activeSelector,
+      isEqual: activeIsEqual,
       value,
     };
     return value;

@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { List, Plus } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAuth } from '../lib/auth'
-import type { ListCoordinatorSessionsResult } from '../lib/api'
+import type { Agent, AgentManagerApiClient } from '../lib/api'
 import {
   Dialog,
   DialogContent,
@@ -11,14 +11,46 @@ import {
   DialogHeader,
   DialogTitle
 } from './ui/dialog'
-import { ChatConversationPage } from '../routes/chat-conversation'
 import { Button } from './ui/button'
 import {
   getActiveChatRuntimeController,
   registerDialogRuntimeController
 } from '@/coordinator-actions/runtime-bridge'
+import {
+  AgentSessionPanel,
+  type AgentSessionPanelConfig
+} from '@/workspace/panels/agent-session'
+import type { PanelRuntime } from '@/workspace/panels/types'
 
 type DialogMode = 'conversation' | 'sessions'
+type ManagerSessionRecord = Awaited<
+  ReturnType<AgentManagerApiClient['listSessions']>
+>['data'][number]
+
+const DIALOG_RUNTIME: PanelRuntime = {
+  leafId: 'coordinator-dialog',
+  now: () => Date.now(),
+  replaceSelf: () => {},
+  openPanel: () => {}
+}
+
+function toErrorMessage (value: unknown): string {
+  if (value instanceof Error) return value.message
+  if (typeof value === 'string' && value.trim().length > 0) return value
+  return 'Something went wrong.'
+}
+
+function selectCoordinatorAgent (
+  agents: readonly Agent[],
+  agentId: string
+): Agent | null {
+  const targetAgentId = agentId.trim()
+  if (targetAgentId.length > 0) {
+    const selected = agents.find(agent => agent.id === targetAgentId)
+    if (selected) return selected
+  }
+  return agents[0] ?? null
+}
 
 export function CoordinatorSessionDialog (props: {
   readonly open: boolean
@@ -27,54 +59,179 @@ export function CoordinatorSessionDialog (props: {
   const auth = useAuth()
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<DialogMode>('conversation')
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
-    null
-  )
   const [isDraftingNewSession, setIsDraftingNewSession] = useState(false)
-  const [conversationViewKey, setConversationViewKey] = useState(0)
+  const [sessionConfig, setSessionConfig] = useState<AgentSessionPanelConfig>({
+    agentId: '',
+    agentName: '',
+    sessionId: '',
+    sessionTitle: '',
+    sessionModel: undefined,
+    sessionModelReasoningEffort: undefined,
+    sessionHarness: undefined
+  })
 
-  const coordinatorSessionsQuery = useQuery({
-    queryKey: ['coordinatorSessions'],
-    queryFn: () => auth.api.listCoordinatorSessions({ limit: 20 }),
+  const setConfig = useCallback(
+    (
+      updater: (prev: AgentSessionPanelConfig) => AgentSessionPanelConfig
+    ): void => {
+      setSessionConfig(prev => updater(prev))
+    },
+    []
+  )
+
+  const coordinatorAgentsQuery = useQuery({
+    queryKey: ['coordinatorAgents', auth.user?.id ?? null],
+    queryFn: () =>
+      auth.api.listAgents({
+        createdBy: auth.user?.id,
+        type: 'coordinator',
+        archived: false,
+        limit: 50
+      }),
     enabled: props.open && !!auth.user && !auth.isBootstrapping
   })
 
-  const sessions = coordinatorSessionsQuery.data?.data ?? []
+  const coordinatorAgents = coordinatorAgentsQuery.data?.data ?? []
+  const selectedAgent = useMemo(
+    () => selectCoordinatorAgent(coordinatorAgents, sessionConfig.agentId),
+    [coordinatorAgents, sessionConfig.agentId]
+  )
+  const selectedAgentId = selectedAgent?.id ?? ''
 
-  const coordinatorSessionId = isDraftingNewSession
-    ? null
-    : selectedSessionId
-    ? selectedSessionId
-    : sessions[0]?.id ?? null
+  const sessionsQuery = useQuery({
+    queryKey: ['/session', 'coordinator-dialog', selectedAgentId, 'false'],
+    queryFn: () =>
+      auth.api.listSessions({
+        agentId: selectedAgentId,
+        archived: 'false',
+        limit: 50
+      }),
+    enabled:
+      props.open &&
+      !!auth.user &&
+      !auth.isBootstrapping &&
+      selectedAgentId.length > 0
+  })
 
-  const clearMutation = useMutation({
-    mutationFn: async (targetCoordinatorSessionId: string) =>
-      auth.api.deleteCoordinatorSession(targetCoordinatorSessionId),
-    onSuccess: async (_data, targetCoordinatorSessionId) => {
-      queryClient.removeQueries({
-        queryKey: ['coordinatorSession', targetCoordinatorSessionId],
-        exact: true
-      })
-      queryClient.removeQueries({
-        queryKey: ['messages', targetCoordinatorSessionId],
-        exact: true
-      })
-      await queryClient.invalidateQueries({ queryKey: ['coordinatorSessions'] })
-      toast.success('Chat cleared')
+  const sessions = sessionsQuery.data?.data ?? []
+  const selectedSession = useMemo(
+    () =>
+      sessions.find(session => session.id === sessionConfig.sessionId.trim()) ??
+      null,
+    [sessionConfig.sessionId, sessions]
+  )
+  const activeSessionId = isDraftingNewSession
+    ? ''
+    : selectedSession?.id ??
+      (sessionConfig.sessionId.trim().length > 0
+        ? sessionConfig.sessionId.trim()
+        : sessions[0]?.id ?? '')
+
+  useEffect(() => {
+    if (!props.open) return
+
+    const nextAgent = selectedAgent
+    setSessionConfig(prev => {
+      const prevAgentId = prev.agentId.trim()
+      const nextAgentId = nextAgent?.id ?? ''
+      const nextAgentName = nextAgent?.name?.trim() ?? ''
+
+      if (
+        prevAgentId === nextAgentId &&
+        (prev.agentName?.trim() ?? '') === nextAgentName
+      ) {
+        return prev
+      }
+
+      if (nextAgentId.length === 0) {
+        if (
+          prevAgentId.length === 0 &&
+          (prev.agentName?.trim() ?? '').length === 0 &&
+          prev.sessionId.trim().length === 0
+        ) {
+          return prev
+        }
+        return {
+          ...prev,
+          agentId: '',
+          agentName: '',
+          sessionId: '',
+          sessionTitle: ''
+        }
+      }
+
+      return {
+        ...prev,
+        agentId: nextAgentId,
+        agentName: nextAgentName,
+        ...(prevAgentId === nextAgentId
+          ? {}
+          : { sessionId: '', sessionTitle: '' })
+      }
+    })
+  }, [props.open, selectedAgent])
+
+  useEffect(() => {
+    if (!props.open || selectedAgentId.length === 0 || isDraftingNewSession)
+      return
+    if (sessionsQuery.isLoading) return
+
+    const nextSession =
+      sessions.find(session => session.id === sessionConfig.sessionId.trim()) ??
+      sessions[0] ??
+      null
+
+    setSessionConfig(prev => {
+      const nextSessionId = nextSession?.id ?? ''
+      const nextSessionTitle = nextSession?.title?.trim() ?? ''
+      if (
+        prev.sessionId.trim() === nextSessionId &&
+        (prev.sessionTitle?.trim() ?? '') === nextSessionTitle
+      ) {
+        return prev
+      }
+      return {
+        ...prev,
+        sessionId: nextSessionId,
+        sessionTitle: nextSessionTitle
+      }
+    })
+  }, [
+    isDraftingNewSession,
+    props.open,
+    selectedAgentId,
+    sessionConfig.sessionId,
+    sessions,
+    sessionsQuery.isLoading
+  ])
+
+  useEffect(() => {
+    if (sessionConfig.sessionId.trim().length === 0) return
+    setIsDraftingNewSession(false)
+  }, [sessionConfig.sessionId])
+
+  const archiveSessionMutation = useMutation({
+    mutationFn: async (session: ManagerSessionRecord) =>
+      auth.api.updateSession(session.id, {
+        agentId: session.agentId,
+        isArchived: true
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['/session'] })
+      toast.success('Session archived')
     },
-    onError: e => {
-      toast.error(e instanceof Error ? e.message : 'Failed to clear chat')
+    onError: error => {
+      toast.error(toErrorMessage(error))
     }
   })
 
   const canClearCurrentConversation = useCallback((): boolean => {
     return (
       !!auth.user &&
-      typeof coordinatorSessionId === 'string' &&
-      coordinatorSessionId.length > 0 &&
-      !clearMutation.isPending
+      activeSessionId.length > 0 &&
+      !archiveSessionMutation.isPending
     )
-  }, [auth.user, clearMutation.isPending, coordinatorSessionId])
+  }, [activeSessionId, archiveSessionMutation.isPending, auth.user])
 
   const openSessionsList = useCallback(async () => {
     setMode('sessions')
@@ -82,12 +239,19 @@ export function CoordinatorSessionDialog (props: {
   }, [])
 
   const draftNewSession = useCallback(async () => {
+    if (selectedAgentId.length === 0) {
+      throw new Error('Create a coordinator agent first.')
+    }
+
     setMode('conversation')
     setIsDraftingNewSession(true)
-    setSelectedSessionId(null)
-    setConversationViewKey(prev => prev + 1)
+    setSessionConfig(prev => ({
+      ...prev,
+      sessionId: '',
+      sessionTitle: ''
+    }))
     return { drafted: true as const, mode: 'conversation' as const }
-  }, [])
+  }, [selectedAgentId])
 
   const listSessions = useCallback(
     async (input?: { readonly limit?: number; readonly cursor?: string }) => {
@@ -99,18 +263,37 @@ export function CoordinatorSessionDialog (props: {
         typeof input?.cursor === 'string' && input.cursor.trim().length > 0
           ? input.cursor.trim()
           : undefined
-      const result = await auth.api.listCoordinatorSessions({ limit, cursor })
+
+      if (selectedAgentId.length === 0) {
+        return {
+          sessions: [],
+          nextCursor: null,
+          selectedSessionId: null,
+          mode,
+          isDraftingNewSession
+        }
+      }
+
+      const result = await auth.api.listSessions({
+        agentId: selectedAgentId,
+        archived: 'false',
+        limit,
+        cursor
+      })
 
       if (!cursor) {
-        queryClient.setQueryData<ListCoordinatorSessionsResult>(
-          ['coordinatorSessions'],
+        queryClient.setQueryData(
+          ['/session', 'coordinator-dialog', selectedAgentId, 'false'],
           result
         )
       }
 
-      const activeSelectedSessionId = isDraftingNewSession
-        ? null
-        : selectedSessionId ?? result.data[0]?.id ?? null
+      const fallbackSelectedSessionId =
+        result.data.find(
+          session => session.id === sessionConfig.sessionId.trim()
+        )?.id ??
+        result.data[0]?.id ??
+        null
 
       return {
         sessions: result.data.map(session => ({
@@ -121,84 +304,96 @@ export function CoordinatorSessionDialog (props: {
           updatedAt: session.updatedAt
         })),
         nextCursor: result.nextCursor,
-        selectedSessionId: activeSelectedSessionId,
+        selectedSessionId: isDraftingNewSession
+          ? null
+          : fallbackSelectedSessionId,
         mode,
         isDraftingNewSession
       }
     },
-    [auth.api, isDraftingNewSession, mode, queryClient, selectedSessionId]
+    [
+      auth.api,
+      isDraftingNewSession,
+      mode,
+      queryClient,
+      selectedAgentId,
+      sessionConfig.sessionId
+    ]
   )
 
   const selectSession = useCallback(
     async (input: { readonly coordinatorSessionId: string }) => {
-      const coordinatorSessionId = input.coordinatorSessionId.trim()
-      if (!coordinatorSessionId) {
+      const nextSessionId = input.coordinatorSessionId.trim()
+      if (!nextSessionId) {
         throw new Error('coordinatorSessionId is required')
       }
 
-      const session = await auth.api.getCoordinatorSession(coordinatorSessionId)
-      queryClient.setQueryData(
-        ['coordinatorSession', coordinatorSessionId],
-        session
-      )
+      const matchingSession =
+        sessions.find(session => session.id === nextSessionId) ?? null
 
-      setSelectedSessionId(coordinatorSessionId)
+      setSessionConfig(prev => ({
+        ...prev,
+        sessionId: nextSessionId,
+        sessionTitle: matchingSession?.title?.trim() ?? ''
+      }))
       setIsDraftingNewSession(false)
       setMode('conversation')
-      setConversationViewKey(prev => prev + 1)
 
       return {
         selected: true as const,
-        coordinatorSessionId,
+        coordinatorSessionId: nextSessionId,
         mode: 'conversation' as const
       }
     },
-    [auth.api, queryClient]
+    [sessions]
   )
 
   const createSession = useCallback(
-    async (input?: { readonly title?: string }) => {
-      const title =
-        typeof input?.title === 'string' && input.title.trim().length > 0
-          ? input.title.trim()
-          : undefined
-      const created = await auth.api.createCoordinatorSession(
-        title ? { title } : undefined
-      )
+    async (_input?: { readonly title?: string }) => {
+      if (selectedAgentId.length === 0) {
+        throw new Error('Create a coordinator agent first.')
+      }
 
-      queryClient.setQueryData(['coordinatorSession', created.id], created)
-      queryClient.setQueryData<ListCoordinatorSessionsResult>(
-        ['coordinatorSessions'],
-        prev => {
-          const list = prev?.data ?? []
-          if (list.some(session => session.id === created.id)) return prev
-          return {
-            data: [created, ...list],
-            nextCursor: prev?.nextCursor ?? null
-          }
-        }
-      )
-
-      setSelectedSessionId(created.id)
-      setIsDraftingNewSession(false)
+      setSessionConfig(prev => ({
+        ...prev,
+        sessionId: '',
+        sessionTitle: ''
+      }))
+      setIsDraftingNewSession(true)
       setMode('conversation')
-      setConversationViewKey(prev => prev + 1)
 
       return {
         created: true as const,
-        coordinatorSessionId: created.id,
+        coordinatorSessionId: '',
         mode: 'conversation' as const
       }
     },
-    [auth.api, queryClient]
+    [selectedAgentId]
   )
 
   const clearCurrentConversation = useCallback(async () => {
-    if (!coordinatorSessionId)
-      throw new Error('Coordinator session unavailable')
-    await clearMutation.mutateAsync(coordinatorSessionId)
+    const currentSession =
+      sessions.find(session => session.id === activeSessionId) ?? null
+    if (!currentSession) {
+      setIsDraftingNewSession(true)
+      setSessionConfig(prev => ({
+        ...prev,
+        sessionId: '',
+        sessionTitle: ''
+      }))
+      return { cleared: true as const }
+    }
+
+    await archiveSessionMutation.mutateAsync(currentSession)
+    setMode('conversation')
+    setIsDraftingNewSession(true)
+    setSessionConfig(prev => ({
+      ...prev,
+      sessionId: '',
+      sessionTitle: ''
+    }))
     return { cleared: true as const }
-  }, [clearMutation, coordinatorSessionId])
+  }, [activeSessionId, archiveSessionMutation, sessions])
 
   useEffect(() => {
     return registerDialogRuntimeController({
@@ -235,14 +430,14 @@ export function CoordinatorSessionDialog (props: {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent
         data-coordinator-dialog='true'
-        className='max-w-4xl h-[600px] max-h-[calc(100dvh-3rem)] flex flex-col p-0 overflow-hidden gap-0'
+        className='max-w-6xl min-h-[80%] max-h-[calc(100dvh-3rem)] grid-rows-[auto_minmax(0,1fr)] p-0 overflow-hidden gap-0'
         onEscapeKeyDown={event => {
           const shouldHandleInConversation =
             !!auth.user &&
-            !coordinatorSessionsQuery.isLoading &&
-            !coordinatorSessionsQuery.isError &&
+            !coordinatorAgentsQuery.isLoading &&
+            !coordinatorAgentsQuery.isError &&
             mode === 'conversation' &&
-            !clearMutation.isPending
+            !archiveSessionMutation.isPending
           if (!shouldHandleInConversation) return
 
           const chatController = getActiveChatRuntimeController()
@@ -277,7 +472,7 @@ export function CoordinatorSessionDialog (props: {
                       prev === 'sessions' ? 'conversation' : 'sessions'
                     )
                   }}
-                  disabled={coordinatorSessionsQuery.isLoading}
+                  disabled={coordinatorAgentsQuery.isLoading}
                 >
                   <List className='h-3.5 w-3.5' />
                 </Button>
@@ -285,12 +480,9 @@ export function CoordinatorSessionDialog (props: {
                   size='icon'
                   variant='icon'
                   onClick={() => {
-                    setMode('conversation')
-                    setIsDraftingNewSession(true)
-                    setSelectedSessionId(null)
-                    setConversationViewKey(prev => prev + 1)
+                    void draftNewSession()
                   }}
-                  disabled={coordinatorSessionsQuery.isLoading}
+                  disabled={coordinatorAgentsQuery.isLoading}
                   title='Prepare new coordinator session'
                 >
                   <Plus className='h-3.5 w-3.5' />
@@ -312,82 +504,140 @@ export function CoordinatorSessionDialog (props: {
                 </p>
               </div>
             </div>
-          ) : coordinatorSessionsQuery.isLoading ? (
+          ) : auth.isBootstrapping || coordinatorAgentsQuery.isLoading ? (
             <div className='h-full grid place-items-center'>
               <p className='text-sm text-text-secondary'>Loading…</p>
             </div>
-          ) : coordinatorSessionsQuery.isError ? (
+          ) : coordinatorAgentsQuery.isError ? (
             <div className='h-full grid place-items-center px-6'>
               <p className='text-sm text-destructive text-center'>
-                {(coordinatorSessionsQuery.error as Error).message}
+                {toErrorMessage(coordinatorAgentsQuery.error)}
               </p>
             </div>
+          ) : coordinatorAgents.length === 0 ? (
+            <div className='h-full grid place-items-center text-center px-6'>
+              <div className='space-y-1'>
+                <p className='text-sm font-medium text-text-primary'>
+                  No coordinator agents yet.
+                </p>
+                <p className='text-xs text-text-tertiary'>
+                  Create an agent with type{' '}
+                  <span className='font-mono'>coordinator</span> from the
+                  workspace first.
+                </p>
+              </div>
+            </div>
           ) : mode === 'sessions' ? (
-            <div className='h-full overflow-y-auto'>
-              {sessions.length === 0 ? (
-                <div className='h-full grid place-items-center text-center px-6'>
-                  <div className='space-y-1'>
+            <div className='h-full flex flex-col'>
+              <div className='border-b border-border px-4 py-3'>
+                <label className='flex flex-col gap-1'>
+                  <span className='text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary'>
+                    Coordinator Agent
+                  </span>
+                  <select
+                    className='h-9 rounded-md border border-border bg-surface-1 px-3 text-sm'
+                    value={selectedAgentId}
+                    onChange={event => {
+                      const nextAgent =
+                        coordinatorAgents.find(
+                          agent => agent.id === event.target.value
+                        ) ?? null
+                      setIsDraftingNewSession(false)
+                      setSessionConfig(prev => ({
+                        ...prev,
+                        agentId: nextAgent?.id ?? '',
+                        agentName: nextAgent?.name?.trim() ?? '',
+                        sessionId: '',
+                        sessionTitle: ''
+                      }))
+                    }}
+                  >
+                    {coordinatorAgents.map(agent => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name?.trim() || agent.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className='h-full overflow-y-auto'>
+                {selectedAgentId.length === 0 || sessionsQuery.isLoading ? (
+                  <div className='h-full grid place-items-center'>
                     <p className='text-sm text-text-secondary'>
-                      No saved sessions yet.
-                    </p>
-                    <p className='text-xs text-text-tertiary'>
-                      Press + to prepare a new one.
+                      Loading sessions…
                     </p>
                   </div>
-                </div>
-              ) : (
-                <div className='divide-y divide-border'>
-                  {sessions.map(session => {
-                    const isCurrent =
-                      session.id === coordinatorSessionId &&
-                      !isDraftingNewSession
-                    return (
-                      <button
-                        key={session.id}
-                        type='button'
-                        onClick={() => {
-                          setSelectedSessionId(session.id)
-                          setIsDraftingNewSession(false)
-                          setMode('conversation')
-                          setConversationViewKey(prev => prev + 1)
-                        }}
-                        className={[
-                          'w-full text-left px-4 py-3 transition-colors',
-                          isCurrent ? 'bg-surface-2' : 'hover:bg-surface-2'
-                        ].join(' ')}
-                      >
-                        <p className='text-sm font-medium text-text-primary truncate'>
-                          {session.title?.trim().length
-                            ? session.title
-                            : 'Untitled session'}
-                        </p>
-                        <p className='text-xs text-text-tertiary mt-0.5'>
-                          Updated {formatSessionDate(session.updatedAt)}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          ) : clearMutation.isPending ? (
-            <div className='h-full grid place-items-center'>
-              <p className='text-sm text-text-secondary'>Clearing…</p>
+                ) : sessionsQuery.isError ? (
+                  <div className='h-full grid place-items-center px-6'>
+                    <p className='text-sm text-destructive text-center'>
+                      {toErrorMessage(sessionsQuery.error)}
+                    </p>
+                  </div>
+                ) : sessions.length === 0 ? (
+                  <div className='h-full grid place-items-center text-center px-6'>
+                    <div className='space-y-1'>
+                      <p className='text-sm text-text-secondary'>
+                        No saved sessions yet.
+                      </p>
+                      <p className='text-xs text-text-tertiary'>
+                        Press + to start a new one.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className='divide-y divide-border'>
+                    {sessions.map(session => {
+                      const isCurrent =
+                        session.id === activeSessionId && !isDraftingNewSession
+                      return (
+                        <button
+                          key={session.id}
+                          type='button'
+                          onClick={() => {
+                            setSessionConfig(prev => ({
+                              ...prev,
+                              sessionId: session.id,
+                              sessionTitle: session.title?.trim() ?? ''
+                            }))
+                            setIsDraftingNewSession(false)
+                            setMode('conversation')
+                          }}
+                          className={[
+                            'w-full text-left px-4 py-3 transition-colors',
+                            isCurrent ? 'bg-surface-2' : 'hover:bg-surface-2'
+                          ].join(' ')}
+                        >
+                          <p className='text-sm font-medium text-text-primary truncate'>
+                            {session.title?.trim().length
+                              ? session.title
+                              : 'Untitled session'}
+                          </p>
+                          <p className='text-xs text-text-tertiary mt-0.5'>
+                            Updated {formatSessionDate(session.updatedAt)}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
-            <ChatConversationPage
-              key={conversationViewKey}
-              coordinatorSessionId={coordinatorSessionId}
-              variant='dialog'
-              showDelete={false}
-              showTitle={false}
-              allowCoordinatorComposeEvents
-              onSessionCreated={createdSessionId => {
-                setSelectedSessionId(createdSessionId)
-                setIsDraftingNewSession(false)
-                setMode('conversation')
-              }}
-            />
+            <div className='h-full flex flex-col flex-1'>
+              <AgentSessionPanel
+                config={{
+                  ...sessionConfig,
+                  agentId: selectedAgentId,
+                  agentName: selectedAgent?.name?.trim() ?? '',
+                  sessionId: activeSessionId
+                }}
+                setConfig={setConfig}
+                runtime={DIALOG_RUNTIME}
+                showToolOpenControls={false}
+                chatControllerKind='dialog'
+                allowCoordinatorComposeEvents
+              />
+            </div>
           )}
         </div>
       </DialogContent>

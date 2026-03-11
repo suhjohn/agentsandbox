@@ -94,13 +94,31 @@ function formatDiffignoreInput (value: readonly string[]): string {
   return normalizeDiffignore(value).join('\n')
 }
 
-function parseGlobalDiffignoreResponse (value: unknown): readonly string[] {
-  if (typeof value !== 'object' || value === null) return []
-  const raw = (value as { diffignore?: unknown }).diffignore
-  if (!Array.isArray(raw)) return []
-  return normalizeDiffignore(
-    raw.filter((item): item is string => typeof item === 'string')
-  )
+type GlobalSettingsResponse = {
+  readonly diffignore: readonly string[]
+  readonly defaultCoordinatorImageId: string
+}
+
+function parseGlobalSettingsResponse (value: unknown): GlobalSettingsResponse {
+  if (typeof value !== 'object' || value === null) {
+    return { diffignore: [], defaultCoordinatorImageId: '' }
+  }
+  const rawDiffignore = (value as { diffignore?: unknown }).diffignore
+  const rawDefaultCoordinatorImageId = (
+    value as { defaultCoordinatorImageId?: unknown }
+  ).defaultCoordinatorImageId
+
+  return {
+    diffignore: Array.isArray(rawDiffignore)
+      ? normalizeDiffignore(
+          rawDiffignore.filter((item): item is string => typeof item === 'string')
+        )
+      : [],
+    defaultCoordinatorImageId:
+      typeof rawDefaultCoordinatorImageId === 'string'
+        ? rawDefaultCoordinatorImageId.trim()
+        : ''
+  }
 }
 
 export function SettingsGeneralPage () {
@@ -116,7 +134,9 @@ export function SettingsGeneralPage () {
   const [name, setName] = useState(currentName)
   const [regionText, setRegionText] = useState(currentRegionDisplay)
   const [diffignoreText, setDiffignoreText] = useState('')
+  const [defaultCoordinatorImageId, setDefaultCoordinatorImageId] = useState('')
   const [didEditDiffignore, setDidEditDiffignore] = useState(false)
+  const [didEditDefaultCoordinatorImageId, setDidEditDefaultCoordinatorImageId] = useState(false)
 
   const globalSettingsQuery = useQuery({
     queryKey: ['settings', 'global'],
@@ -127,15 +147,21 @@ export function SettingsGeneralPage () {
       const text = await res.text()
       const body = text.trim().length > 0 ? (JSON.parse(text) as unknown) : null
       if (!res.ok) throw new Error(toErrorMessage(body))
-      return parseGlobalDiffignoreResponse(body)
+      return parseGlobalSettingsResponse(body)
     }
   })
 
   useEffect(() => {
     if (didEditDiffignore) return
     if (!globalSettingsQuery.data) return
-    setDiffignoreText(formatDiffignoreInput(globalSettingsQuery.data))
+    setDiffignoreText(formatDiffignoreInput(globalSettingsQuery.data.diffignore))
   }, [didEditDiffignore, globalSettingsQuery.data])
+
+  useEffect(() => {
+    if (didEditDefaultCoordinatorImageId) return
+    if (!globalSettingsQuery.data) return
+    setDefaultCoordinatorImageId(globalSettingsQuery.data.defaultCoordinatorImageId)
+  }, [didEditDefaultCoordinatorImageId, globalSettingsQuery.data])
 
   const desiredRegion = useMemo(() => {
     try {
@@ -146,12 +172,20 @@ export function SettingsGeneralPage () {
   }, [regionText])
 
   const currentDiffignore = useMemo(
-    () => normalizeDiffignore(globalSettingsQuery.data ?? []),
+    () => normalizeDiffignore(globalSettingsQuery.data?.diffignore ?? []),
     [globalSettingsQuery.data]
   )
   const desiredDiffignore = useMemo(
     () => parseDiffignoreInput(diffignoreText),
     [diffignoreText]
+  )
+  const currentDefaultCoordinatorImageId = useMemo(
+    () => globalSettingsQuery.data?.defaultCoordinatorImageId ?? '',
+    [globalSettingsQuery.data]
+  )
+  const desiredDefaultCoordinatorImageId = useMemo(
+    () => defaultCoordinatorImageId.trim(),
+    [defaultCoordinatorImageId]
   )
 
   const isUserDirty = useMemo(() => {
@@ -165,8 +199,19 @@ export function SettingsGeneralPage () {
   }, [auth.user, currentName, currentRegionDisplay, desiredRegion, name])
 
   const isGlobalDirty = useMemo(() => {
-    return formatDiffignoreInput(desiredDiffignore) !== formatDiffignoreInput(currentDiffignore)
-  }, [currentDiffignore, desiredDiffignore])
+    if (
+      formatDiffignoreInput(desiredDiffignore) !==
+      formatDiffignoreInput(currentDiffignore)
+    ) {
+      return true
+    }
+    return desiredDefaultCoordinatorImageId !== currentDefaultCoordinatorImageId
+  }, [
+    currentDefaultCoordinatorImageId,
+    currentDiffignore,
+    desiredDefaultCoordinatorImageId,
+    desiredDiffignore
+  ])
 
   const isDirty = isUserDirty || isGlobalDirty
 
@@ -181,7 +226,13 @@ export function SettingsGeneralPage () {
         const res = await auth.fetchAuthed('/settings/global', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ diffignore: desiredDiffignore })
+          body: JSON.stringify({
+            diffignore: desiredDiffignore,
+            defaultCoordinatorImageId:
+              desiredDefaultCoordinatorImageId.length > 0
+                ? desiredDefaultCoordinatorImageId
+                : null
+          })
         })
         const text = await res.text()
         const body = text.trim().length > 0 ? (JSON.parse(text) as unknown) : null
@@ -191,6 +242,7 @@ export function SettingsGeneralPage () {
     onSuccess: async () => {
       toast.success('Saved')
       setDidEditDiffignore(false)
+      setDidEditDefaultCoordinatorImageId(false)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['images'] }),
         queryClient.invalidateQueries({ queryKey: ['settings', 'global'] })
@@ -409,6 +461,30 @@ export function SettingsGeneralPage () {
         >
           <SettingsPanel>
             <SettingsList className='rounded-none border-0'>
+              <SettingsRow
+                className='items-start sm:items-center flex-col sm:flex-row'
+                left={
+                  <SettingsRowLeft
+                    title='Default coordinator image'
+                    description='Global fallback image used for coordinator agents.'
+                  />
+                }
+                right={
+                  <div className='w-full sm:w-[420px] space-y-1.5'>
+                    <Input
+                      value={defaultCoordinatorImageId}
+                      onChange={e => {
+                        setDidEditDefaultCoordinatorImageId(true)
+                        setDefaultCoordinatorImageId(e.target.value)
+                      }}
+                      placeholder='Leave blank to unset'
+                    />
+                    <div className='text-xs text-text-secondary'>
+                      Store an image ID directly. The bootstrap script can create and populate this for you.
+                    </div>
+                  </div>
+                }
+              />
               <SettingsRow
                 className='items-start flex-col sm:flex-row'
                 left={

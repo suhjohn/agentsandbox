@@ -986,6 +986,9 @@ status?: GetAgentsStatus;
 imageId?: string;
 noImage?: GetAgentsNoImage;
 archived?: GetAgentsArchived;
+createdBy?: string;
+type?: GetAgentsType;
+visibility?: GetAgentsVisibility;
 parentAgentId?: string;
 /**
  * @minLength 1
@@ -1025,6 +1028,22 @@ export const GetAgentsArchived = {
   false: 'false',
 } as const;
 
+export type GetAgentsType = typeof GetAgentsType[keyof typeof GetAgentsType];
+
+
+export const GetAgentsType = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type GetAgentsVisibility = typeof GetAgentsVisibility[keyof typeof GetAgentsVisibility];
+
+
+export const GetAgentsVisibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
+
 /**
  * @nullable
  */
@@ -1032,6 +1051,22 @@ export type GetAgents200DataItemImage = {
   id: string;
   name: string;
 } | null;
+
+export type GetAgents200DataItemType = typeof GetAgents200DataItemType[keyof typeof GetAgents200DataItemType];
+
+
+export const GetAgents200DataItemType = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type GetAgents200DataItemVisibility = typeof GetAgents200DataItemVisibility[keyof typeof GetAgents200DataItemVisibility];
+
+
+export const GetAgents200DataItemVisibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
 
 export type GetAgents200DataItemStatus = typeof GetAgents200DataItemStatus[keyof typeof GetAgents200DataItemStatus];
 
@@ -1058,6 +1093,22 @@ export type GetAgents200DataItemSubAgentsItemImage = {
   id: string;
   name: string;
 } | null;
+
+export type GetAgents200DataItemSubAgentsItemType = typeof GetAgents200DataItemSubAgentsItemType[keyof typeof GetAgents200DataItemSubAgentsItemType];
+
+
+export const GetAgents200DataItemSubAgentsItemType = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type GetAgents200DataItemSubAgentsItemVisibility = typeof GetAgents200DataItemSubAgentsItemVisibility[keyof typeof GetAgents200DataItemSubAgentsItemVisibility];
+
+
+export const GetAgents200DataItemSubAgentsItemVisibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
 
 export type GetAgents200DataItemSubAgentsItemStatus = typeof GetAgents200DataItemSubAgentsItemStatus[keyof typeof GetAgents200DataItemSubAgentsItemStatus];
 
@@ -1096,6 +1147,8 @@ export type GetAgents200DataItemSubAgentsItem = {
   snapshotImageId?: string | null;
   /** @nullable */
   region?: string | null;
+  type: GetAgents200DataItemSubAgentsItemType;
+  visibility: GetAgents200DataItemSubAgentsItemVisibility;
   status: GetAgents200DataItemSubAgentsItemStatus;
   /** @nullable */
   createdBy: string | null;
@@ -1124,6 +1177,8 @@ export type GetAgents200DataItem = {
   snapshotImageId?: string | null;
   /** @nullable */
   region?: string | null;
+  type: GetAgents200DataItemType;
+  visibility: GetAgents200DataItemVisibility;
   status: GetAgents200DataItemStatus;
   /** @nullable */
   createdBy: string | null;
@@ -1140,10 +1195,28 @@ export type GetAgents200 = {
   nextCursor: string | null;
 };
 
+export type PostAgentsBodyType = typeof PostAgentsBodyType[keyof typeof PostAgentsBodyType];
+
+
+export const PostAgentsBodyType = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type PostAgentsBodyVisibility = typeof PostAgentsBodyVisibility[keyof typeof PostAgentsBodyVisibility];
+
+
+export const PostAgentsBodyVisibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
+
 export type PostAgentsBody = {
   parentAgentId?: string;
   imageId: string;
   variantId?: string;
+  type?: PostAgentsBodyType;
+  visibility?: PostAgentsBodyVisibility;
   region?: string | string[];
 };
 
@@ -1154,6 +1227,22 @@ export type PostAgents201Image = {
   id: string;
   name: string;
 } | null;
+
+export type PostAgents201Type = typeof PostAgents201Type[keyof typeof PostAgents201Type];
+
+
+export const PostAgents201Type = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type PostAgents201Visibility = typeof PostAgents201Visibility[keyof typeof PostAgents201Visibility];
+
+
+export const PostAgents201Visibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
 
 export type PostAgents201Status = typeof PostAgents201Status[keyof typeof PostAgents201Status];
 
@@ -1192,6 +1281,8 @@ export type PostAgents201 = {
   snapshotImageId?: string | null;
   /** @nullable */
   region?: string | null;
+  type: PostAgents201Type;
+  visibility: PostAgents201Visibility;
   status: PostAgents201Status;
   /** @nullable */
   createdBy: string | null;
@@ -1213,6 +1304,8 @@ by: GetAgentsGroupsBy;
  */
 previewN: number;
 archived?: GetAgentsGroupsArchived;
+type?: GetAgentsGroupsType;
+visibility?: GetAgentsGroupsVisibility;
 };
 
 export type GetAgentsGroupsBy = typeof GetAgentsGroupsBy[keyof typeof GetAgentsGroupsBy];
@@ -1231,6 +1324,22 @@ export const GetAgentsGroupsArchived = {
   false: 'false',
 } as const;
 
+export type GetAgentsGroupsType = typeof GetAgentsGroupsType[keyof typeof GetAgentsGroupsType];
+
+
+export const GetAgentsGroupsType = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type GetAgentsGroupsVisibility = typeof GetAgentsGroupsVisibility[keyof typeof GetAgentsGroupsVisibility];
+
+
+export const GetAgentsGroupsVisibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
+
 /**
  * @nullable
  */
@@ -1238,6 +1347,22 @@ export type GetAgentsGroups200DataItemPreviewItemImage = {
   id: string;
   name: string;
 } | null;
+
+export type GetAgentsGroups200DataItemPreviewItemType = typeof GetAgentsGroups200DataItemPreviewItemType[keyof typeof GetAgentsGroups200DataItemPreviewItemType];
+
+
+export const GetAgentsGroups200DataItemPreviewItemType = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type GetAgentsGroups200DataItemPreviewItemVisibility = typeof GetAgentsGroups200DataItemPreviewItemVisibility[keyof typeof GetAgentsGroups200DataItemPreviewItemVisibility];
+
+
+export const GetAgentsGroups200DataItemPreviewItemVisibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
 
 export type GetAgentsGroups200DataItemPreviewItemStatus = typeof GetAgentsGroups200DataItemPreviewItemStatus[keyof typeof GetAgentsGroups200DataItemPreviewItemStatus];
 
@@ -1276,6 +1401,8 @@ export type GetAgentsGroups200DataItemPreviewItem = {
   snapshotImageId?: string | null;
   /** @nullable */
   region?: string | null;
+  type: GetAgentsGroups200DataItemPreviewItemType;
+  visibility: GetAgentsGroups200DataItemPreviewItemVisibility;
   status: GetAgentsGroups200DataItemPreviewItemStatus;
   /** @nullable */
   createdBy: string | null;
@@ -1339,6 +1466,22 @@ export type PostAgentsAgentIdSnapshot200AgentImage = {
   name: string;
 } | null;
 
+export type PostAgentsAgentIdSnapshot200AgentType = typeof PostAgentsAgentIdSnapshot200AgentType[keyof typeof PostAgentsAgentIdSnapshot200AgentType];
+
+
+export const PostAgentsAgentIdSnapshot200AgentType = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type PostAgentsAgentIdSnapshot200AgentVisibility = typeof PostAgentsAgentIdSnapshot200AgentVisibility[keyof typeof PostAgentsAgentIdSnapshot200AgentVisibility];
+
+
+export const PostAgentsAgentIdSnapshot200AgentVisibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
+
 export type PostAgentsAgentIdSnapshot200AgentStatus = typeof PostAgentsAgentIdSnapshot200AgentStatus[keyof typeof PostAgentsAgentIdSnapshot200AgentStatus];
 
 
@@ -1376,6 +1519,8 @@ export type PostAgentsAgentIdSnapshot200Agent = {
   snapshotImageId?: string | null;
   /** @nullable */
   region?: string | null;
+  type: PostAgentsAgentIdSnapshot200AgentType;
+  visibility: PostAgentsAgentIdSnapshot200AgentVisibility;
   status: PostAgentsAgentIdSnapshot200AgentStatus;
   /** @nullable */
   createdBy: string | null;
@@ -1424,6 +1569,22 @@ export type PostAgentsAgentIdSession200AgentImage = {
   name: string;
 } | null;
 
+export type PostAgentsAgentIdSession200AgentType = typeof PostAgentsAgentIdSession200AgentType[keyof typeof PostAgentsAgentIdSession200AgentType];
+
+
+export const PostAgentsAgentIdSession200AgentType = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type PostAgentsAgentIdSession200AgentVisibility = typeof PostAgentsAgentIdSession200AgentVisibility[keyof typeof PostAgentsAgentIdSession200AgentVisibility];
+
+
+export const PostAgentsAgentIdSession200AgentVisibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
+
 export type PostAgentsAgentIdSession200AgentStatus = typeof PostAgentsAgentIdSession200AgentStatus[keyof typeof PostAgentsAgentIdSession200AgentStatus];
 
 
@@ -1461,6 +1622,8 @@ export type PostAgentsAgentIdSession200Agent = {
   snapshotImageId?: string | null;
   /** @nullable */
   region?: string | null;
+  type: PostAgentsAgentIdSession200AgentType;
+  visibility: PostAgentsAgentIdSession200AgentVisibility;
   status: PostAgentsAgentIdSession200AgentStatus;
   /** @nullable */
   createdBy: string | null;
@@ -1497,6 +1660,22 @@ export type GetAgentsAgentId200Image = {
   id: string;
   name: string;
 } | null;
+
+export type GetAgentsAgentId200Type = typeof GetAgentsAgentId200Type[keyof typeof GetAgentsAgentId200Type];
+
+
+export const GetAgentsAgentId200Type = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type GetAgentsAgentId200Visibility = typeof GetAgentsAgentId200Visibility[keyof typeof GetAgentsAgentId200Visibility];
+
+
+export const GetAgentsAgentId200Visibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
 
 export type GetAgentsAgentId200Status = typeof GetAgentsAgentId200Status[keyof typeof GetAgentsAgentId200Status];
 
@@ -1535,6 +1714,8 @@ export type GetAgentsAgentId200 = {
   snapshotImageId?: string | null;
   /** @nullable */
   region?: string | null;
+  type: GetAgentsAgentId200Type;
+  visibility: GetAgentsAgentId200Visibility;
   status: GetAgentsAgentId200Status;
   /** @nullable */
   createdBy: string | null;
@@ -1555,6 +1736,22 @@ export type PostAgentsAgentIdArchive200Image = {
   id: string;
   name: string;
 } | null;
+
+export type PostAgentsAgentIdArchive200Type = typeof PostAgentsAgentIdArchive200Type[keyof typeof PostAgentsAgentIdArchive200Type];
+
+
+export const PostAgentsAgentIdArchive200Type = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type PostAgentsAgentIdArchive200Visibility = typeof PostAgentsAgentIdArchive200Visibility[keyof typeof PostAgentsAgentIdArchive200Visibility];
+
+
+export const PostAgentsAgentIdArchive200Visibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
 
 export type PostAgentsAgentIdArchive200Status = typeof PostAgentsAgentIdArchive200Status[keyof typeof PostAgentsAgentIdArchive200Status];
 
@@ -1593,6 +1790,8 @@ export type PostAgentsAgentIdArchive200 = {
   snapshotImageId?: string | null;
   /** @nullable */
   region?: string | null;
+  type: PostAgentsAgentIdArchive200Type;
+  visibility: PostAgentsAgentIdArchive200Visibility;
   status: PostAgentsAgentIdArchive200Status;
   /** @nullable */
   createdBy: string | null;
@@ -1613,6 +1812,22 @@ export type PostAgentsAgentIdResume200Image = {
   id: string;
   name: string;
 } | null;
+
+export type PostAgentsAgentIdResume200Type = typeof PostAgentsAgentIdResume200Type[keyof typeof PostAgentsAgentIdResume200Type];
+
+
+export const PostAgentsAgentIdResume200Type = {
+  worker: 'worker',
+  coordinator: 'coordinator',
+} as const;
+
+export type PostAgentsAgentIdResume200Visibility = typeof PostAgentsAgentIdResume200Visibility[keyof typeof PostAgentsAgentIdResume200Visibility];
+
+
+export const PostAgentsAgentIdResume200Visibility = {
+  private: 'private',
+  shared: 'shared',
+} as const;
 
 export type PostAgentsAgentIdResume200Status = typeof PostAgentsAgentIdResume200Status[keyof typeof PostAgentsAgentIdResume200Status];
 
@@ -1651,6 +1866,8 @@ export type PostAgentsAgentIdResume200 = {
   snapshotImageId?: string | null;
   /** @nullable */
   region?: string | null;
+  type: PostAgentsAgentIdResume200Type;
+  visibility: PostAgentsAgentIdResume200Visibility;
   status: PostAgentsAgentIdResume200Status;
   /** @nullable */
   createdBy: string | null;
@@ -2312,14 +2529,20 @@ export type PostTerminalConnect502 = {
 
 export type GetSettingsGlobal200 = {
   diffignore: string[];
+  /** @nullable */
+  defaultCoordinatorImageId: string | null;
 };
 
 export type PatchSettingsGlobalBody = {
-  diffignore: string[];
+  diffignore?: string[];
+  /** @nullable */
+  defaultCoordinatorImageId?: string | null;
 };
 
 export type PatchSettingsGlobal200 = {
   diffignore: string[];
+  /** @nullable */
+  defaultCoordinatorImageId: string | null;
 };
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];

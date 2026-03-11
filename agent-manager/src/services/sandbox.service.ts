@@ -1010,6 +1010,7 @@ export async function ensureAgentSandbox (input: {
   readonly agentId: string
   readonly imageId?: string
   readonly region?: SandboxRegion
+  readonly waitForLock?: boolean
 }): Promise<AgentSandboxResult> {
   const agentId = input.agentId.trim()
   if (agentId.length === 0) throw new Error('agentId is required')
@@ -1018,7 +1019,7 @@ export async function ensureAgentSandbox (input: {
     {
       key: `locks:agent-sandbox:create:${agentId}`,
       ttlMs: SESSION_SANDBOX_CREATE_LOCK_TTL_MS,
-      waitMs: SESSION_SANDBOX_CREATE_LOCK_WAIT_MS,
+      waitMs: input.waitForLock === false ? 0 : SESSION_SANDBOX_CREATE_LOCK_WAIT_MS,
       retryDelayMs: 250
     },
     async () => {

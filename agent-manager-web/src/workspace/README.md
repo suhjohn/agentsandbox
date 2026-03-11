@@ -204,7 +204,8 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
 - Panel hosts are rendered through a root portal layer keyed by `panelInstanceId` and mounted into stable per-panel host elements.
 - Leaf slot refs only reattach those host elements when tree shape changes, so split/stack operations do not remount panel components when panel IDs/config remain stable.
 - During portal reattachment (e.g. split/stack or fullscreen transitions), the workspace snapshots/restores scroll for the deepest element marked `data-workspace-panel-scroller="true"` within a panel host (allows panels with inner scrollers, like `agent_detail`, to preserve scroll position).
-- `useWorkspaceSelector` uses `useSyncExternalStore` and `Object.is` snapshot stability to reduce unnecessary rerenders.
+- `useWorkspaceSelector` uses `useSyncExternalStore` and can preserve the previous snapshot when an optional equality function reports that the derived value is unchanged.
+- `WorkspaceView` uses selector equality for the window tab model so routine store updates do not rerender the whole workspace chrome when the visible window list is unchanged.
 - `PanelDefinition` supports view-level layout/focus hints consumed by workspace chrome:
   - `bodyPadding: "default" | "none"` controls panel container padding.
   - `getAutoFocusSelector(config)` enables focused-pane input autofocus without hardcoding panel type IDs in layout code.

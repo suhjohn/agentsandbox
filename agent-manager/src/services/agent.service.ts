@@ -24,18 +24,37 @@ import {
   uniqueNamesGenerator,
 } from "unique-names-generator";
 import { db } from "../db";
-import { agents, images, sessions, users } from "../db/schema";
+import {
+  agents,
+  globalSettings,
+  images,
+  sessions,
+  users,
+  type AgentType,
+  type AgentVisibility,
+} from "../db/schema";
 import type { AgentStatus } from "../db/enums";
 import type { Region } from "../utils/region";
-import { DEFAULT_REGION, serializeRegion } from "../utils/region";
+import { DEFAULT_REGION, parseRegionText, serializeRegion } from "../utils/region";
 import { generateUuid7 } from "../utils/uuid7";
 import { env } from "../env";
+import { withLock } from "./lock.service";
+
+function buildAgentViewerCondition(viewerUserId: string) {
+  const trimmedViewerUserId = viewerUserId.trim();
+  return or(
+    eq(agents.visibility, "shared"),
+    eq(agents.createdBy, trimmedViewerUserId),
+  );
+}
 
 function generateOpaqueSecret(): string {
   // 32 hex chars, URL-safe and fine for use in query params.
   return crypto.randomUUID().replace(/-/g, "");
 }
 const MAX_CREATE_AGENT_ATTEMPTS = 8;
+const DEFAULT_COORDINATOR_AGENT_LOCK_TTL_MS = 30_000;
+const DEFAULT_COORDINATOR_AGENT_LOCK_WAIT_MS = 5_000;
 
 function buildDefaultAgentName(agentId: string): string {
   return uniqueNamesGenerator({
@@ -129,6 +148,8 @@ export async function createAgent(input: {
   imageVariantId?: string | null;
   createdBy: string;
   region?: Region;
+  type?: AgentType;
+  visibility?: AgentVisibility;
 }) {
   const serializedRegion = serializeRegion(input.region);
   const sandboxAccessToken = generateSandboxAccessToken();
@@ -146,6 +167,8 @@ export async function createAgent(input: {
           imageId: input.imageId,
           imageVariantId: input.imageVariantId ?? null,
           createdBy: input.createdBy,
+          type: input.type ?? "worker",
+          visibility: input.visibility ?? "private",
           sandboxAccessToken: encryptSandboxAccessToken(sandboxAccessToken),
           runtimeInternalSecret: null,
           region: serializedRegion ?? DEFAULT_REGION,
@@ -167,6 +190,83 @@ export async function createAgent(input: {
   throw new Error("Failed to create agent after retrying generated identity");
 }
 
+async function getConfiguredDefaultCoordinatorImage() {
+  const rows = await db
+    .select({
+      imageId: globalSettings.defaultCoordinatorImageId,
+      defaultVariantId: images.defaultVariantId,
+      deletedAt: images.deletedAt,
+    })
+    .from(globalSettings)
+    .leftJoin(images, eq(images.id, globalSettings.defaultCoordinatorImageId))
+    .where(eq(globalSettings.id, "default"))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row?.imageId) return null;
+  if (row.deletedAt != null) return null;
+  return {
+    imageId: row.imageId,
+    defaultVariantId: row.defaultVariantId ?? null,
+  };
+}
+
+export async function getOrCreateDefaultCoordinatorAgentForUser(input: {
+  readonly userId: string;
+}) {
+  const userId = input.userId.trim();
+  if (userId.length === 0) throw new Error("userId is required");
+
+  return await withLock(
+    {
+      key: `locks:user-default-coordinator:create:${userId}`,
+      ttlMs: DEFAULT_COORDINATOR_AGENT_LOCK_TTL_MS,
+      waitMs: DEFAULT_COORDINATOR_AGENT_LOCK_WAIT_MS,
+      retryDelayMs: 100,
+    },
+    async () => {
+      const defaultImage = await getConfiguredDefaultCoordinatorImage();
+      if (!defaultImage) return null;
+
+      const existingRows = await db
+        .select()
+        .from(agents)
+        .where(
+          and(
+            eq(agents.createdBy, userId),
+            eq(agents.type, "coordinator"),
+            eq(agents.imageId, defaultImage.imageId),
+            isNull(agents.parentAgentId),
+            ne(agents.status, "archived"),
+          ),
+        )
+        .orderBy(desc(agents.updatedAt), desc(agents.id))
+        .limit(1);
+      const existing = existingRows[0] ?? null;
+      if (existing) return existing;
+
+      const userRows = await db
+        .select({ defaultRegion: users.defaultRegion })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      const user = userRows[0];
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      return createAgent({
+        imageId: defaultImage.imageId,
+        imageVariantId: defaultImage.defaultVariantId,
+        createdBy: userId,
+        region: parseRegionText(user.defaultRegion) ?? DEFAULT_REGION,
+        type: "coordinator",
+        visibility: "private",
+      });
+    },
+  );
+}
+
 export async function getAgentById(id: string) {
   const result = await db
     .select()
@@ -183,6 +283,7 @@ export async function getAgentById(id: string) {
 }
 
 export async function listAgents(input: {
+  viewerUserId: string;
   imageId?: string;
   noImage?: boolean;
   status?: AgentStatus;
@@ -190,6 +291,8 @@ export async function listAgents(input: {
   parentAgentId?: string;
   search?: string;
   createdBy?: string;
+  type?: AgentType;
+  visibility?: AgentVisibility;
   limit: number;
   cursor?: string;
 }) {
@@ -199,8 +302,16 @@ export async function listAgents(input: {
 
   const conditions = [];
 
+  conditions.push(buildAgentViewerCondition(input.viewerUserId));
+
   if (input.createdBy && input.createdBy.trim().length > 0) {
     conditions.push(eq(agents.createdBy, input.createdBy.trim()));
+  }
+  if (input.type) {
+    conditions.push(eq(agents.type, input.type));
+  }
+  if (input.visibility) {
+    conditions.push(eq(agents.visibility, input.visibility));
   }
   if (input.imageId) conditions.push(eq(agents.imageId, input.imageId));
   if (input.noImage) conditions.push(isNull(agents.imageId));
@@ -383,14 +494,24 @@ export type AgentGroup = {
 };
 
 export async function listAgentGroups(input: {
+  readonly viewerUserId: string;
   readonly createdBy?: string;
   readonly by: AgentGroupBy;
   readonly previewN: number;
   readonly archived?: boolean;
+  readonly type?: AgentType;
+  readonly visibility?: AgentVisibility;
 }): Promise<{ readonly groups: readonly AgentGroup[] }> {
   const conditions = [];
+  conditions.push(buildAgentViewerCondition(input.viewerUserId));
   if (input.createdBy && input.createdBy.trim().length > 0) {
     conditions.push(eq(agents.createdBy, input.createdBy.trim()));
+  }
+  if (input.type) {
+    conditions.push(eq(agents.type, input.type));
+  }
+  if (input.visibility) {
+    conditions.push(eq(agents.visibility, input.visibility));
   }
 
   if (input.archived) {

@@ -51,11 +51,18 @@ const defaultDiffIgnorePatterns = [
 
 const globalSettingsSchema = z.object({
   diffignore: z.array(z.string()),
+  defaultCoordinatorImageId: z.string().uuid().nullable(),
 });
 
 const updateGlobalSettingsSchema = z.object({
-  diffignore: z.array(z.string().min(1)),
-});
+  diffignore: z.array(z.string().min(1)).optional(),
+  defaultCoordinatorImageId: z.string().uuid().nullable().optional(),
+}).refine(
+  (value) =>
+    Object.prototype.hasOwnProperty.call(value, "diffignore") ||
+    Object.prototype.hasOwnProperty.call(value, "defaultCoordinatorImageId"),
+  { message: "At least one field must be provided" },
+);
 
 function normalizeDiffIgnorePatterns(values: readonly string[]): string[] {
   if (values.length === 0) return [];
@@ -94,6 +101,7 @@ async function ensureGlobalSettingsRow() {
     .values({
       id: GLOBAL_SETTINGS_ID,
       diffignore: [...defaultDiffIgnorePatterns],
+      defaultCoordinatorImageId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
@@ -105,15 +113,22 @@ async function readGlobalSettings() {
   const rows = await db
     .select({
       diffignore: globalSettings.diffignore,
+      defaultCoordinatorImageId: globalSettings.defaultCoordinatorImageId,
     })
     .from(globalSettings)
     .where(eq(globalSettings.id, GLOBAL_SETTINGS_ID))
     .limit(1);
   const row = rows[0];
   if (!row) {
-    return { diffignore: [...defaultDiffIgnorePatterns] };
+    return {
+      diffignore: [...defaultDiffIgnorePatterns],
+      defaultCoordinatorImageId: null,
+    };
   }
-  return { diffignore: parseStoredDiffignore(row.diffignore) };
+  return {
+    diffignore: parseStoredDiffignore(row.diffignore),
+    defaultCoordinatorImageId: row.defaultCoordinatorImageId ?? null,
+  };
 }
 
 registerRoute(
@@ -135,7 +150,10 @@ registerRoute(
     } catch (err) {
       if (hasRelationMissingError(err)) {
         // Degrade gracefully when migrations have not been applied yet.
-        return c.json({ diffignore: [...defaultDiffIgnorePatterns] });
+        return c.json({
+          diffignore: [...defaultDiffIgnorePatterns],
+          defaultCoordinatorImageId: null,
+        });
       }
       throw err;
     }
@@ -161,20 +179,35 @@ registerRoute(
     const body = c.req.valid("json" as never) as z.infer<
       typeof updateGlobalSettingsSchema
     >;
-    const diffignore = normalizeDiffIgnorePatterns(body.diffignore);
+    const diffignore = Array.isArray(body.diffignore)
+      ? normalizeDiffIgnorePatterns(body.diffignore)
+      : undefined;
     try {
       await ensureGlobalSettingsRow();
       const rows = await db
         .update(globalSettings)
         .set({
-          diffignore,
+          ...(diffignore ? { diffignore } : {}),
+          ...(Object.prototype.hasOwnProperty.call(
+            body,
+            "defaultCoordinatorImageId",
+          )
+            ? {
+                defaultCoordinatorImageId: body.defaultCoordinatorImageId ?? null,
+              }
+            : {}),
           updatedAt: new Date(),
         })
         .where(eq(globalSettings.id, GLOBAL_SETTINGS_ID))
-        .returning({ diffignore: globalSettings.diffignore });
+        .returning({
+          diffignore: globalSettings.diffignore,
+          defaultCoordinatorImageId: globalSettings.defaultCoordinatorImageId,
+        });
 
+      const row = rows[0];
       return c.json({
-        diffignore: parseStoredDiffignore(rows[0]?.diffignore ?? diffignore),
+        diffignore: parseStoredDiffignore(row?.diffignore ?? diffignore ?? []),
+        defaultCoordinatorImageId: row?.defaultCoordinatorImageId ?? null,
       });
     } catch (err) {
       if (hasRelationMissingError(err)) {
