@@ -1475,26 +1475,24 @@ export function SettingsImageDetailPage () {
         </SettingsSection>
 
         <SettingsSection
-          title='Image'
+          title='Image Variants'
           description='Manage image variants, current images, and builds for this image.'
         >
+          <VariantCombobox
+            className='min-w-48 max-w-64'
+            value={selectedVariantId}
+            onChange={setSelectedVariantId}
+            variants={variantOptions}
+            currentUserId={auth.user?.id ?? null}
+            disabled={!canEdit || isBusy}
+            onDelete={(variantId, variantName) => {
+              setPendingDeleteVariant({ variantId, label: variantName })
+            }}
+            onCreate={() => createVariantMutation.mutate()}
+            canCreate={canEdit && !isBusy}
+            canDelete={variant => canEdit && !isBusy && !variant.isDefault}
+          />
           <SettingsPanel>
-            <div className='flex items-center gap-2 border-b border-border px-3 py-2'>
-              <VariantCombobox
-                className='min-w-48 max-w-64'
-                value={selectedVariantId}
-                onChange={setSelectedVariantId}
-                variants={variantOptions}
-                currentUserId={auth.user?.id ?? null}
-                disabled={!canEdit || isBusy}
-                onDelete={(variantId, variantName) => {
-                  setPendingDeleteVariant({ variantId, label: variantName })
-                }}
-                onCreate={() => createVariantMutation.mutate()}
-                canCreate={canEdit && !isBusy}
-                canDelete={variant => canEdit && !isBusy && !variant.isDefault}
-              />
-            </div>
             <Dialog
               open={pendingDeleteVariant !== null}
               onOpenChange={open => {
@@ -1543,6 +1541,34 @@ export function SettingsImageDetailPage () {
             </Dialog>
 
             <SettingsList className='rounded-none border-0'>
+              <SettingsRow
+                className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
+                left={
+                  <SettingsRowLeft
+                    title='Variant ID'
+                    description='Stable identifier for the selected variant.'
+                  />
+                }
+                right={
+                  <div className='flex w-full sm:w-[420px] items-center gap-2'>
+                    <code className='flex-1 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-text-secondary break-all'>
+                      {selectedVariant?.id ?? '-'}
+                    </code>
+                    {selectedVariant?.id ? (
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        className='h-8 w-8 shrink-0'
+                        onClick={() =>
+                          void onCopy(selectedVariant.id, 'variant id')
+                        }
+                      >
+                        <Copy className='h-4 w-4' />
+                      </Button>
+                    ) : null}
+                  </div>
+                }
+              />
               <SettingsRow
                 className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
                 left={
@@ -1600,7 +1626,7 @@ export function SettingsImageDetailPage () {
                 left={
                   <SettingsRowLeft
                     title='Variant visibility'
-                    description='Toggle whether this variant is personal to you or shared across the image.'
+                    description='Toggle whether this variant is personal to you or shared across the organization.'
                   />
                 }
                 right={
@@ -1820,32 +1846,24 @@ export function SettingsImageDetailPage () {
                       </p>
                     </div>
                   )}
-                </div>
 
-                <div className='border-t border-border px-4 py-3'>
-                  <div className='text-xs font-medium text-text-secondary'>
-                    Hook files
-                  </div>
-                  <div className='mt-1 text-xs text-text-tertiary'>
-                    <code className='font-mono text-text-primary'>
-                      ~/build.sh
-                    </code>{' '}
-                    runs during image builds if present.{' '}
-                    <code className='font-mono text-text-primary'>
-                      ~/start.sh
-                    </code>{' '}
-                    runs before agent-server starts in new agent sandboxes if
-                    present.
-                  </div>
-                </div>
-
-                {/* SSH Connection Info - shown when sandbox active with SSH */}
-                {setupSandboxId && setupSshInfo && (
-                  <div className='border-t border-border px-4 py-3'>
-                    <div className='text-xs font-medium text-text-secondary mb-2'>
-                      SSH Connection
-                    </div>
-                    <div className='space-y-2'>
+                  {setupSandboxId && setupSshInfo && (
+                    <div className='mt-3 space-y-2'>
+                      <div className='text-xs font-medium text-text-secondary'>
+                        SSH Connection
+                      </div>
+                      <div className='text-xs text-text-tertiary'>
+                        If you generated a new key for this sandbox, plain{' '}
+                        <code className='font-mono text-text-primary'>
+                          ssh host
+                        </code>{' '}
+                        may fail unless that matching private key is already
+                        loaded into your SSH agent. Use{' '}
+                        <code className='font-mono text-text-primary'>
+                          -i /path/to/private_key
+                        </code>{' '}
+                        or a matching SSH config entry.
+                      </div>
                       <div className='rounded-md bg-surface-2 px-3 py-2'>
                         <div className='text-xs text-text-tertiary mb-1'>
                           Connect via SSH:
@@ -1897,6 +1915,61 @@ export function SettingsImageDetailPage () {
                       </div>
                       <div className='rounded-md bg-surface-2 px-3 py-2'>
                         <div className='text-xs text-text-tertiary mb-1'>
+                          Run a bash command:
+                        </div>
+                        <div className='flex items-center gap-2'>
+                          <code className='flex-1 text-xs font-mono text-text-primary break-all'>
+                            ssh -p {setupSshInfo.port} {setupSshInfo.username}@
+                            {setupSshInfo.host} -- bash -lc 'ls -la /home/agent'
+                          </code>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-6 w-6 shrink-0'
+                            onClick={() =>
+                              void onCopy(
+                                `ssh -p ${setupSshInfo.port} ${setupSshInfo.username}@${setupSshInfo.host} -- bash -lc 'ls -la /home/agent'`,
+                                'SSH bash command'
+                              )
+                            }
+                          >
+                            <Copy className='h-3.5 w-3.5' />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className='rounded-md bg-surface-2 px-3 py-2'>
+                        <div className='text-xs text-text-tertiary mb-1'>
+                          Write a file via shell:
+                        </div>
+                        <div className='flex items-center gap-2'>
+                          <code className='flex-1 text-xs font-mono text-text-primary break-all'>
+                            ssh -p {setupSshInfo.port} {setupSshInfo.username}@
+                            {setupSshInfo.host} -- bash -lc "cat &gt;
+                            /home/agent/build.sh &lt;&lt;'EOF'
+                            <br />
+                            set -euo pipefail
+                            <br />
+                            echo hello
+                            <br />
+                            EOF"
+                          </code>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-6 w-6 shrink-0'
+                            onClick={() =>
+                              void onCopy(
+                                `ssh -p ${setupSshInfo.port} ${setupSshInfo.username}@${setupSshInfo.host} -- bash -lc "cat > /home/agent/build.sh <<'EOF'\nset -euo pipefail\necho hello\nEOF"`,
+                                'SSH file write command'
+                              )
+                            }
+                          >
+                            <Copy className='h-3.5 w-3.5' />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className='rounded-md bg-surface-2 px-3 py-2'>
+                        <div className='text-xs text-text-tertiary mb-1'>
                           Known hosts line (add to ~/.ssh/known_hosts):
                         </div>
                         <div className='flex items-center gap-2'>
@@ -1919,8 +1992,25 @@ export function SettingsImageDetailPage () {
                         </div>
                       </div>
                     </div>
+                  )}
+                </div>
+
+                <div className='border-t border-border px-4 py-3'>
+                  <div className='text-xs font-medium text-text-secondary'>
+                    Hook files
                   </div>
-                )}
+                  <div className='mt-1 text-xs text-text-tertiary'>
+                    <code className='font-mono text-text-primary'>
+                      ~/build.sh
+                    </code>{' '}
+                    runs during image builds if present.{' '}
+                    <code className='font-mono text-text-primary'>
+                      ~/start.sh
+                    </code>{' '}
+                    runs before agent-server starts in new agent sandboxes if
+                    present.
+                  </div>
+                </div>
 
                 {/* Browser Terminal - shown when sandbox active in browser mode */}
                 {setupSandboxId && setupTerminalConnection ? (

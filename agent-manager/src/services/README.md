@@ -301,7 +301,7 @@ createSetupSandbox(input: {
 Behavior:
 - Creates the setup sandbox from the selected variant `headImageId`.
 - Continues to expose the existing setup terminal/API over encrypted port `8080`.
-- When `sshPublicKeys` is provided and non-empty, also exposes sandbox port `22` over a Modal unencrypted TCP tunnel, provisions `authorized_keys` for the `agent` user, starts `sshd`, and returns the tunnel host/port plus host verification material.
+- When `sshPublicKeys` is provided and non-empty, also exposes sandbox port `22` over a Modal unencrypted TCP tunnel, writes the uploaded keys to `/root/.ssh/authorized_keys`, configures setup-sandbox SSH login for `root`, starts `sshd`, and returns the tunnel TCP host/port plus host verification material.
 - When `sshPublicKeys` is omitted or empty, no SSH tunnel is provisioned and `ssh` is returned as `null`.
 - Setup sandbox SSH access is creation-time only; callers are expected to terminate and recreate the setup sandbox to rotate keys or reissue access.
 
@@ -319,6 +319,7 @@ closeSetupSandbox(input: {
 ```
 
 Behavior:
+- Before snapshotting, recursively normalizes `/home/agent` ownership back to `agent:agent` so files created over root SSH remain usable to the normal agent user in later sandboxes.
 - Snapshots the live setup sandbox filesystem, writes the snapshot image id back to the variant's `headImageId`, and terminates the sandbox.
 - Records the previous variant `headImageId` as `baseImageId` in a succeeded `image_variant_builds` row with source `setup-sandbox`.
 

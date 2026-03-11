@@ -105,6 +105,8 @@ type RawSandboxTunnelsResponse = {
     readonly containerPort: number
     readonly host: string
     readonly port: number
+    readonly unencryptedHost?: string
+    readonly unencryptedPort?: number
   }>
 }
 
@@ -240,12 +242,14 @@ const SETUP_SERVER_COMMAND = [
   '/opt/agentsandbox/agent-go/build-artifacts/agent-server',
   'serve'
 ] as const
-const SETUP_SSH_USERNAME = 'agent'
+const SETUP_SSH_USERNAME = 'root'
+const SETUP_SSH_AUTHORIZED_KEYS_HOME = '/root'
 const SETUP_SSH_PORT = 22
 const SETUP_TERMINAL_PORT = 8080
 const SETUP_TIMEOUT_MS = 60 * 60 * 1000
 const SETUP_IDLE_TIMEOUT_MS = 60 * 60 * 1000
 const SETUP_SNAPSHOT_TIMEOUT_MS = 10 * 60 * 1000
+const SETUP_PRE_SNAPSHOT_CHOWN_TIMEOUT_MS = 60_000
 const SETUP_TUNNELS_RPC_TIMEOUT_SECONDS = 3
 const SETUP_TUNNELS_READY_TIMEOUT_MS = 20_000
 const SETUP_TUNNELS_RETRY_INTERVAL_MS = 400
@@ -476,7 +480,21 @@ async function waitForSetupSandboxTunnel (input: {
       if (!tunnel) {
         throw new Error(`Expected tunnel for port ${input.containerPort}`)
       }
-      return { host: tunnel.host, port: tunnel.port }
+      if (
+        typeof tunnel.unencryptedHost !== 'string' ||
+        tunnel.unencryptedHost.trim().length === 0 ||
+        typeof tunnel.unencryptedPort !== 'number' ||
+        !Number.isFinite(tunnel.unencryptedPort) ||
+        tunnel.unencryptedPort <= 0
+      ) {
+        throw new Error(
+          `Expected unencrypted TCP tunnel for port ${input.containerPort}`
+        )
+      }
+      return {
+        host: tunnel.unencryptedHost,
+        port: Math.floor(tunnel.unencryptedPort)
+      }
     } catch (err) {
       lastErr = err
       if (!isTransientSandboxLookupError(err)) throw err
@@ -510,7 +528,7 @@ async function provisionSetupSandboxSshAccess (input: {
     `  echo "missing ssh user: ${SETUP_SSH_USERNAME}" >&2`,
     '  exit 1',
     'fi',
-    'SSH_HOME=/home/agent',
+    `SSH_HOME="${SETUP_SSH_AUTHORIZED_KEYS_HOME}"`,
     'SSH_DIR="${SSH_HOME}/.ssh"',
     'HOST_DIR="${ROOT_DIR:-/home/agent/runtime}/ssh-hostkeys"',
     'RUNTIME_DIR="${ROOT_DIR:-/home/agent/runtime}"',
@@ -522,7 +540,7 @@ async function provisionSetupSandboxSshAccess (input: {
     'cat > "${SSH_DIR}/authorized_keys" <<\'__AUTHORIZED_KEYS__\'',
     authorizedKeys.trimEnd(),
     '__AUTHORIZED_KEYS__',
-    `chown -R ${shellQuote(SETUP_SSH_USERNAME)}:${shellQuote(SETUP_SSH_USERNAME)} "\${SSH_DIR}"`,
+    'chown -R root:root "${SSH_DIR}"',
     'chmod 600 "${SSH_DIR}/authorized_keys"',
     'if [[ ! -f "${HOST_DIR}/ssh_host_ed25519_key" ]]; then',
     '  ssh-keygen -q -t ed25519 -N "" -f "${HOST_DIR}/ssh_host_ed25519_key"',
@@ -536,9 +554,9 @@ async function provisionSetupSandboxSshAccess (input: {
     'KbdInteractiveAuthentication no',
     'ChallengeResponseAuthentication no',
     'UsePAM no',
-    'PermitRootLogin no',
+    'PermitRootLogin yes',
     'PubkeyAuthentication yes',
-    'AuthorizedKeysFile .ssh/authorized_keys',
+    `AuthorizedKeysFile ${SETUP_SSH_AUTHORIZED_KEYS_HOME}/.ssh/authorized_keys`,
     `AllowUsers ${SETUP_SSH_USERNAME}`,
     'HostKey ${HOST_DIR}/ssh_host_ed25519_key',
     'PidFile ${PID_PATH}',
@@ -1735,6 +1753,32 @@ export async function closeSetupSandbox (input: {
       : DEFAULT_VARIANT_HEAD_IMAGE_REF
 
   const sandbox = await modalClient.sandboxes.fromId(session.sandboxId)
+  const normalizeOwnershipResult = await execSandboxCommand({
+    sandbox,
+    command: [
+      'bash',
+      '-lc',
+      [
+        'set -euo pipefail',
+        'if id -u agent >/dev/null 2>&1 && [[ -d /home/agent ]]; then',
+        '  chown -R agent:agent /home/agent',
+        'fi'
+      ].join('\n')
+    ],
+    timeoutMs: SETUP_PRE_SNAPSHOT_CHOWN_TIMEOUT_MS
+  })
+  if (normalizeOwnershipResult.exitCode !== 0) {
+    throw new Error(
+      `Failed to normalize setup sandbox ownership before snapshot (exit ${
+        normalizeOwnershipResult.exitCode
+      }): ${
+        normalizeOwnershipResult.stderr.trim() ||
+        normalizeOwnershipResult.stdout.trim() ||
+        'unknown error'
+      }`
+    )
+  }
+
   const snapshot = await sandbox.snapshotFilesystem(SETUP_SNAPSHOT_TIMEOUT_MS)
   const snapshotImageId =
     typeof snapshot.imageId === 'string' ? snapshot.imageId.trim() : ''
