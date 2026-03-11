@@ -188,7 +188,7 @@ Additional trigger conditions:
 1. Call \`POST /session\` to create the agent, initialize/fetch its deterministic runtime session, and start the first run from the provided \`message\`.
 2. Use request body fields (do not invent additional fields):
    - Required:
-     - \`imageId\`: Manager image UUID to create the agent from. The session bootstrap uses the image's default variant and requires that variant to have a built \`headImageId\`. Find this based on GET /images API response from the user's message.
+     - \`imageId\`: Manager image UUID to create the agent from. The session bootstrap uses the image's default variant and requires that variant to have a non-empty \`activeImageId\`. Find this based on GET /images API response from the user's message.
        - Image lookup call shape: \`{ "method": "GET", "path": "/images", "query": { "limit": 50 } }\` and paginate with \`nextCursor\` when needed.
        - Match by exact/obvious name from \`response.data[].name\` (for example \`alexandria0\`). If multiple plausible matches exist, ask the user to disambiguate.
      - \`message\`: First user prompt for the newly created agent runtime session. This should contain the full user request (including constraints and acceptance criteria).
@@ -225,14 +225,14 @@ Trigger conditions:
 - User asks to build/rebuild an image.
 - User asks to validate or troubleshoot image build hook / build failures.
 - User cannot create agents because image is not built.
-1. If build behavior needs to change, use a setup sandbox or SSH/SCP to edit \`~/build.sh\` inside the variant's current head image. Persist those filesystem changes by closing the setup sandbox.
-2. Ensure \`~/build.sh\` follows the build-hook guidelines below.
+1. If build behavior needs to change, use a setup sandbox or SSH/SCP to edit \`/shared/image-hooks/build.sh\` in the image's shared hook volume. Those hook edits are shared across all variants of the image.
+2. Ensure \`/shared/image-hooks/build.sh\` follows the build-hook guidelines below.
 3. Run build: \`POST /images/{imageId}/build\`.
-4. Re-read: \`GET /images/{imageId}/variants\` (or the build response) and summarize the updated \`headImageId\` and any errors.
+4. Re-read: \`GET /images/{imageId}/variants\` (or the build response) and summarize the updated \`draftImageId\` and any errors.
 
-#### \`~/build.sh\` Guidelines
+#### \`/shared/image-hooks/build.sh\` Guidelines
 
-If \`/home/agent/build.sh\` exists in the selected variant head image, the manager executes it inside the Modal build sandbox via \`bash -lc\` with a 1-hour timeout. If the file is absent, the build continues without a user hook.
+If \`/shared/image-hooks/build.sh\` exists in the image-scoped shared hook volume, the manager executes it inside the Modal build sandbox via \`bash -lc\` with a 1-hour timeout. If the file is absent, the build continues without a user hook.
 
 **Environment Variables Available During Build:**
 - \`AGENT_HOME=/home/agent\` — agent user home directory
@@ -246,6 +246,7 @@ If \`/home/agent/build.sh\` exists in the selected variant head image, the manag
 - \`XDG_CACHE_HOME=/home/agent/runtime/xdg/cache\`
 - \`XDG_DATA_HOME=/home/agent/runtime/xdg/data\`
 - \`HOME=/home/agent\`
+- \`IMAGE_HOOKS_DIR=/shared/image-hooks\`
 
 **Key Assumptions:**
 1. **Working directory**: Script starts in \`$WORKSPACES_DIR\` (\`/home/agent/workspaces\`).
@@ -274,7 +275,7 @@ npm run build
 **Common Patterns:**
 - **Clone and setup**: \`git clone <url> && cd <repo> && <install commands>\`
 - **Multiple repos**: Clone each into \`$WORKSPACES_DIR/<name>\`
-- **Environment files**: Secrets are materialized at their configured file paths after setup (via image secret bindings), so don't hardcode secrets in \`~/build.sh\`.
+- **Environment files**: Secrets are materialized at their configured file paths after setup (via image secret bindings), so don't hardcode secrets in \`/shared/image-hooks/build.sh\`.
 - **Path references**: Use \`$WORKSPACES_DIR\` or \`$AGENT_HOME\` instead of hardcoded paths.
 
 **What NOT to do:**
@@ -288,7 +289,7 @@ Trigger conditions:
 - User asks to create/manage agents directly (without bootstrap \`POST /session\` first-run flow).
 - User asks for archive/resume/status/access operations on existing agents.
 - User provides an existing \`agentId\` and asks for lifecycle actions.
-1. Confirm image has a current head image: \`GET /images/{imageId}/variants\` and ensure the chosen variant has non-empty \`headImageId\`.
+1. Confirm image has a current active image: \`GET /images/{imageId}/variants\` and ensure the chosen variant has non-empty \`activeImageId\`.
 2. Create agent: \`POST /agents\`.
    The manager generates the agent \`id\` and default \`name\`; do not send a \`name\` field.
 3. Runtime access links if requested: \`GET /agents/{agentId}/access\`.

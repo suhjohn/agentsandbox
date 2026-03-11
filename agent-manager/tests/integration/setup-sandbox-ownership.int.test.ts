@@ -90,7 +90,7 @@ describe("setup sandbox ownership guard (integration)", () => {
     });
     const closeSpy = vi.spyOn(sandboxService, "closeSetupSandbox").mockResolvedValue({
       baseImageId: "im-base",
-      headImageId: "im-head",
+      draftImageId: "im-head",
       variantId,
     });
 

@@ -225,6 +225,20 @@
       "when": 1773222146002,
       "tag": "0031_warm_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1773225087799,
+      "tag": "0032_fresh_vindicator",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1773255800000,
+      "tag": "0033_user_image_variant_defaults_return",
+      "breakpoints": true
     }
   ]
 }

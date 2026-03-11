@@ -20,7 +20,7 @@ import {
   setAgentStatus
 } from '../services/agent.service'
 import {
-  DEFAULT_VARIANT_HEAD_IMAGE_REF,
+  getVariantActiveImageId,
   getImageById,
   getImageByIdIncludingArchived,
   resolveImageVariantForUser
@@ -455,7 +455,7 @@ registerRoute(
     if (!variant) {
       return c.json({ error: 'Image variant not found' }, 404)
     }
-    const headImageId = variant.headImageId?.trim() || DEFAULT_VARIANT_HEAD_IMAGE_REF
+    const activeImageId = getVariantActiveImageId(variant)
 
     let parentAgentId: string | null = null
     if (body.parentAgentId) {
@@ -478,7 +478,7 @@ registerRoute(
     })
     await ensureAgentSandbox({
       agentId: agent.id,
-      imageId: headImageId,
+      imageId: activeImageId,
       region
     })
     const updatedAgent = await getAgentById(agent.id)

@@ -13,7 +13,7 @@ import {
   getSandboxAgentToken
 } from './sandbox.service'
 import {
-  DEFAULT_VARIANT_HEAD_IMAGE_REF,
+  getVariantActiveImageId,
   getImageById,
   getImageByIdIncludingArchived,
   resolveImageVariantForUser
@@ -249,8 +249,7 @@ export async function createSessionBootstrap (input: {
   if (!variant) {
     throw new HTTPException(404, { message: 'Image variant not found' })
   }
-  const effectiveCurrentImageId =
-    variant.headImageId?.trim() || DEFAULT_VARIANT_HEAD_IMAGE_REF
+  const effectiveCurrentImageId = getVariantActiveImageId(variant)
 
   let parentAgentId: string | null = null
   if (body.parentAgentId) {

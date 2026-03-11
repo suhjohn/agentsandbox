@@ -66,7 +66,8 @@ describe("POST /agents (integration)", () => {
 
     vi.spyOn(imageService, "resolveImageVariantForUser").mockResolvedValue({
       id: image.defaultVariantId as string,
-      headImageId: crypto.randomUUID(),
+      activeImageId: crypto.randomUUID(),
+      draftImageId: crypto.randomUUID(),
     } as Awaited<ReturnType<typeof imageService.resolveImageVariantForUser>>);
     vi.spyOn(sandboxService, "ensureAgentSandbox").mockResolvedValue({
       tunnels: {
@@ -92,7 +93,7 @@ describe("POST /agents (integration)", () => {
     expect(body.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
-    expect(body.name).toBe(`ag-${body.id.slice(0, 16)}`);
+    expect(body.name).toMatch(/^[a-z]+-[a-z]+-[a-z]+$/);
   });
 
   it("rejects a client-provided name field", async () => {

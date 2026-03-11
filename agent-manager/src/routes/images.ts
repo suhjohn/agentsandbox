@@ -23,11 +23,13 @@ import {
   canUserAccessImageVariant,
   canUserMutateImageVariant,
   createImageVariant,
+  clearUserImageDefaultVariantId,
   deleteImageVariant,
   getImageVariantForImage,
   isDefaultVariant,
   listImageVariantsForUser,
   listImageVariantBuilds,
+  setUserImageDefaultVariantId,
   setImageDefaultVariantId,
   updateImageVariant
 } from '../services/image.service'
@@ -71,7 +73,8 @@ function isMissingTableError (err: unknown, ...tableNames: string[]): boolean {
 const createImageSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(2000).optional(),
-  headImageId: z.string().optional()
+  activeImageId: z.string().optional(),
+  draftImageId: z.string().optional()
 })
 
 const updateImageSchema = z.object({
@@ -124,6 +127,8 @@ const imageSchema = z.object({
   description: z.string().nullable().optional(),
   createdBy: z.string().nullable(),
   defaultVariantId: z.string().uuid().nullable().optional(),
+  userDefaultVariantId: z.string().uuid().nullable().optional(),
+  effectiveDefaultVariantId: z.string().uuid().nullable().optional(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
   deletedAt: z.string().or(z.date()).nullable().optional()
@@ -135,7 +140,8 @@ const imageVariantSchema = z.object({
   scope: z.enum(['shared', 'personal'] as const),
   imageId: z.string(),
   ownerUserId: z.string().nullable().optional(),
-  headImageId: z.string(),
+  activeImageId: z.string(),
+  draftImageId: z.string(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date())
 })
@@ -152,13 +158,13 @@ const setupSandboxSshSchema = z.object({
 const setupSandboxSchema = z.object({
   sandboxId: z.string(),
   variantId: z.string().uuid(),
-  headImageId: z.string(),
+  draftImageId: z.string(),
   ssh: setupSandboxSshSchema.nullable().optional()
 })
 
 const closeSetupSandboxSchema = z.object({
   baseImageId: z.string(),
-  headImageId: z.string(),
+  draftImageId: z.string(),
   variantId: z.string().uuid()
 })
 
@@ -170,19 +176,25 @@ const buildResultSchema = z.object({
 const createVariantSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   scope: z.enum(['shared', 'personal'] as const).default('personal'),
-  headImageId: z.string().optional(),
+  activeImageId: z.string().optional(),
+  draftImageId: z.string().optional(),
   setAsDefault: z.boolean().optional().default(false)
 })
 
 const updateVariantSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  headImageId: z.string().min(1).optional(),
+  activeImageId: z.string().min(1).optional(),
+  draftImageId: z.string().min(1).optional(),
   scope: z.enum(['shared', 'personal'] as const).optional()
 })
 
 const variantParamsSchema = z.object({
   imageId: z.string().min(1),
   variantId: z.string().uuid()
+})
+
+const imageParamsSchema = z.object({
+  imageId: z.string().min(1)
 })
 
 const listVariantBuildsQuery = z.object({
@@ -299,7 +311,8 @@ registerRoute(
     const image = await createImage({
       name: body.name,
       description: body.description,
-      headImageId: body.headImageId,
+      activeImageId: body.activeImageId,
+      draftImageId: body.draftImageId,
       createdBy: user.id
     })
     return c.json(image, 201)
@@ -324,7 +337,7 @@ registerRoute(
   async c => {
     const user = c.get('user')
     const imageId = c.req.param('imageId')
-    const image = await getImageByIdIncludingArchived(imageId)
+    const image = await getImageByIdIncludingArchived(imageId, user.id)
     if (!image) {
       log.warn('images.get.not_found', { userId: user.id, imageId })
       return c.json({ error: 'Image not found' }, 404)
@@ -431,7 +444,8 @@ registerRoute(
       name: body.name,
       scope: body.scope,
       ownerUserId: user.id,
-      headImageId: body.headImageId
+      activeImageId: body.activeImageId,
+      draftImageId: body.draftImageId
     })
     if (!created) return c.json({ error: 'Failed to create variant' }, 400)
     if (body.setAsDefault) {
@@ -522,7 +536,8 @@ registerRoute(
       imageId,
       variantId,
       name: body.name,
-      headImageId: body.headImageId,
+      activeImageId: body.activeImageId,
+      draftImageId: body.draftImageId,
       scope: body.scope,
       ownerUserId: user.id
     })
@@ -567,6 +582,92 @@ registerRoute(
       return c.json({ error: 'Image variant not found' }, 404)
     }
     await setImageDefaultVariantId({ imageId, variantId })
+    return c.json({ ok: true })
+  }
+)
+
+// Set user default variant override
+registerRoute(
+  app,
+  {
+    method: 'post',
+    path: `${BASE}/:imageId/variants/:variantId/user-default`,
+    summary: 'Set user default image variant override',
+    tags: ['images'],
+    security: [{ bearerAuth: [] }],
+    request: { params: variantParamsSchema },
+    responses: {
+      200: z.object({ ok: z.boolean() }),
+      404: z.object({ error: z.string() })
+    }
+  },
+  '/:imageId/variants/:variantId/user-default',
+  zValidator('param', variantParamsSchema),
+  async c => {
+    const user = c.get('user')
+    const { imageId, variantId } = c.req.valid('param' as never) as z.infer<
+      typeof variantParamsSchema
+    >
+    const image = await getImageById(imageId)
+    if (!image) return c.json({ error: 'Image not found' }, 404)
+    try {
+      ensureCanReadImage(user.id, {
+        visibility: image.visibility as Visibility,
+        createdBy: image.createdBy
+      })
+    } catch {
+      return c.json({ error: 'Image not found' }, 404)
+    }
+    const variant = await getImageVariantForImage({ imageId, variantId })
+    if (!variant) return c.json({ error: 'Image variant not found' }, 404)
+    if (!canUserAccessImageVariant({ userId: user.id, variant })) {
+      return c.json({ error: 'Image variant not found' }, 404)
+    }
+    await setUserImageDefaultVariantId({
+      imageId,
+      userId: user.id,
+      variantId
+    })
+    return c.json({ ok: true })
+  }
+)
+
+// Clear user default variant override
+registerRoute(
+  app,
+  {
+    method: 'delete',
+    path: `${BASE}/:imageId/user-default`,
+    summary: 'Clear user default image variant override',
+    tags: ['images'],
+    security: [{ bearerAuth: [] }],
+    request: { params: imageParamsSchema },
+    responses: {
+      200: z.object({ ok: z.boolean() }),
+      404: z.object({ error: z.string() })
+    }
+  },
+  '/:imageId/user-default',
+  zValidator('param', imageParamsSchema),
+  async c => {
+    const user = c.get('user')
+    const { imageId } = c.req.valid('param' as never) as z.infer<
+      typeof imageParamsSchema
+    >
+    const image = await getImageById(imageId)
+    if (!image) return c.json({ error: 'Image not found' }, 404)
+    try {
+      ensureCanReadImage(user.id, {
+        visibility: image.visibility as Visibility,
+        createdBy: image.createdBy
+      })
+    } catch {
+      return c.json({ error: 'Image not found' }, 404)
+    }
+    await clearUserImageDefaultVariantId({
+      imageId,
+      userId: user.id
+    })
     return c.json({ ok: true })
   }
 )

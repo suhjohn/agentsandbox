@@ -136,14 +136,27 @@ describe("Sessions sandbox agent API (real)", () => {
             throw new Error(`image build failed (${res.status}): ${text}`);
           }
           return (await res.json()) as {
-            variant?: { headImageId?: string | null; currentImageId?: string | null };
+            variant?: { draftImageId?: string | null };
           };
         },
         15 * 60 * 1000,
         3_000,
       );
-      const builtImageId = built.variant?.headImageId ?? built.variant?.currentImageId;
+      const builtImageId = built.variant?.draftImageId;
       expect(typeof builtImageId).toBe("string");
+
+      const promoteRes = await fetch(
+        `${server.baseUrl}/images/${imageBody.id}/variants/${variantId}`,
+        {
+          method: "PATCH",
+          headers: authedHeaders(accessToken, { "Content-Type": "application/json" }),
+          body: JSON.stringify({ activeImageId: builtImageId }),
+        },
+      );
+      if (!promoteRes.ok) {
+        const text = await promoteRes.text();
+        throw new Error(`variant promote failed (${promoteRes.status}): ${text}`);
+      }
 
       const sessionRes = await fetch(`${server.baseUrl}/agents`, {
         method: "POST",

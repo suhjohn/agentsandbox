@@ -3,6 +3,7 @@ import {
   asc,
   desc,
   eq,
+  inArray,
   isNotNull,
   isNull,
   lt,
@@ -16,18 +17,28 @@ import {
   imageVariantBuilds,
   images,
   imageVariants,
+  userImageVariantDefaults,
 } from "../db/schema";
 import { log } from "../log";
 import { runModalImageBuild, type BuildChunk } from "./build";
+import {
+  copyImageHookFiles,
+  deleteImageHookVolume,
+  getImageBuildHookDigest
+} from "./image-hooks";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
-export const DEFAULT_VARIANT_HEAD_IMAGE_REF = env.AGENT_BASE_IMAGE_REF;
+export const DEFAULT_VARIANT_IMAGE_REF = env.AGENT_BASE_IMAGE_REF;
 
 function normalizeNullableText(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeVariantImageId(value: string | null | undefined): string {
+  return normalizeNullableText(value) ?? DEFAULT_VARIANT_IMAGE_REF;
 }
 
 function normalizeSecretNames(values: readonly string[]): readonly string[] {
@@ -49,8 +60,17 @@ function isUuid(value: string): boolean {
   );
 }
 
-function hydrateImage(input: { readonly image: typeof images.$inferSelect }) {
-  return { ...input.image };
+function hydrateImage(input: {
+  readonly image: typeof images.$inferSelect;
+  readonly userDefaultVariantId?: string | null;
+}) {
+  const userDefaultVariantId = input.userDefaultVariantId ?? null;
+  return {
+    ...input.image,
+    userDefaultVariantId,
+    effectiveDefaultVariantId:
+      userDefaultVariantId ?? input.image.defaultVariantId ?? null,
+  };
 }
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -58,7 +78,20 @@ function hydrateImage(input: { readonly image: typeof images.$inferSelect }) {
 export type ImageVariantScope = "shared" | "personal";
 export type ImageVariantBuildStatus = "running" | "succeeded" | "failed";
 
-export type ImageVariantWithHead = typeof imageVariants.$inferSelect;
+export type ImageVariantRecord = typeof imageVariants.$inferSelect;
+
+export function getVariantActiveImageId(input: {
+  readonly activeImageId: string | null | undefined;
+}): string {
+  return normalizeVariantImageId(input.activeImageId);
+}
+
+export function getVariantDraftImageId(input: {
+  readonly draftImageId: string | null | undefined;
+  readonly activeImageId: string | null | undefined;
+}): string {
+  return normalizeNullableText(input.draftImageId) ?? getVariantActiveImageId(input);
+}
 
 // ── Environment Secrets ─────────────────────────────────────────────
 
@@ -129,7 +162,8 @@ const IMAGE_VARIANT_SELECT = {
   scope: imageVariants.scope,
   imageId: imageVariants.imageId,
   ownerUserId: imageVariants.ownerUserId,
-  headImageId: imageVariants.headImageId,
+  activeImageId: imageVariants.activeImageId,
+  draftImageId: imageVariants.draftImageId,
   createdAt: imageVariants.createdAt,
   updatedAt: imageVariants.updatedAt,
 };
@@ -223,7 +257,8 @@ export async function createImageVariant(input: {
   readonly name?: string;
   readonly scope: ImageVariantScope;
   readonly ownerUserId?: string | null;
-  readonly headImageId?: string | null;
+  readonly activeImageId?: string | null;
+  readonly draftImageId?: string | null;
 }) {
   if (!isUuid(input.imageId)) return null;
 
@@ -231,8 +266,9 @@ export async function createImageVariant(input: {
   const baseName = trimmedName.length > 0 ? trimmedName : "Variant";
   const ownerUserId =
     input.scope === "personal" ? input.ownerUserId ?? null : null;
-  const headImageId =
-    normalizeNullableText(input.headImageId) ?? DEFAULT_VARIANT_HEAD_IMAGE_REF;
+  const activeImageId = normalizeVariantImageId(input.activeImageId);
+  const draftImageId =
+    normalizeNullableText(input.draftImageId) ?? activeImageId;
 
   // UI can create personal variants without specifying a name. Auto-number
   // default names so users can create multiple personal variants per image.
@@ -263,7 +299,8 @@ export async function createImageVariant(input: {
           name: candidateName,
           scope: input.scope,
           ownerUserId,
-          headImageId,
+          activeImageId,
+          draftImageId,
         })
         .returning({ id: imageVariants.id });
       if (!created) return null;
@@ -287,7 +324,8 @@ export async function updateImageVariant(input: {
   readonly imageId: string;
   readonly variantId: string;
   readonly name?: string;
-  readonly headImageId?: string | null;
+  readonly activeImageId?: string | null;
+  readonly draftImageId?: string | null;
   readonly scope?: ImageVariantScope;
   readonly ownerUserId?: string | null;
 }) {
@@ -308,9 +346,12 @@ export async function updateImageVariant(input: {
   }
 
   let nextName = requestedName ?? existing.name;
-  const nextHeadImageId = Object.prototype.hasOwnProperty.call(input, "headImageId")
-    ? normalizeNullableText(input.headImageId) ?? DEFAULT_VARIANT_HEAD_IMAGE_REF
-    : existing.headImageId;
+  const nextActiveImageId = Object.prototype.hasOwnProperty.call(input, "activeImageId")
+    ? normalizeVariantImageId(input.activeImageId)
+    : getVariantActiveImageId(existing);
+  const nextDraftImageId = Object.prototype.hasOwnProperty.call(input, "draftImageId")
+    ? normalizeNullableText(input.draftImageId) ?? nextActiveImageId
+    : getVariantDraftImageId(existing);
   const shouldAutoRenameOnPersonalConflict =
     requestedName === null &&
     nextScope === "personal" &&
@@ -344,7 +385,8 @@ export async function updateImageVariant(input: {
         scope: nextScope,
         ownerUserId: nextOwnerUserId,
         name: nextName,
-        headImageId: nextHeadImageId,
+        activeImageId: nextActiveImageId,
+        draftImageId: nextDraftImageId,
         updatedAt: new Date(),
       })
       .where(
@@ -384,14 +426,16 @@ export async function deleteImageVariant(input: {
 export async function createDefaultImageVariantForImage(input: {
   readonly imageId: string;
   readonly ownerUserId: string;
-  readonly headImageId?: string | null;
+  readonly activeImageId?: string | null;
+  readonly draftImageId?: string | null;
 }) {
   return createImageVariant({
     imageId: input.imageId,
     name: "Default",
     scope: "shared",
     ownerUserId: input.ownerUserId,
-    headImageId: input.headImageId,
+    activeImageId: input.activeImageId,
+    draftImageId: input.draftImageId,
   });
 }
 
@@ -423,6 +467,107 @@ export async function getDefaultImageVariantForImage(imageId: string) {
   return getImageVariantForImage({ imageId, variantId: defaultVariantId });
 }
 
+export async function getUserImageDefaultVariantId(input: {
+  readonly imageId: string;
+  readonly userId: string;
+}) {
+  if (!isUuid(input.imageId) || !isUuid(input.userId)) return null;
+  const rows = await db
+    .select({ variantId: userImageVariantDefaults.variantId })
+    .from(userImageVariantDefaults)
+    .where(
+      and(
+        eq(userImageVariantDefaults.imageId, input.imageId),
+        eq(userImageVariantDefaults.userId, input.userId),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.variantId ?? null;
+}
+
+async function listUserImageDefaultVariantIds(input: {
+  readonly imageIds: readonly string[];
+  readonly userId: string;
+}) {
+  if (!isUuid(input.userId) || input.imageIds.length === 0) {
+    return new Map<string, string>();
+  }
+  const imageIds = input.imageIds.filter(isUuid);
+  if (imageIds.length === 0) return new Map<string, string>();
+  const rows = await db
+    .select({
+      imageId: userImageVariantDefaults.imageId,
+      variantId: userImageVariantDefaults.variantId,
+    })
+    .from(userImageVariantDefaults)
+    .where(
+      and(
+        eq(userImageVariantDefaults.userId, input.userId),
+        inArray(userImageVariantDefaults.imageId, imageIds),
+      ),
+    );
+  return new Map(rows.map((row) => [row.imageId, row.variantId]));
+}
+
+export async function getUserDefaultImageVariantForImage(input: {
+  readonly imageId: string;
+  readonly userId: string;
+}) {
+  const variantId = await getUserImageDefaultVariantId(input);
+  if (!variantId) return null;
+  return getImageVariantForImage({ imageId: input.imageId, variantId });
+}
+
+export async function setUserImageDefaultVariantId(input: {
+  readonly imageId: string;
+  readonly userId: string;
+  readonly variantId: string;
+}) {
+  if (
+    !isUuid(input.imageId) ||
+    !isUuid(input.userId) ||
+    !isUuid(input.variantId)
+  ) {
+    return null;
+  }
+  const [row] = await db
+    .insert(userImageVariantDefaults)
+    .values({
+      imageId: input.imageId,
+      userId: input.userId,
+      variantId: input.variantId,
+    })
+    .onConflictDoUpdate({
+      target: [
+        userImageVariantDefaults.userId,
+        userImageVariantDefaults.imageId,
+      ],
+      set: {
+        variantId: input.variantId,
+        updatedAt: new Date(),
+      },
+    })
+    .returning({ variantId: userImageVariantDefaults.variantId });
+  return row?.variantId ?? null;
+}
+
+export async function clearUserImageDefaultVariantId(input: {
+  readonly imageId: string;
+  readonly userId: string;
+}) {
+  if (!isUuid(input.imageId) || !isUuid(input.userId)) return false;
+  const rows = await db
+    .delete(userImageVariantDefaults)
+    .where(
+      and(
+        eq(userImageVariantDefaults.imageId, input.imageId),
+        eq(userImageVariantDefaults.userId, input.userId),
+      ),
+    )
+    .returning({ id: userImageVariantDefaults.id });
+  return rows.length > 0;
+}
+
 export async function resolveImageVariantForUser(input: {
   readonly imageId: string;
   readonly userId: string;
@@ -436,19 +581,23 @@ export async function resolveImageVariantForUser(input: {
     if (!explicitVariant) return null;
     return explicitVariant;
   }
+  const userDefaultVariant = await getUserDefaultImageVariantForImage({
+    imageId: input.imageId,
+    userId: input.userId,
+  });
+  if (userDefaultVariant) return userDefaultVariant;
   return getDefaultImageVariantForImage(input.imageId);
 }
 
-export async function setImageVariantHeadImageId(input: {
+export async function setImageVariantDraftImageId(input: {
   readonly variantId: string;
-  readonly headImageId: string | null;
+  readonly draftImageId: string | null;
 }) {
   if (!isUuid(input.variantId)) return null;
   const [updated] = await db
     .update(imageVariants)
     .set({
-      headImageId:
-        normalizeNullableText(input.headImageId) ?? DEFAULT_VARIANT_HEAD_IMAGE_REF,
+      draftImageId: normalizeVariantImageId(input.draftImageId),
       updatedAt: new Date(),
     })
     .where(eq(imageVariants.id, input.variantId))
@@ -557,7 +706,8 @@ export async function isDefaultVariant(input: {
 export async function createImage(input: {
   readonly name: string;
   readonly description?: string;
-  readonly headImageId?: string | null;
+  readonly activeImageId?: string | null;
+  readonly draftImageId?: string | null;
   readonly createdBy: string;
 }) {
   const [image] = await db
@@ -574,7 +724,8 @@ export async function createImage(input: {
   const defaultVariant = await createDefaultImageVariantForImage({
     imageId: image.id,
     ownerUserId: input.createdBy,
-    headImageId: input.headImageId,
+    activeImageId: input.activeImageId,
+    draftImageId: input.draftImageId,
   });
   if (!defaultVariant) throw new Error("Failed to create default image variant");
 
@@ -588,7 +739,7 @@ export async function createImage(input: {
   return hydrated;
 }
 
-export async function getImageById(id: string) {
+export async function getImageById(id: string, userId?: string | null) {
   if (!isUuid(id)) return null;
   const result = await db
     .select()
@@ -597,10 +748,17 @@ export async function getImageById(id: string) {
     .limit(1);
   const row = result[0] ?? null;
   if (!row) return null;
-  return hydrateImage({ image: row });
+  const userDefaultVariantId =
+    userId && isUuid(userId)
+      ? await getUserImageDefaultVariantId({ imageId: id, userId })
+      : null;
+  return hydrateImage({ image: row, userDefaultVariantId });
 }
 
-export async function getImageByIdIncludingArchived(id: string) {
+export async function getImageByIdIncludingArchived(
+  id: string,
+  userId?: string | null,
+) {
   if (!isUuid(id)) return null;
   const result = await db
     .select()
@@ -609,7 +767,11 @@ export async function getImageByIdIncludingArchived(id: string) {
     .limit(1);
   const row = result[0] ?? null;
   if (!row) return null;
-  return hydrateImage({ image: row });
+  const userDefaultVariantId =
+    userId && isUuid(userId)
+      ? await getUserImageDefaultVariantId({ imageId: id, userId })
+      : null;
+  return hydrateImage({ image: row, userDefaultVariantId });
 }
 
 export async function updateImage(
@@ -660,7 +822,18 @@ export async function unarchiveImage(id: string) {
 export async function deleteImage(id: string) {
   if (!isUuid(id)) return false;
   const result = await db.delete(images).where(eq(images.id, id)).returning();
-  return result.length > 0;
+  const deleted = result.length > 0;
+  if (deleted) {
+    try {
+      await deleteImageHookVolume(id);
+    } catch (err) {
+      log.warn("Failed to delete shared image hook volume after image delete.", {
+        imageId: id,
+        err,
+      });
+    }
+  }
+  return deleted;
 }
 
 export async function listImages(input: {
@@ -687,7 +860,16 @@ export async function listImages(input: {
   const hasMore = rows.length > input.limit;
   if (hasMore) rows.pop();
 
-  const hydrated = rows.map((row) => hydrateImage({ image: row }));
+  const userDefaultVariantIds = await listUserImageDefaultVariantIds({
+    imageIds: rows.map((row) => row.id),
+    userId: input.userId,
+  });
+  const hydrated = rows.map((row) =>
+    hydrateImage({
+      image: row,
+      userDefaultVariantId: userDefaultVariantIds.get(row.id) ?? null,
+    }),
+  );
 
   return {
     images: hydrated,
@@ -729,7 +911,8 @@ export async function cloneImage(input: {
   const defaultVariant = await createDefaultImageVariantForImage({
     imageId: cloned.id,
     ownerUserId: input.clonedByUserId,
-    headImageId: sourceDefaultVariant?.headImageId ?? null,
+    activeImageId: sourceDefaultVariant?.activeImageId ?? null,
+    draftImageId: sourceDefaultVariant?.draftImageId ?? null,
   });
   if (!defaultVariant) throw new Error("Failed to clone default variant");
 
@@ -737,6 +920,19 @@ export async function cloneImage(input: {
     imageId: cloned.id,
     variantId: defaultVariant.id,
   });
+
+  try {
+    await copyImageHookFiles({
+      sourceImageId: input.sourceImageId,
+      targetImageId: cloned.id,
+    });
+  } catch (err) {
+    throw new Error(
+      `Failed to clone shared image hooks: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
 
   const hydrated = await getImageById(cloned.id);
   if (!hydrated) throw new Error("Image not found after clone");
@@ -774,8 +970,7 @@ export async function runBuild(input: {
     throw new Error("Image variant is read-only");
   }
 
-  const baseImageId =
-    normalizeNullableText(variant.headImageId) ?? DEFAULT_VARIANT_HEAD_IMAGE_REF;
+  const baseImageId = getVariantDraftImageId(variant);
 
   let environmentSecretRows =
     [] as Awaited<ReturnType<typeof listEnvironmentSecrets>>;
@@ -790,12 +985,14 @@ export async function runBuild(input: {
   const environmentSecretNames = normalizeSecretNames(
     environmentSecretRows.map((secret) => secret.modalSecretName),
   );
+  const buildHookDigest = await getImageBuildHookDigest(input.imageRecordId);
 
   const buildInputPayload = {
     imageId: input.imageRecordId,
     variantId: variant.id,
     baseImageId,
     environmentSecretNames,
+    buildHookDigest,
   } as const;
   const inputHash = createHash("sha256")
     .update(JSON.stringify(buildInputPayload))
@@ -841,9 +1038,9 @@ export async function runBuild(input: {
       throw new Error("Failed to update build record");
     }
 
-    const updatedVariant = await setImageVariantHeadImageId({
+    const updatedVariant = await setImageVariantDraftImageId({
       variantId: variant.id,
-      headImageId: builtImageId,
+      draftImageId: builtImageId,
     });
     if (!updatedVariant) throw new Error("Image variant not found after build");
 

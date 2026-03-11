@@ -43,7 +43,7 @@ imageVariantBuilds
 ├── variantId
 ├── status               # running | succeeded | failed
 ├── inputPayload         # { imageId, variantId, baseImageId, environmentSecretNames, ... }
-├── outputImageId        # Modal im-* (OUTPUT of build) = effective "headImageId"
+├── outputImageId        # Modal im-* (OUTPUT of build) = latest draftImageId
 └── ...
 
 agents
@@ -93,17 +93,17 @@ agents
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  HEAD IMAGE (variant.headBuildId → build.outputImageId)                     │
-│  • OUTPUT of build process (Modal im-*)                                     │
-│  • What agent sandboxes are created from                                    │
-│  • Note: "headImageId" is a derived field (outputImageId for headBuildId)   │
+│  DRAFT IMAGE (variant.draftImageId)                                         │
+│  • OUTPUT of build process / setup sandbox snapshot (Modal im-*)            │
+│  • Used for future builds and setup sandboxes                               │
+│  • Distinct from activeImageId, which creates new agent sandboxes           │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  SNAPSHOT IMAGE (agent.snapshotImageId) - optional                          │
 │  • Runtime state of a running sandbox                                       │
-│  • Tried FIRST when recreating sandbox (before headImageId)                 │
+│  • Tried FIRST when recreating sandbox (before activeImageId)               │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -134,7 +134,7 @@ agents
 | ------------------------------------------ | ------------------------------------------- |
 | Uses default base                          | Click "Build" (picks up new registry image) |
 | Used "Activate Shell" (pinned baseImageId) | ❌ Must re-do interactive setup on new base |
-| Running sandbox                            | ❌ Must recreate from new headImageId       |
+| Running sandbox                            | ❌ Must recreate from new activeImageId     |
 
 **The "re-do Activate Shell" requirement is the anti-pattern we want to eliminate.**
 

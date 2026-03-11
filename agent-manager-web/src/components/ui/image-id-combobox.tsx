@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './popover'
 export type ImageIdOption = {
   readonly id: string
   readonly updatedAt: string
-  readonly isCurrent?: boolean
+  readonly labels?: readonly string[]
 }
 
 export type ImageIdComboboxProps = {
@@ -153,7 +153,9 @@ export function ImageIdCombobox({
                       </span>
                       <span className='text-xs text-text-tertiary'>
                         {formatDate(option.updatedAt)}
-                        {option.isCurrent && ' (current)'}
+                        {option.labels && option.labels.length > 0
+                          ? ` (${option.labels.join(', ')})`
+                          : ''}
                       </span>
                     </div>
                     <Check

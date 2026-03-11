@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db, closeDb } from "../src/db";
 import { globalSettings, images, imageVariants } from "../src/db/schema";
 import { log } from "../src/log";
-import { DEFAULT_VARIANT_HEAD_IMAGE_REF } from "../src/services/image.service";
+import { DEFAULT_VARIANT_IMAGE_REF } from "../src/services/image.service";
 
 const GLOBAL_SETTINGS_ID = "default";
 const IMAGE_NAME = "Default Coordinator";
@@ -50,7 +50,8 @@ async function getVariant(variantId: string | null) {
   const rows = await db
     .select({
       id: imageVariants.id,
-      headImageId: imageVariants.headImageId,
+      activeImageId: imageVariants.activeImageId,
+      draftImageId: imageVariants.draftImageId,
     })
     .from(imageVariants)
     .where(eq(imageVariants.id, variantId))
@@ -77,7 +78,8 @@ async function createDefaultCoordinatorImageRecord() {
       name: "Default",
       scope: "shared",
       ownerUserId: null,
-      headImageId: DEFAULT_VARIANT_HEAD_IMAGE_REF,
+      activeImageId: DEFAULT_VARIANT_IMAGE_REF,
+      draftImageId: DEFAULT_VARIANT_IMAGE_REF,
     })
     .returning({ id: imageVariants.id });
   if (!variant) throw new Error("Failed to create default image variant");
@@ -111,19 +113,20 @@ async function findReusableUnownedDefaultImage() {
   return rows[0] ?? null;
 }
 
-async function ensureVariantHeadImageId(variantId: string) {
+async function ensureVariantActiveImageId(variantId: string) {
   const variant = await getVariant(variantId);
-  if (variant?.headImageId?.trim()) return variant.headImageId.trim();
+  if (variant?.activeImageId?.trim()) return variant.activeImageId.trim();
 
   await db
     .update(imageVariants)
     .set({
-      headImageId: DEFAULT_VARIANT_HEAD_IMAGE_REF,
+      activeImageId: DEFAULT_VARIANT_IMAGE_REF,
+      draftImageId: variant?.draftImageId?.trim() || DEFAULT_VARIANT_IMAGE_REF,
       updatedAt: new Date(),
     })
     .where(eq(imageVariants.id, variantId));
 
-  return DEFAULT_VARIANT_HEAD_IMAGE_REF;
+  return DEFAULT_VARIANT_IMAGE_REF;
 }
 
 async function main() {
@@ -131,9 +134,9 @@ async function main() {
 
   const current = await getCurrentDefaultImage();
   if (current && current.deletedAt == null && current.defaultVariantId) {
-    const headImageId = await ensureVariantHeadImageId(current.defaultVariantId);
+    const activeImageId = await ensureVariantActiveImageId(current.defaultVariantId);
     console.log(
-      `Default coordinator image already configured: ${current.id} (${headImageId})`,
+      `Default coordinator image already configured: ${current.id} (${activeImageId})`,
     );
     return;
   }
@@ -144,7 +147,7 @@ async function main() {
       ? { imageId: reusable.id, variantId: reusable.defaultVariantId }
       : await createDefaultCoordinatorImageRecord();
 
-  const headImageId = await ensureVariantHeadImageId(target.variantId);
+  const activeImageId = await ensureVariantActiveImageId(target.variantId);
 
   await db
     .update(globalSettings)
@@ -157,11 +160,11 @@ async function main() {
   log.info("default_coordinator_image.ready", {
     imageId: target.imageId,
     variantId: target.variantId,
-    headImageId,
+    activeImageId,
   });
   console.log(`Default coordinator image ready: ${target.imageId}`);
   console.log(`Default variant: ${target.variantId}`);
-  console.log(`Head image id: ${headImageId}`);
+  console.log(`Active image id: ${activeImageId}`);
 }
 
 try {

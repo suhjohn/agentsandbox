@@ -38,6 +38,7 @@ import type { Region } from "../utils/region";
 import { DEFAULT_REGION, parseRegionText, serializeRegion } from "../utils/region";
 import { generateUuid7 } from "../utils/uuid7";
 import { env } from "../env";
+import { resolveImageVariantForUser } from "./image.service";
 import { withLock } from "./lock.service";
 
 function buildAgentViewerCondition(viewerUserId: string) {
@@ -194,7 +195,6 @@ async function getConfiguredDefaultCoordinatorImage() {
   const rows = await db
     .select({
       imageId: globalSettings.defaultCoordinatorImageId,
-      defaultVariantId: images.defaultVariantId,
       deletedAt: images.deletedAt,
     })
     .from(globalSettings)
@@ -205,10 +205,7 @@ async function getConfiguredDefaultCoordinatorImage() {
   const row = rows[0];
   if (!row?.imageId) return null;
   if (row.deletedAt != null) return null;
-  return {
-    imageId: row.imageId,
-    defaultVariantId: row.defaultVariantId ?? null,
-  };
+  return { imageId: row.imageId };
 }
 
 export async function getOrCreateDefaultCoordinatorAgentForUser(input: {
@@ -227,6 +224,11 @@ export async function getOrCreateDefaultCoordinatorAgentForUser(input: {
     async () => {
       const defaultImage = await getConfiguredDefaultCoordinatorImage();
       if (!defaultImage) return null;
+      const defaultVariant = await resolveImageVariantForUser({
+        imageId: defaultImage.imageId,
+        userId,
+      });
+      if (!defaultVariant) return null;
 
       const existingRows = await db
         .select()
@@ -257,7 +259,7 @@ export async function getOrCreateDefaultCoordinatorAgentForUser(input: {
 
       return createAgent({
         imageId: defaultImage.imageId,
-        imageVariantId: defaultImage.defaultVariantId,
+        imageVariantId: defaultVariant.id,
         createdBy: userId,
         region: parseRegionText(user.defaultRegion) ?? DEFAULT_REGION,
         type: "coordinator",

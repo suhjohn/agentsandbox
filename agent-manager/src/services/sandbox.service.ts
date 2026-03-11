@@ -15,14 +15,22 @@ import { env } from '../env'
 import {
   canUserAccessImageVariant,
   createImageVariantBuild,
-  DEFAULT_VARIANT_HEAD_IMAGE_REF,
+  DEFAULT_VARIANT_IMAGE_REF,
   getImageById,
   getImageByIdIncludingArchived,
   getImageVariantForImage,
+  getVariantActiveImageId,
+  getVariantDraftImageId,
   listEnvironmentSecrets,
   resolveImageVariantForUser,
-  setImageVariantHeadImageId
+  setImageVariantDraftImageId
 } from './image.service'
+import {
+  getImageHooksVolume,
+  IMAGE_HOOKS_ENV_VAR,
+  IMAGE_HOOKS_MOUNT_PATH,
+  IMAGE_START_HOOK_PATH
+} from './image-hooks'
 import { withLock } from './lock.service'
 import { getRedisClient } from './redis.service'
 import { tryResolveTailscaleFunnelPublicBaseUrl } from '../clients/tailscale'
@@ -70,13 +78,13 @@ export type SetupSandboxSshAccess = {
 export type CreateSetupSandboxResult = {
   readonly sandboxId: string
   readonly variantId: string
-  readonly headImageId: string
+  readonly draftImageId: string
   readonly ssh: SetupSandboxSshAccess | null
 }
 
 export type CloseSetupSandboxResult = {
   readonly baseImageId: string
-  readonly headImageId: string
+  readonly draftImageId: string
   readonly variantId: string
 }
 
@@ -254,7 +262,6 @@ const SETUP_TUNNELS_RPC_TIMEOUT_SECONDS = 3
 const SETUP_TUNNELS_READY_TIMEOUT_MS = 20_000
 const SETUP_TUNNELS_RETRY_INTERVAL_MS = 400
 const SETUP_SECRET_NAME = 'openinspect-build-secret'
-const SANDBOX_START_SCRIPT_PATH = '/home/agent/start.sh'
 
 function splitCommaList (raw: string | null | undefined): string[] {
   return (raw ?? '')
@@ -330,11 +337,10 @@ function buildSandboxStartCommand (): readonly string[] {
     '-lc',
     [
       'set -euo pipefail',
-      `if [[ -f ${shellQuote(SANDBOX_START_SCRIPT_PATH)} ]]; then`,
-      `  chmod 700 ${shellQuote(SANDBOX_START_SCRIPT_PATH)}`,
-      '  echo "[sandbox-start] running ~/start.sh..." >&2',
-      `  bash ${shellQuote(SANDBOX_START_SCRIPT_PATH)}`,
-      '  echo "[sandbox-start] ~/start.sh complete." >&2',
+      `if [[ -r ${shellQuote(IMAGE_START_HOOK_PATH)} ]]; then`,
+      '  echo "[sandbox-start] running shared start hook..." >&2',
+      `  bash ${shellQuote(IMAGE_START_HOOK_PATH)}`,
+      '  echo "[sandbox-start] shared start hook complete." >&2',
       'fi',
       `exec ${serverCommand}`
     ].join('\n')
@@ -992,7 +998,8 @@ async function createAgentSandboxModal (input: {
     AGENT_ID: input.agentId,
     AGENT_INTERNAL_AUTH_SECRET: input.runtimeInternalSecret,
     AGENT_MANAGER_BASE_URL: agentManagerBaseUrl,
-    AGENT_ALLOWED_ORIGINS: allowedOrigins
+    AGENT_ALLOWED_ORIGINS: allowedOrigins,
+    [IMAGE_HOOKS_ENV_VAR]: IMAGE_HOOKS_MOUNT_PATH
   }
 
   console.log(
@@ -1101,12 +1108,21 @@ async function createAgentSandboxModal (input: {
       ...environmentSecretRefs
     ].filter(v => v != null)
 
+    const hooksVolume = await withTimeout(
+      getImageHooksVolume({ imageId: input.dbImageId, readOnly: true }),
+      MODAL_SANDBOX_CREATE_STEP_TIMEOUT_MS,
+      `shared hook volume lookup (${input.dbImageId})`
+    )
+
     const sandbox = await withTimeout(
       modalClient.sandboxes.create(app, image, {
         command: [...sandboxStartCommand],
         experimentalOptions: { enable_docker: true },
         env: sandboxEnv,
         secrets,
+        volumes: {
+          [IMAGE_HOOKS_MOUNT_PATH]: hooksVolume
+        },
         encryptedPorts: [
           SESSION_SANDBOX_AGENT_API_PORT,
           SESSION_SANDBOX_OPENVSCODE_PORT,
@@ -1280,11 +1296,12 @@ export async function ensureAgentSandbox (input: {
                 variantId: agent.imageVariantId
               })
             : null
-        const headImageId =
-          baseVariant?.headImageId?.trim() || DEFAULT_VARIANT_HEAD_IMAGE_REF
+        const activeImageId = baseVariant
+          ? getVariantActiveImageId(baseVariant)
+          : DEFAULT_VARIANT_IMAGE_REF
 
         const snapshotImageId = agent.snapshotImageId?.trim() ?? ''
-        candidateImageIds = [snapshotImageId, headImageId].filter(
+        candidateImageIds = [snapshotImageId, activeImageId].filter(
           v => v.length > 0
         )
       }
@@ -1480,12 +1497,7 @@ export async function createSetupSandbox (input: {
   if (!variant || !canUserAccessImageVariant({ userId: input.userId, variant }))
     throw new Error('Image variant not found')
 
-  const currentHeadImageId =
-    typeof variant.headImageId === 'string' ? variant.headImageId.trim() : ''
-  const normalizedHeadImageId =
-    currentHeadImageId.length > 0
-      ? currentHeadImageId
-      : DEFAULT_VARIANT_HEAD_IMAGE_REF
+  const normalizedDraftImageId = getVariantDraftImageId(variant)
   const sshPublicKeys = normalizeSetupSandboxSshKeys(input.sshPublicKeys)
   const shouldEnableSsh = sshPublicKeys.length > 0
 
@@ -1493,23 +1505,23 @@ export async function createSetupSandbox (input: {
     createIfMissing: true
   })
 
-  const looksLikeModalImageId = normalizedHeadImageId
-    ? /^im-[a-z0-9]+$/i.test(normalizedHeadImageId)
+  const looksLikeModalImageId = normalizedDraftImageId
+    ? /^im-[a-z0-9]+$/i.test(normalizedDraftImageId)
     : false
   const explicitBaseImageId =
-    normalizedHeadImageId && looksLikeModalImageId
-      ? normalizedHeadImageId
+    normalizedDraftImageId && looksLikeModalImageId
+      ? normalizedDraftImageId
       : null
   const explicitBaseImageRef =
-    normalizedHeadImageId && !looksLikeModalImageId
-      ? await resolveBaseImageRefForRegistry(normalizedHeadImageId)
+    normalizedDraftImageId && !looksLikeModalImageId
+      ? await resolveBaseImageRefForRegistry(normalizedDraftImageId)
       : null
 
   const baseImageRef = explicitBaseImageRef
     ? explicitBaseImageRef
     : explicitBaseImageId
     ? null
-    : await resolveBaseImageRefForRegistry(DEFAULT_VARIANT_HEAD_IMAGE_REF)
+    : await resolveBaseImageRefForRegistry(DEFAULT_VARIANT_IMAGE_REF)
   const modalImage = explicitBaseImageId
     ? await modalClient.images.fromId(explicitBaseImageId)
     : modalClient.images.fromRegistry(baseImageRef!)
@@ -1541,6 +1553,10 @@ export async function createSetupSandbox (input: {
 
   let sandbox: Sandbox
   try {
+    const hooksVolume = await getImageHooksVolume({
+      imageId: input.imageId,
+      readOnly: false
+    })
     sandbox = await modalClient.sandboxes.create(app, modalImage, {
       command: [...SETUP_SERVER_COMMAND],
       env: {
@@ -1550,7 +1566,11 @@ export async function createSetupSandbox (input: {
         SECRET_SEED: env.SANDBOX_SIGNING_SECRET,
         AGENT_MANAGER_BASE_URL: agentManagerBaseUrl,
         AGENT_ALLOWED_ORIGINS: buildAllowedOrigins(agentManagerBaseUrl),
+        [IMAGE_HOOKS_ENV_VAR]: IMAGE_HOOKS_MOUNT_PATH,
         TERM: 'xterm-256color'
+      },
+      volumes: {
+        [IMAGE_HOOKS_MOUNT_PATH]: hooksVolume
       },
       ...(namedSecret ? { secrets: [namedSecret] } : {}),
       encryptedPorts: [SETUP_TERMINAL_PORT],
@@ -1560,8 +1580,8 @@ export async function createSetupSandbox (input: {
       ...(regions ? { regions } : {})
     })
   } catch (err) {
-    const source = normalizedHeadImageId
-      ? `headImage=${normalizedHeadImageId}`
+    const source = normalizedDraftImageId
+      ? `draftImage=${normalizedDraftImageId}`
       : `baseImageRef=${baseImageRef ?? 'unknown'}`
     log.error('Setup sandbox create failed', {
       imageId: input.imageId,
@@ -1593,8 +1613,8 @@ export async function createSetupSandbox (input: {
     const exitCode = await probe.wait()
     if (exitCode !== 0) throw new Error(`startup probe exited ${exitCode}`)
   } catch (err) {
-    const source = normalizedHeadImageId
-      ? `headImage=${normalizedHeadImageId}`
+    const source = normalizedDraftImageId
+      ? `draftImage=${normalizedDraftImageId}`
       : `baseImageRef=${baseImageRef ?? 'unknown'}`
     await safeTerminateSandbox(sandbox)
     throw new Error(
@@ -1624,8 +1644,8 @@ export async function createSetupSandbox (input: {
         knownHostsLine: `[${tunnel.host}]:${tunnel.port} ${sshMetadata.hostPublicKey}`
       }
     } catch (err) {
-      const source = normalizedHeadImageId
-        ? `headImage=${normalizedHeadImageId}`
+      const source = normalizedDraftImageId
+        ? `draftImage=${normalizedDraftImageId}`
         : `baseImageRef=${baseImageRef ?? 'unknown'}`
       await safeTerminateSandbox(sandbox)
       throw new Error(
@@ -1648,7 +1668,7 @@ export async function createSetupSandbox (input: {
   return {
     sandboxId: sandbox.sandboxId,
     variantId: input.variantId,
-    headImageId: normalizedHeadImageId,
+    draftImageId: normalizedDraftImageId,
     ssh: sshAccess
   }
 }
@@ -1747,10 +1767,7 @@ export async function closeSetupSandbox (input: {
   if (!variant)
     throw new Error('Image variant not found for setup sandbox session')
 
-  const baseImageId =
-    typeof variant.headImageId === 'string' && variant.headImageId.trim().length > 0
-      ? variant.headImageId.trim()
-      : DEFAULT_VARIANT_HEAD_IMAGE_REF
+  const baseImageId = getVariantDraftImageId(variant)
 
   const sandbox = await modalClient.sandboxes.fromId(session.sandboxId)
   const normalizeOwnershipResult = await execSandboxCommand({
@@ -1809,9 +1826,9 @@ export async function closeSetupSandbox (input: {
     finishedAt: new Date()
   })
 
-  const updatedVariant = await setImageVariantHeadImageId({
+  const updatedVariant = await setImageVariantDraftImageId({
     variantId: session.variantId,
-    headImageId: snapshotImageId
+    draftImageId: snapshotImageId
   })
   if (!updatedVariant)
     throw new Error('Image variant not found for setup sandbox session')
@@ -1821,7 +1838,7 @@ export async function closeSetupSandbox (input: {
 
   return {
     baseImageId,
-    headImageId: snapshotImageId,
+    draftImageId: snapshotImageId,
     variantId: session.variantId
   }
 }

@@ -1062,6 +1062,20 @@
                             ],
                             "format": "uuid"
                           },
+                          "userDefaultVariantId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid"
+                          },
+                          "effectiveDefaultVariantId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid"
+                          },
                           "createdAt": {
                             "anyOf": [
                               {
@@ -1151,7 +1165,10 @@
                     "type": "string",
                     "maxLength": 2000
                   },
-                  "headImageId": {
+                  "activeImageId": {
+                    "type": "string"
+                  },
+                  "draftImageId": {
                     "type": "string"
                   }
                 },
@@ -1196,6 +1213,20 @@
                       ]
                     },
                     "defaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "userDefaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "effectiveDefaultVariantId": {
                       "type": [
                         "string",
                         "null"
@@ -1309,6 +1340,20 @@
                       ]
                     },
                     "defaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "userDefaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "effectiveDefaultVariantId": {
                       "type": [
                         "string",
                         "null"
@@ -1458,6 +1503,20 @@
                       ]
                     },
                     "defaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "userDefaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "effectiveDefaultVariantId": {
                       "type": [
                         "string",
                         "null"
@@ -1667,7 +1726,10 @@
                               "null"
                             ]
                           },
-                          "headImageId": {
+                          "activeImageId": {
+                            "type": "string"
+                          },
+                          "draftImageId": {
                             "type": "string"
                           },
                           "createdAt": {
@@ -1698,7 +1760,8 @@
                           "name",
                           "scope",
                           "imageId",
-                          "headImageId",
+                          "activeImageId",
+                          "draftImageId",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -1771,7 +1834,10 @@
                     ],
                     "default": "personal"
                   },
-                  "headImageId": {
+                  "activeImageId": {
+                    "type": "string"
+                  },
+                  "draftImageId": {
                     "type": "string"
                   },
                   "setAsDefault": {
@@ -1813,7 +1879,10 @@
                         "null"
                       ]
                     },
-                    "headImageId": {
+                    "activeImageId": {
+                      "type": "string"
+                    },
+                    "draftImageId": {
                       "type": "string"
                     },
                     "createdAt": {
@@ -1844,7 +1913,8 @@
                     "name",
                     "scope",
                     "imageId",
-                    "headImageId",
+                    "activeImageId",
+                    "draftImageId",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -1933,7 +2003,11 @@
                     "minLength": 1,
                     "maxLength": 255
                   },
-                  "headImageId": {
+                  "activeImageId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "draftImageId": {
                     "type": "string",
                     "minLength": 1
                   },
@@ -1979,7 +2053,10 @@
                         "null"
                       ]
                     },
-                    "headImageId": {
+                    "activeImageId": {
+                      "type": "string"
+                    },
+                    "draftImageId": {
                       "type": "string"
                     },
                     "createdAt": {
@@ -2010,7 +2087,8 @@
                     "name",
                     "scope",
                     "imageId",
-                    "headImageId",
+                    "activeImageId",
+                    "draftImageId",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -2225,6 +2303,139 @@
                   },
                   "required": [
                     "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/images/{imageId}/variants/{variantId}/user-default": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Set user default image variant override",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "imageId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "variantId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/images/{imageId}/user-default": {
+      "delete": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Clear user default image variant override",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "imageId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
                   ]
                 }
               }
@@ -2511,7 +2722,7 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "headImageId": {
+                    "draftImageId": {
                       "type": "string"
                     },
                     "ssh": {
@@ -2553,7 +2764,7 @@
                   "required": [
                     "sandboxId",
                     "variantId",
-                    "headImageId"
+                    "draftImageId"
                   ]
                 }
               }
@@ -2640,7 +2851,7 @@
                     "baseImageId": {
                       "type": "string"
                     },
-                    "headImageId": {
+                    "draftImageId": {
                       "type": "string"
                     },
                     "variantId": {
@@ -2650,7 +2861,7 @@
                   },
                   "required": [
                     "baseImageId",
-                    "headImageId",
+                    "draftImageId",
                     "variantId"
                   ]
                 }
@@ -3190,6 +3401,20 @@
                       ],
                       "format": "uuid"
                     },
+                    "userDefaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "effectiveDefaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
                     "createdAt": {
                       "anyOf": [
                         {
@@ -3333,6 +3558,20 @@
                       ]
                     },
                     "defaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "userDefaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "effectiveDefaultVariantId": {
                       "type": [
                         "string",
                         "null"
@@ -3509,6 +3748,20 @@
                           ],
                           "format": "uuid"
                         },
+                        "userDefaultVariantId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "uuid"
+                        },
+                        "effectiveDefaultVariantId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "uuid"
+                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -3580,7 +3833,10 @@
                             "null"
                           ]
                         },
-                        "headImageId": {
+                        "activeImageId": {
+                          "type": "string"
+                        },
+                        "draftImageId": {
                           "type": "string"
                         },
                         "createdAt": {
@@ -3611,7 +3867,8 @@
                         "name",
                         "scope",
                         "imageId",
-                        "headImageId",
+                        "activeImageId",
+                        "draftImageId",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -3717,6 +3974,20 @@
                       ]
                     },
                     "defaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "userDefaultVariantId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "effectiveDefaultVariantId": {
                       "type": [
                         "string",
                         "null"

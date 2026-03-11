@@ -2,6 +2,12 @@ import { resolveGhcrDigest } from '@/clients/ghcr'
 import { env } from '@/env'
 import { ModalClient, type Secret, type Sandbox } from 'modal'
 import {
+  getImageHooksVolume,
+  IMAGE_BUILD_HOOK_PATH,
+  IMAGE_HOOKS_ENV_VAR,
+  IMAGE_HOOKS_MOUNT_PATH
+} from './image-hooks'
+import {
   isLikelyModalImageId,
   normalizeHeadImageId
 } from '../utils/image-source'
@@ -13,7 +19,6 @@ const SANDBOX_WORKSPACES_DIR = `${SANDBOX_AGENT_HOME}/workspaces`
 const SANDBOX_ROOT_DIR = `${SANDBOX_AGENT_HOME}/runtime`
 const SANDBOX_CODEX_HOME = `${SANDBOX_AGENT_HOME}/.codex`
 const SANDBOX_PI_DIR = `${SANDBOX_AGENT_HOME}/.pi`
-const SANDBOX_BUILD_SCRIPT_PATH = `${SANDBOX_AGENT_HOME}/build.sh`
 
 const BUILD_APP_NAME = 'image-builder'
 const DEFAULT_MODAL_SECRET_NAME = 'openinspect-build-secret'
@@ -115,6 +120,10 @@ export async function runModalImageBuild (input: {
       )
     }
   }
+  const hooksVolume = await getImageHooksVolume({
+    imageId: input.imageId,
+    readOnly: true
+  })
 
   logStep('Creating sandbox...')
   const sandbox = await modalClient.sandboxes.create(app, imageForSandbox, {
@@ -131,7 +140,11 @@ export async function runModalImageBuild (input: {
       CODEX_HOME: SANDBOX_CODEX_HOME,
       PI_CODING_AGENT_DIR: SANDBOX_PI_DIR,
       HOME: SANDBOX_AGENT_HOME,
+      [IMAGE_HOOKS_ENV_VAR]: IMAGE_HOOKS_MOUNT_PATH,
       SECRET_SEED: env.SANDBOX_SIGNING_SECRET
+    },
+    volumes: {
+      [IMAGE_HOOKS_MOUNT_PATH]: hooksVolume
     },
     ...(modalSecrets.length > 0 ? { secrets: modalSecrets } : {}),
     timeoutMs: CREATE_TIMEOUT_MS
@@ -159,11 +172,10 @@ export async function runModalImageBuild (input: {
     ]
 
     setupSteps.push({
-      label: 'image build hook',
+      label: 'shared image build hook',
       command: [
-        'if [[ -f ' + shellQuote(SANDBOX_BUILD_SCRIPT_PATH) + ' ]]; then',
-        '  chmod 700 ' + shellQuote(SANDBOX_BUILD_SCRIPT_PATH),
-        '  ' + shellQuote(SANDBOX_BUILD_SCRIPT_PATH),
+        'if [[ -r ' + shellQuote(IMAGE_BUILD_HOOK_PATH) + ' ]]; then',
+        '  bash ' + shellQuote(IMAGE_BUILD_HOOK_PATH),
         'fi'
       ].join('\n'),
       errorPrefix: 'build hook'

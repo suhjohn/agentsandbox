@@ -109,7 +109,10 @@ export const imageVariants = pgTable(
     ownerUserId: uuid("owner_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    headImageId: text("head_image_id")
+    activeImageId: text("active_image_id")
+      .notNull()
+      .default("ghcr.io/suhjohn/agentsandbox:latest"),
+    draftImageId: text("draft_image_id")
       .notNull()
       .default("ghcr.io/suhjohn/agentsandbox:latest"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -128,6 +131,37 @@ export const imageVariants = pgTable(
       table.ownerUserId,
       table.name,
     ),
+  ],
+);
+
+export const userImageVariantDefaults = pgTable(
+  "user_image_variant_defaults",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    imageId: uuid("image_id")
+      .notNull()
+      .references(() => images.id, { onDelete: "cascade" }),
+    variantId: uuid("variant_id")
+      .notNull()
+      .references(() => imageVariants.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("user_image_variant_defaults_user_image_idx").on(
+      table.userId,
+      table.imageId,
+    ),
+    index("user_image_variant_defaults_user_id_idx").on(table.userId),
+    index("user_image_variant_defaults_image_id_idx").on(table.imageId),
+    index("user_image_variant_defaults_variant_id_idx").on(table.variantId),
   ],
 );
 

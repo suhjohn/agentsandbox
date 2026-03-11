@@ -287,6 +287,10 @@ export type GetImages200DataItem = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
+  /** @nullable */
+  userDefaultVariantId?: string | null;
+  /** @nullable */
+  effectiveDefaultVariantId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -306,7 +310,8 @@ export type PostImagesBody = {
   name: string;
   /** @maxLength 2000 */
   description?: string;
-  headImageId?: string;
+  activeImageId?: string;
+  draftImageId?: string;
 };
 
 export type PostImages201Visibility = typeof PostImages201Visibility[keyof typeof PostImages201Visibility];
@@ -327,6 +332,10 @@ export type PostImages201 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
+  /** @nullable */
+  userDefaultVariantId?: string | null;
+  /** @nullable */
+  effectiveDefaultVariantId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -350,6 +359,10 @@ export type GetImagesImageId200 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
+  /** @nullable */
+  userDefaultVariantId?: string | null;
+  /** @nullable */
+  effectiveDefaultVariantId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -387,6 +400,10 @@ export type PatchImagesImageId200 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
+  /** @nullable */
+  userDefaultVariantId?: string | null;
+  /** @nullable */
+  effectiveDefaultVariantId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -423,7 +440,8 @@ export type GetImagesImageIdVariants200DataItem = {
   imageId: string;
   /** @nullable */
   ownerUserId?: string | null;
-  headImageId: string;
+  activeImageId: string;
+  draftImageId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -451,7 +469,8 @@ export type PostImagesImageIdVariantsBody = {
    */
   name?: string;
   scope?: PostImagesImageIdVariantsBodyScope;
-  headImageId?: string;
+  activeImageId?: string;
+  draftImageId?: string;
   setAsDefault?: boolean;
 };
 
@@ -470,7 +489,8 @@ export type PostImagesImageIdVariants201 = {
   imageId: string;
   /** @nullable */
   ownerUserId?: string | null;
-  headImageId: string;
+  activeImageId: string;
+  draftImageId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -498,7 +518,9 @@ export type PatchImagesImageIdVariantsVariantIdBody = {
    */
   name?: string;
   /** @minLength 1 */
-  headImageId?: string;
+  activeImageId?: string;
+  /** @minLength 1 */
+  draftImageId?: string;
   scope?: PatchImagesImageIdVariantsVariantIdBodyScope;
 };
 
@@ -517,7 +539,8 @@ export type PatchImagesImageIdVariantsVariantId200 = {
   imageId: string;
   /** @nullable */
   ownerUserId?: string | null;
-  headImageId: string;
+  activeImageId: string;
+  draftImageId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -555,6 +578,22 @@ export type PostImagesImageIdVariantsVariantIdDefault400 = {
 };
 
 export type PostImagesImageIdVariantsVariantIdDefault404 = {
+  error: string;
+};
+
+export type PostImagesImageIdVariantsVariantIdUserDefault200 = {
+  ok: boolean;
+};
+
+export type PostImagesImageIdVariantsVariantIdUserDefault404 = {
+  error: string;
+};
+
+export type DeleteImagesImageIdUserDefault200 = {
+  ok: boolean;
+};
+
+export type DeleteImagesImageIdUserDefault404 = {
   error: string;
 };
 
@@ -625,7 +664,7 @@ export type PostImagesImageIdSetupSandbox200Ssh = {
 export type PostImagesImageIdSetupSandbox200 = {
   sandboxId: string;
   variantId: string;
-  headImageId: string;
+  draftImageId: string;
   /** @nullable */
   ssh?: PostImagesImageIdSetupSandbox200Ssh;
 };
@@ -640,7 +679,7 @@ export type PostImagesImageIdSetupSandbox404 = {
 
 export type DeleteImagesImageIdSetupSandboxSandboxId200 = {
   baseImageId: string;
-  headImageId: string;
+  draftImageId: string;
   variantId: string;
 };
 
@@ -748,6 +787,10 @@ export type PostImagesImageIdArchive200 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
+  /** @nullable */
+  userDefaultVariantId?: string | null;
+  /** @nullable */
+  effectiveDefaultVariantId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -779,6 +822,10 @@ export type PostImagesImageIdUnarchive200 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
+  /** @nullable */
+  userDefaultVariantId?: string | null;
+  /** @nullable */
+  effectiveDefaultVariantId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -814,6 +861,10 @@ export type PostImagesImageIdBuild200Image = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
+  /** @nullable */
+  userDefaultVariantId?: string | null;
+  /** @nullable */
+  effectiveDefaultVariantId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -834,7 +885,8 @@ export type PostImagesImageIdBuild200Variant = {
   imageId: string;
   /** @nullable */
   ownerUserId?: string | null;
-  headImageId: string;
+  activeImageId: string;
+  draftImageId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -874,6 +926,10 @@ export type PostImagesImageIdClone201 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
+  /** @nullable */
+  userDefaultVariantId?: string | null;
+  /** @nullable */
+  effectiveDefaultVariantId?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -4689,6 +4745,186 @@ export const usePostImagesImageIdVariantsVariantIdDefault = <TError = PostImages
         TContext
       > => {
       return useMutation(getPostImagesImageIdVariantsVariantIdDefaultMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Set user default image variant override
+ */
+export type postImagesImageIdVariantsVariantIdUserDefaultResponse200 = {
+  data: PostImagesImageIdVariantsVariantIdUserDefault200
+  status: 200
+}
+
+export type postImagesImageIdVariantsVariantIdUserDefaultResponse404 = {
+  data: PostImagesImageIdVariantsVariantIdUserDefault404
+  status: 404
+}
+    
+export type postImagesImageIdVariantsVariantIdUserDefaultResponseSuccess = (postImagesImageIdVariantsVariantIdUserDefaultResponse200) & {
+  headers: Headers;
+};
+export type postImagesImageIdVariantsVariantIdUserDefaultResponseError = (postImagesImageIdVariantsVariantIdUserDefaultResponse404) & {
+  headers: Headers;
+};
+
+export type postImagesImageIdVariantsVariantIdUserDefaultResponse = (postImagesImageIdVariantsVariantIdUserDefaultResponseSuccess | postImagesImageIdVariantsVariantIdUserDefaultResponseError)
+
+export const getPostImagesImageIdVariantsVariantIdUserDefaultUrl = (imageId: string,
+    variantId: string,) => {
+
+
+  
+
+  return `/images/${imageId}/variants/${variantId}/user-default`
+}
+
+export const postImagesImageIdVariantsVariantIdUserDefault = async (imageId: string,
+    variantId: string, options?: RequestInit): Promise<postImagesImageIdVariantsVariantIdUserDefaultResponse> => {
+  
+  return orvalFetcher<postImagesImageIdVariantsVariantIdUserDefaultResponse>(getPostImagesImageIdVariantsVariantIdUserDefaultUrl(imageId,variantId),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+
+export const getPostImagesImageIdVariantsVariantIdUserDefaultMutationOptions = <TError = PostImagesImageIdVariantsVariantIdUserDefault404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdVariantsVariantIdUserDefault>>, TError,{imageId: string;variantId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdVariantsVariantIdUserDefault>>, TError,{imageId: string;variantId: string}, TContext> => {
+
+const mutationKey = ['postImagesImageIdVariantsVariantIdUserDefault'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postImagesImageIdVariantsVariantIdUserDefault>>, {imageId: string;variantId: string}> = (props) => {
+          const {imageId,variantId} = props ?? {};
+
+          return  postImagesImageIdVariantsVariantIdUserDefault(imageId,variantId,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostImagesImageIdVariantsVariantIdUserDefaultMutationResult = NonNullable<Awaited<ReturnType<typeof postImagesImageIdVariantsVariantIdUserDefault>>>
+    
+    export type PostImagesImageIdVariantsVariantIdUserDefaultMutationError = PostImagesImageIdVariantsVariantIdUserDefault404
+
+    /**
+ * @summary Set user default image variant override
+ */
+export const usePostImagesImageIdVariantsVariantIdUserDefault = <TError = PostImagesImageIdVariantsVariantIdUserDefault404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdVariantsVariantIdUserDefault>>, TError,{imageId: string;variantId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postImagesImageIdVariantsVariantIdUserDefault>>,
+        TError,
+        {imageId: string;variantId: string},
+        TContext
+      > => {
+      return useMutation(getPostImagesImageIdVariantsVariantIdUserDefaultMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Clear user default image variant override
+ */
+export type deleteImagesImageIdUserDefaultResponse200 = {
+  data: DeleteImagesImageIdUserDefault200
+  status: 200
+}
+
+export type deleteImagesImageIdUserDefaultResponse404 = {
+  data: DeleteImagesImageIdUserDefault404
+  status: 404
+}
+    
+export type deleteImagesImageIdUserDefaultResponseSuccess = (deleteImagesImageIdUserDefaultResponse200) & {
+  headers: Headers;
+};
+export type deleteImagesImageIdUserDefaultResponseError = (deleteImagesImageIdUserDefaultResponse404) & {
+  headers: Headers;
+};
+
+export type deleteImagesImageIdUserDefaultResponse = (deleteImagesImageIdUserDefaultResponseSuccess | deleteImagesImageIdUserDefaultResponseError)
+
+export const getDeleteImagesImageIdUserDefaultUrl = (imageId: string,) => {
+
+
+  
+
+  return `/images/${imageId}/user-default`
+}
+
+export const deleteImagesImageIdUserDefault = async (imageId: string, options?: RequestInit): Promise<deleteImagesImageIdUserDefaultResponse> => {
+  
+  return orvalFetcher<deleteImagesImageIdUserDefaultResponse>(getDeleteImagesImageIdUserDefaultUrl(imageId),
+  {      
+    ...options,
+    method: 'DELETE'
+    
+    
+  }
+);}
+
+
+
+
+export const getDeleteImagesImageIdUserDefaultMutationOptions = <TError = DeleteImagesImageIdUserDefault404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteImagesImageIdUserDefault>>, TError,{imageId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteImagesImageIdUserDefault>>, TError,{imageId: string}, TContext> => {
+
+const mutationKey = ['deleteImagesImageIdUserDefault'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteImagesImageIdUserDefault>>, {imageId: string}> = (props) => {
+          const {imageId} = props ?? {};
+
+          return  deleteImagesImageIdUserDefault(imageId,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteImagesImageIdUserDefaultMutationResult = NonNullable<Awaited<ReturnType<typeof deleteImagesImageIdUserDefault>>>
+    
+    export type DeleteImagesImageIdUserDefaultMutationError = DeleteImagesImageIdUserDefault404
+
+    /**
+ * @summary Clear user default image variant override
+ */
+export const useDeleteImagesImageIdUserDefault = <TError = DeleteImagesImageIdUserDefault404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteImagesImageIdUserDefault>>, TError,{imageId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteImagesImageIdUserDefault>>,
+        TError,
+        {imageId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteImagesImageIdUserDefaultMutationOptions(options), queryClient);
     }
     
 /**

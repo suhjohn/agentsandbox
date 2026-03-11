@@ -25,7 +25,7 @@ Behavior:
 - Missing secret names are logged to build stderr and ignored.
 - Always runs an internal setup sequence before snapshotting:
   - source sync via `agent-go/docker/update-agent-go-source.sh` when available, forcing the checkout to match the remote branch and failing the build if sync fails,
-  - then `/home/agent/build.sh` if that file exists in the selected base image,
+  - then `/shared/image-hooks/build.sh` if that file exists in the image-scoped shared hook volume,
   - then verifies `/opt/agentsandbox/agent-go/build-artifacts/agent-server` exists and is executable before snapshotting.
 
 ## image.service.ts
@@ -34,9 +34,13 @@ Behavior:
 
 Behavior:
 - Image records no longer persist build/start script text.
-- Build customization now comes from `/home/agent/build.sh` inside the variant head image.
-- Agent sandbox startup customization now comes from `/home/agent/start.sh` inside the variant head image.
-- `cloneImage` copies the source default variant head image so those filesystem hooks come along with the cloned variant state.
+- Build customization now comes from `/shared/image-hooks/build.sh` in the image-scoped shared hook volume.
+- Agent sandbox startup customization now comes from `/shared/image-hooks/start.sh` in the image-scoped shared hook volume.
+- `cloneImage` copies the source image's shared hook files into the cloned image's hook volume and still copies the source default variant active/draft image pointers.
+- Hydrated image responses expose:
+  - `defaultVariantId`: the image-level shared fallback.
+  - `userDefaultVariantId`: the current user's override for that image, or `null`.
+  - `effectiveDefaultVariantId`: `userDefaultVariantId ?? defaultVariantId`.
 
 ### `createImageVariant(input)`
 
@@ -46,14 +50,18 @@ createImageVariant(input: {
   readonly name?: string
   readonly scope: "shared" | "personal"
   readonly ownerUserId?: string | null
-  readonly headImageId?: string | null
+  readonly activeImageId?: string | null
+  readonly draftImageId?: string | null
 })
 ```
 
 Behavior:
 - For `scope: "personal"`, the variant row is owned by `ownerUserId` (and `ownerUserId` is cleared for `scope: "shared"`).
 - When `name` is omitted/blank for a personal variant, the service auto-numbers `Variant`, `Variant 2`, `Variant 3`, ... per `(imageId, ownerUserId)` to avoid unique-index collisions.
-- `headImageId` is the single live image pointer for a variant. When callers omit it, the variant starts from the default ref `ghcr.io/suhjohn/agentsandbox:latest`.
+- `activeImageId` is the stable image pointer used for new agent sandboxes.
+- `draftImageId` is the mutable image pointer used for builds and setup sandboxes.
+- When callers omit `activeImageId`, the variant starts from the default ref `ghcr.io/suhjohn/agentsandbox:latest`.
+- When callers omit `draftImageId`, it defaults to the resolved `activeImageId`.
 
 ### `updateImageVariant(input)`
 
@@ -62,7 +70,8 @@ updateImageVariant(input: {
   readonly imageId: string
   readonly variantId: string
   readonly name?: string
-  readonly headImageId?: string | null
+  readonly activeImageId?: string | null
+  readonly draftImageId?: string | null
   readonly scope?: "shared" | "personal"
   readonly ownerUserId?: string | null
 })
@@ -70,7 +79,8 @@ updateImageVariant(input: {
 
 Behavior:
 - Updates the variant name when `name` is provided.
-- Updates the variant `headImageId` when `headImageId` is provided.
+- Updates the variant `activeImageId` when `activeImageId` is provided.
+- Updates the variant `draftImageId` when `draftImageId` is provided.
 - Updates the variant scope between `personal` and `shared`.
 - Shared variants clear `ownerUserId`; personal variants assign `ownerUserId`.
 - When switching a variant to `personal`, the service auto-renames on conflict using `Variant`, `Variant 2`, ... style suffixing for that owner scope.
@@ -90,8 +100,17 @@ runBuild(input: {
 Behavior:
 - Passes environment secret names to `runModalImageBuild` via `environmentSecretNames`.
 - Includes `environmentSecretNames` in the build input payload/hash.
-- Uses the variant's current `headImageId` as the build base and records that value as `baseImageId` in the build input payload.
-- On success, writes the produced Modal image id directly back to the variant's `headImageId`.
+- Uses the variant's current `draftImageId` as the build base and records that value as `baseImageId` in the build input payload.
+- On success, writes the produced Modal image id directly back to the variant's `draftImageId`.
+
+### `setUserImageDefaultVariantId(input)` / `clearUserImageDefaultVariantId(input)` / `resolveImageVariantForUser(input)`
+
+Behavior:
+- Per-user image default overrides are stored in `user_image_variant_defaults` keyed by `(userId, imageId)`.
+- `resolveImageVariantForUser` resolves in this order:
+  - explicit `variantId` when one is supplied,
+  - then the user's override for that image,
+  - then the image's shared `defaultVariantId`.
 
 ## agent.service.ts
 
@@ -127,7 +146,7 @@ getOrCreateDefaultCoordinatorAgentForUser(input: {
 Behavior:
 - Resolves `global_settings.defaultCoordinatorImageId` as the bootstrap image source.
 - Reuses the user's latest non-archived root coordinator agent for that default image when one already exists.
-- Otherwise creates a new private `type: "coordinator"` agent for that user, seeded from the default image and its default variant.
+- Otherwise creates a new private `type: "coordinator"` agent for that user, seeded from the default image and that user's effective default variant for the image.
 - Uses a per-user lock to avoid creating duplicate bootstrap coordinator agents during concurrent login or `/me` requests.
 
 ### `listAgents(input)`
@@ -286,7 +305,7 @@ createSetupSandbox(input: {
 }): Promise<{
   readonly sandboxId: string
   readonly variantId: string
-  readonly headImageId: string
+  readonly draftImageId: string
   readonly ssh: {
     readonly username: string
     readonly host: string
@@ -299,9 +318,9 @@ createSetupSandbox(input: {
 ```
 
 Behavior:
-- Creates the setup sandbox from the selected variant `headImageId`.
+- Creates the setup sandbox from the selected variant `draftImageId`.
 - Continues to expose the existing setup terminal/API over encrypted port `8080`.
-- When `sshPublicKeys` is provided and non-empty, also exposes sandbox port `22` over a Modal unencrypted TCP tunnel, writes the uploaded keys to `/root/.ssh/authorized_keys`, configures setup-sandbox SSH login for `root`, starts `sshd`, and returns the tunnel TCP host/port plus host verification material.
+- When `sshPublicKeys` is provided and non-empty, also exposes sandbox port `22` over a Modal unencrypted TCP tunnel, provisions `authorized_keys` for the `agent` user, starts `sshd`, and returns the tunnel host/port plus host verification material.
 - When `sshPublicKeys` is omitted or empty, no SSH tunnel is provisioned and `ssh` is returned as `null`.
 - Setup sandbox SSH access is creation-time only; callers are expected to terminate and recreate the setup sandbox to rotate keys or reissue access.
 
@@ -313,15 +332,15 @@ closeSetupSandbox(input: {
   readonly sandboxId: string
 }): Promise<{
   readonly baseImageId: string
-  readonly headImageId: string
+  readonly draftImageId: string
   readonly variantId: string
 }>
 ```
 
 Behavior:
 - Before snapshotting, recursively normalizes `/home/agent` ownership back to `agent:agent` so files created over root SSH remain usable to the normal agent user in later sandboxes.
-- Snapshots the live setup sandbox filesystem, writes the snapshot image id back to the variant's `headImageId`, and terminates the sandbox.
-- Records the previous variant `headImageId` as `baseImageId` in a succeeded `image_variant_builds` row with source `setup-sandbox`.
+- Snapshots the live setup sandbox filesystem, writes the snapshot image id back to the variant's `draftImageId`, and terminates the sandbox.
+- Records the previous variant `draftImageId` as `baseImageId` in a succeeded `image_variant_builds` row with source `setup-sandbox`.
 
 ### `ensureAgentSandbox(input)`
 
@@ -341,7 +360,8 @@ Behavior:
   - image-bound environment secrets from `listEnvironmentSecrets(agent.imageId)`.
 - Session sandboxes only inject runtime-specific env overrides (`PORT`, Docker toggles, auth/base-URL values, and optional `PI_CODING_AGENT_DIR`) and otherwise rely on the `agent-go` image/entrypoint defaults for paths and UI token wiring.
 - Setup sandboxes likewise rely on container defaults for home/workspace paths, but explicitly force `AGENT_RUNTIME_MODE=server`.
-- When `/home/agent/start.sh` exists in the source image, sandbox startup runs that hook once before `/opt/agentsandbox/agent-go/build-artifacts/agent-server serve`.
+- Session sandboxes mount the image-scoped shared hook volume read-only at `/shared/image-hooks`; setup sandboxes mount the same volume read-write.
+- When `/shared/image-hooks/start.sh` exists in the shared hook volume, session sandbox startup runs that hook once before `/opt/agentsandbox/agent-go/build-artifacts/agent-server serve`.
 - If an agent no longer has an owner (`created_by` is `NULL`), sandbox creation fails with `409 Agent owner is missing`.
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.
 - Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).

@@ -71,7 +71,7 @@ describe("Images build sandbox (real)", () => {
   });
 
   it(
-    "build sandbox runs ~/build.sh on default GHCR base image and snapshots marker artifacts",
+    "build sandbox runs shared /shared/image-hooks/build.sh and snapshots marker artifacts",
     async () => {
       const modalTokenId = process.env.MODAL_TOKEN_ID?.trim() ?? "";
       const modalTokenSecret = process.env.MODAL_TOKEN_SECRET?.trim() ?? "";
@@ -131,14 +131,14 @@ describe("Images build sandbox (real)", () => {
             "bash",
             "-lc",
             [
-              "cat > /home/agent/build.sh <<'EOF'",
+              "mkdir -p /shared/image-hooks",
+              "cat > /shared/image-hooks/build.sh <<'EOF'",
               "set -euo pipefail",
               "mkdir -p /opt/agent-image/test-markers",
               "code=0",
               "curl -fsS --max-time 3 http://127.0.0.1:48213/health >/opt/agent-image/test-markers/build-sandbox-health.out 2>/opt/agent-image/test-markers/build-sandbox-health.err || code=$?",
               "printf '%s\\n' \"$code\" >/opt/agent-image/test-markers/build-sandbox-health.exit",
               "EOF",
-              "chmod 700 /home/agent/build.sh",
             ].join("\n"),
           ],
           { stdout: "pipe", stderr: "pipe", timeoutMs: 10_000 },
@@ -164,12 +164,11 @@ describe("Images build sandbox (real)", () => {
           throw new Error(`image build failed (${buildRes.status}): ${text}`);
         }
         const buildBody = (await buildRes.json()) as {
-          variant?: { headImageId?: string | null; currentImageId?: string | null };
+          variant?: { draftImageId?: string | null };
         };
-        const currentImageId =
-          buildBody.variant?.headImageId ?? buildBody.variant?.currentImageId;
-        expect(typeof currentImageId).toBe("string");
-        builtImageId = (currentImageId ?? "").trim();
+        const draftImageId = buildBody.variant?.draftImageId;
+        expect(typeof draftImageId).toBe("string");
+        builtImageId = (draftImageId ?? "").trim();
         expect(builtImageId.length).toBeGreaterThan(0);
 
         const modal = new ModalClient();
