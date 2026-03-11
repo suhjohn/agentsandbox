@@ -24,6 +24,7 @@ export function SettingsRow (props: {
 export function SettingsRowLeft (props: {
   readonly title: ReactNode
   readonly description?: ReactNode
+  readonly descriptionClassName?: string
   readonly leading?: ReactNode
 }) {
   return (
@@ -34,7 +35,7 @@ export function SettingsRowLeft (props: {
           {props.title}
         </div>
         {props.description ? (
-          <div className='text-xs text-text-tertiary line-clamp-2'>
+          <div className={cn('text-xs text-text-tertiary line-clamp-2', props.descriptionClassName)}>
             {props.description}
           </div>
         ) : null}

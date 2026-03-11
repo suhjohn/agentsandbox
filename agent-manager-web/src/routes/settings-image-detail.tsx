@@ -1901,8 +1901,7 @@ export function SettingsImageDetailPage () {
                       Open a terminal to edit the current draft image directly.
                       Closing snapshots the filesystem and updates the variant
                       draft image. New agent sandboxes continue to use the
-                      active image. Agent sandboxes also run ~/start.sh on boot
-                      if that file exists.
+                      active image.
                     </div>
                   </div>
                   {!setupSandboxId && (
@@ -2181,22 +2180,34 @@ export function SettingsImageDetailPage () {
                 </div>
               ) : null}
 
-              <div className='border-t border-border px-4 py-3'>
-                <div className='text-xs font-medium text-text-secondary'>
-                  Shared hook files
-                </div>
-                <div className='mt-1 text-xs text-text-tertiary'>
-                  <code className='font-mono text-text-primary'>
-                    /shared/image-hooks/build.sh
-                  </code>{' '}
-                  runs during image builds if present and is shared across all
-                  variants of this image.{' '}
-                  <code className='font-mono text-text-primary'>
-                    /shared/image-hooks/start.sh
-                  </code>{' '}
-                  runs before agent-server starts in new agent sandboxes if
-                  present.
-                </div>
+              <div className='border-t border-border'>
+                <SettingsRow
+                  left={
+                    <SettingsRowLeft
+                      title='Shared volume'
+                      descriptionClassName='line-clamp-none'
+                      description={
+                        <>
+                          <code className='font-mono text-text-primary'>
+                            /shared/image-hooks/build.sh
+                          </code>{' '}
+                          runs during image builds if present and is shared across
+                          all variants of this image.{' '}
+                          <code className='font-mono text-text-primary'>
+                            /shared/image-hooks/start.sh
+                          </code>{' '}
+                          runs before agent-server starts in new agent sandboxes if
+                          present.{' '}
+                          <code className='font-mono text-text-primary'>
+                            /shared
+                          </code>{' '}
+                          is a mounted Modal volume, so hook edits persist
+                          immediately without waiting for a setup sandbox snapshot.
+                        </>
+                      }
+                    />
+                  }
+                />
               </div>
             </div>
             {buildLogs.length > 0 ? (

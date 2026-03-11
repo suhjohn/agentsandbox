@@ -36,6 +36,7 @@ Behavior:
 - Image records no longer persist build/start script text.
 - Build customization now comes from `/shared/image-hooks/build.sh` in the image-scoped shared hook volume.
 - Agent sandbox startup customization now comes from `/shared/image-hooks/start.sh` in the image-scoped shared hook volume.
+- `/shared` is a mounted Modal volume inside these sandboxes, so hook-file edits persist independently of setup-sandbox filesystem snapshots.
 - `cloneImage` copies the source image's shared hook files into the cloned image's hook volume and still copies the source default variant active/draft image pointers.
 - Hydrated image responses expose:
   - `defaultVariantId`: the image-level shared fallback.

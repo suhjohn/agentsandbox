@@ -34,7 +34,8 @@ export async function getImageBuildHookDigest (
   imageId: string
 ): Promise<string | null> {
   const client = new ModalVolumeClient({
-    volumeName: getImageHooksVolumeName(imageId)
+    volumeName: getImageHooksVolumeName(imageId),
+    ensureExists: false
   })
   const remotePath = '/build.sh'
   if (!(await client.exists({ remotePath }))) return null
@@ -47,7 +48,8 @@ export async function copyImageHookFiles (input: {
   readonly targetImageId: string
 }): Promise<void> {
   const source = new ModalVolumeClient({
-    volumeName: getImageHooksVolumeName(input.sourceImageId)
+    volumeName: getImageHooksVolumeName(input.sourceImageId),
+    ensureExists: false
   })
   const target = new ModalVolumeClient({
     volumeName: getImageHooksVolumeName(input.targetImageId)
