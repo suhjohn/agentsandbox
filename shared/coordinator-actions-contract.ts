@@ -143,11 +143,6 @@ export const COORDINATOR_SEMANTIC_ACTIONS = [
     description: "Set image description field on settings image detail page.",
   },
   {
-    id: "settings.image_detail.set_setup_script",
-    version: 1,
-    description: "Set setup script text on settings image detail page.",
-  },
-  {
     id: "settings.image_detail.save",
     version: 1,
     description: "Save pending settings image detail draft changes.",

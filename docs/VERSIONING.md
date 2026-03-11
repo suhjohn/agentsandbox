@@ -28,7 +28,6 @@ When a user has done interactive work via "Activate Shell" (OAuth, credentials, 
 ```
 images
 ├── id
-├── setupScript          # User's build script (pip install, apt install, etc.)
 ├── defaultVariantId
 └── createdBy
 
@@ -43,7 +42,7 @@ imageVariantBuilds
 ├── id
 ├── variantId
 ├── status               # running | succeeded | failed
-├── inputPayload         # { imageId, variantId, baseImageId, setupScript, environmentSecretNames, ... }
+├── inputPayload         # { imageId, variantId, baseImageId, environmentSecretNames, ... }
 ├── outputImageId        # Modal im-* (OUTPUT of build) = effective "headImageId"
 └── ...
 
@@ -89,7 +88,7 @@ agents
                               ┌───────┴───────┐
                               │    BUILD      │
                               │ baseImageId + │
-                              │  setupScript  │
+                              │  ~/build.sh   │
                               └───────┬───────┘
                                       │
                                       ▼
@@ -357,12 +356,11 @@ echo "[upgrade] Running upgrade check..."
 curl -fsSL "\${AGENT_RELEASES_URL:-https://releases.example.com/agent}/upgrade.sh" | bash || {
   echo "[upgrade] Upgrade failed or unavailable, continuing..."
 }
-echo "[upgrade] Starting user setup script..."
+echo "[upgrade] Starting image build hook..."
 `.trim();
 
 // In runModalImageBuild():
-const effectiveSetupScript =
-  UPGRADE_PREAMBLE + "\n\n" + (input.setupScript || "");
+// execute /home/agent/build.sh when present
 ```
 
 ### New Upgrade Paths

@@ -9,7 +9,6 @@ This document tracks exported service signatures and behavior details that other
 ```ts
 runModalImageBuild(input: {
   readonly imageId: string
-  readonly setupScript: string
   readonly environmentSecretNames?: readonly string[]
   readonly baseImageId?: string | null
   readonly modalSecretName?: string
@@ -19,14 +18,14 @@ runModalImageBuild(input: {
 
 Behavior:
 - Creates a Modal build sandbox.
-- Sets a minimal setup-script environment in that sandbox: `AGENT_HOME`, `AGENT_ID`, `WORKSPACES_DIR`, `ROOT_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and `HOME`.
+- Sets a minimal build environment in that sandbox: `AGENT_HOME`, `AGENT_ID`, `WORKSPACES_DIR`, `ROOT_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and `HOME`.
 - Attaches Modal secrets by name from:
   - `input.modalSecretName` (or default `openinspect-build-secret`), and
   - `input.environmentSecretNames`.
 - Missing secret names are logged to build stderr and ignored.
 - Always runs an internal setup sequence before snapshotting:
   - source sync via `agent-go/docker/update-agent-go-source.sh` when available, forcing the checkout to match the remote branch and failing the build if sync fails,
-  - then `input.setupScript` if non-empty,
+  - then `/home/agent/build.sh` if that file exists in the selected base image,
   - then verifies `/opt/agentsandbox/agent-go/build-artifacts/agent-server` exists and is executable before snapshotting.
 
 ## image.service.ts
@@ -34,10 +33,10 @@ Behavior:
 ### `createImage(input)` / `updateImage(id, input)` / `cloneImage(input)`
 
 Behavior:
-- Image records now persist two separate script fields:
-  - `setupScript`: runs during image build.
-  - `runScript`: runs each time an agent sandbox starts from that image.
-- `cloneImage` copies both script fields onto the cloned image.
+- Image records no longer persist build/start script text.
+- Build customization now comes from `/home/agent/build.sh` inside the variant head image.
+- Agent sandbox startup customization now comes from `/home/agent/start.sh` inside the variant head image.
+- `cloneImage` copies the source default variant head image so those filesystem hooks come along with the cloned variant state.
 
 ### `createImageVariant(input)`
 
@@ -54,7 +53,7 @@ createImageVariant(input: {
 Behavior:
 - For `scope: "personal"`, the variant row is owned by `ownerUserId` (and `ownerUserId` is cleared for `scope: "shared"`).
 - When `name` is omitted/blank for a personal variant, the service auto-numbers `Variant`, `Variant 2`, `Variant 3`, ... per `(imageId, ownerUserId)` to avoid unique-index collisions.
-- `headImageId` is the single live image pointer for a variant. When callers omit it, the variant starts from the default ref `suhjohn/agentdesktop`.
+- `headImageId` is the single live image pointer for a variant. When callers omit it, the variant starts from the default ref `ghcr.io/suhjohn/agentsandbox:latest`.
 
 ### `updateImageVariant(input)`
 
@@ -63,6 +62,7 @@ updateImageVariant(input: {
   readonly imageId: string
   readonly variantId: string
   readonly name?: string
+  readonly headImageId?: string | null
   readonly scope?: "shared" | "personal"
   readonly ownerUserId?: string | null
 })
@@ -70,6 +70,7 @@ updateImageVariant(input: {
 
 Behavior:
 - Updates the variant name when `name` is provided.
+- Updates the variant `headImageId` when `headImageId` is provided.
 - Updates the variant scope between `personal` and `shared`.
 - Shared variants clear `ownerUserId`; personal variants assign `ownerUserId`.
 - When switching a variant to `personal`, the service auto-renames on conflict using `Variant`, `Variant 2`, ... style suffixing for that owner scope.
@@ -339,7 +340,7 @@ Behavior:
   - image-bound environment secrets from `listEnvironmentSecrets(agent.imageId)`.
 - Session sandboxes only inject runtime-specific env overrides (`PORT`, Docker toggles, auth/base-URL values, and optional `PI_CODING_AGENT_DIR`) and otherwise rely on the `agent-go` image/entrypoint defaults for paths and UI token wiring.
 - Setup sandboxes likewise rely on container defaults for home/workspace paths, but explicitly force `AGENT_RUNTIME_MODE=server`.
-- When the source image has a non-empty `runScript`, sandbox startup is wrapped so that script runs once before `/opt/agentsandbox/agent-go/build-artifacts/agent-server serve`.
+- When `/home/agent/start.sh` exists in the source image, sandbox startup runs that hook once before `/opt/agentsandbox/agent-go/build-artifacts/agent-server serve`.
 - If an agent no longer has an owner (`created_by` is `NULL`), sandbox creation fails with `409 Agent owner is missing`.
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.
 - Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).

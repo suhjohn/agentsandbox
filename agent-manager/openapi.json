@@ -1062,18 +1062,6 @@
                             ],
                             "format": "uuid"
                           },
-                          "setupScript": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
-                          "runScript": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          },
                           "createdAt": {
                             "anyOf": [
                               {
@@ -1163,12 +1151,6 @@
                     "type": "string",
                     "maxLength": 2000
                   },
-                  "setupScript": {
-                    "type": "string"
-                  },
-                  "runScript": {
-                    "type": "string"
-                  },
                   "headImageId": {
                     "type": "string"
                   }
@@ -1219,18 +1201,6 @@
                         "null"
                       ],
                       "format": "uuid"
-                    },
-                    "setupScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "runScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     },
                     "createdAt": {
                       "anyOf": [
@@ -1345,18 +1315,6 @@
                       ],
                       "format": "uuid"
                     },
-                    "setupScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "runScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
                     "createdAt": {
                       "anyOf": [
                         {
@@ -1460,12 +1418,6 @@
                   "description": {
                     "type": "string",
                     "maxLength": 2000
-                  },
-                  "setupScript": {
-                    "type": "string"
-                  },
-                  "runScript": {
-                    "type": "string"
                   }
                 }
               }
@@ -1511,18 +1463,6 @@
                         "null"
                       ],
                       "format": "uuid"
-                    },
-                    "setupScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "runScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     },
                     "createdAt": {
                       "anyOf": [
@@ -1988,6 +1928,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "headImageId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "scope": {
                     "type": "string",
                     "enum": [
@@ -3241,18 +3190,6 @@
                       ],
                       "format": "uuid"
                     },
-                    "setupScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "runScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
                     "createdAt": {
                       "anyOf": [
                         {
@@ -3401,18 +3338,6 @@
                         "null"
                       ],
                       "format": "uuid"
-                    },
-                    "setupScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "runScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     },
                     "createdAt": {
                       "anyOf": [
@@ -3583,18 +3508,6 @@
                             "null"
                           ],
                           "format": "uuid"
-                        },
-                        "setupScript": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "runScript": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
                         },
                         "createdAt": {
                           "anyOf": [
@@ -3809,18 +3722,6 @@
                         "null"
                       ],
                       "format": "uuid"
-                    },
-                    "setupScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "runScript": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
                     },
                     "createdAt": {
                       "anyOf": [

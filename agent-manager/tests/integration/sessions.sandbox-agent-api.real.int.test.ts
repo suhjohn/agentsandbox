@@ -113,7 +113,6 @@ describe("Sessions sandbox agent API (real)", () => {
         body: JSON.stringify({
           name: `Agent base image (test ${new Date().toISOString()})`,
           visibility: "private",
-          setupScript: "",
         }),
       });
       expect(imageRes.status).toBe(201);

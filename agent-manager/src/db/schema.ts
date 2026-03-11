@@ -77,8 +77,6 @@ export const images = pgTable(
       .default("private"),
     name: text("name").default(sql`gen_random_uuid()::text`).notNull(),
     description: text("description"),
-    setupScript: text("setup_script"),
-    runScript: text("run_script"),
     defaultVariantId: uuid("default_variant_id"),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -113,7 +111,7 @@ export const imageVariants = pgTable(
     }),
     headImageId: text("head_image_id")
       .notNull()
-      .default("suhjohn/agentdesktop"),
+      .default("ghcr.io/suhjohn/agentsandbox:latest"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

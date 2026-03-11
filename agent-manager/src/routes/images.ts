@@ -71,16 +71,12 @@ function isMissingTableError (err: unknown, ...tableNames: string[]): boolean {
 const createImageSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(2000).optional(),
-  setupScript: z.string().optional(),
-  runScript: z.string().optional(),
   headImageId: z.string().optional()
 })
 
 const updateImageSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  description: z.string().max(2000).optional(),
-  setupScript: z.string().optional(),
-  runScript: z.string().optional()
+  description: z.string().max(2000).optional()
 })
 
 const listImagesQuery = z.object({
@@ -128,8 +124,6 @@ const imageSchema = z.object({
   description: z.string().nullable().optional(),
   createdBy: z.string().nullable(),
   defaultVariantId: z.string().uuid().nullable().optional(),
-  setupScript: z.string().nullable().optional(),
-  runScript: z.string().nullable().optional(),
   createdAt: z.string().or(z.date()),
   updatedAt: z.string().or(z.date()),
   deletedAt: z.string().or(z.date()).nullable().optional()
@@ -182,6 +176,7 @@ const createVariantSchema = z.object({
 
 const updateVariantSchema = z.object({
   name: z.string().min(1).max(255).optional(),
+  headImageId: z.string().min(1).optional(),
   scope: z.enum(['shared', 'personal'] as const).optional()
 })
 
@@ -304,8 +299,6 @@ registerRoute(
     const image = await createImage({
       name: body.name,
       description: body.description,
-      setupScript: body.setupScript,
-      runScript: body.runScript,
       headImageId: body.headImageId,
       createdBy: user.id
     })
@@ -529,6 +522,7 @@ registerRoute(
       imageId,
       variantId,
       name: body.name,
+      headImageId: body.headImageId,
       scope: body.scope,
       ownerUserId: user.id
     })
@@ -829,18 +823,10 @@ registerRoute(
     const patch: {
       readonly name?: string
       readonly description?: string
-      readonly setupScript?: string | null
-      readonly runScript?: string | null
     } = {
       ...(typeof body.name === 'string' ? { name: body.name } : {}),
       ...(typeof body.description === 'string'
         ? { description: body.description }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(body, 'setupScript')
-        ? { setupScript: body.setupScript }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(body, 'runScript')
-        ? { runScript: body.runScript }
         : {})
     }
     const image = await updateImage(imageId, {

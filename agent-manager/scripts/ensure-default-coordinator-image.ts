@@ -7,7 +7,7 @@ import { DEFAULT_VARIANT_HEAD_IMAGE_REF } from "../src/services/image.service";
 const GLOBAL_SETTINGS_ID = "default";
 const IMAGE_NAME = "Default Coordinator";
 const IMAGE_DESCRIPTION =
-  "Prebuilt default image for coordinator agents. No setup script. No run script.";
+  "Prebuilt default image for coordinator agents.";
 
 async function ensureGlobalSettingsRow() {
   await db
@@ -65,8 +65,6 @@ async function createDefaultCoordinatorImageRecord() {
       visibility: "public",
       name: IMAGE_NAME,
       description: IMAGE_DESCRIPTION,
-      setupScript: null,
-      runScript: null,
       createdBy: null,
     })
     .returning({ id: images.id });

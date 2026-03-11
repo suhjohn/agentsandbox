@@ -19,6 +19,7 @@ RUN set -eux; \
   apt-get update; \
   apt-get install -y --no-install-recommends \
   autocutsel \
+  apt-utils \
   ca-certificates \
   curl \
   dumb-init \
@@ -39,12 +40,27 @@ RUN set -eux; \
   ripgrep \
   runit \
   tar \
+  vim \
   websockify \
   novnc \
   x11vnc \
   xvfb; \
-  if ! getent group agent >/dev/null 2>&1; then groupadd --gid 1000 agent; fi; \
-  if ! id -u agent >/dev/null 2>&1; then useradd --uid 1000 --gid agent --home-dir /home/agent --shell /bin/bash agent; fi; \
+  if getent group agent >/dev/null 2>&1; then \
+    agent_gid="$(getent group agent | cut -d: -f3)"; \
+  elif getent group 1000 >/dev/null 2>&1; then \
+    groupadd agent; \
+    agent_gid="$(getent group agent | cut -d: -f3)"; \
+  else \
+    groupadd --gid 1000 agent; \
+    agent_gid=1000; \
+  fi; \
+  if ! id -u agent >/dev/null 2>&1; then \
+    if getent passwd 1000 >/dev/null 2>&1; then \
+      useradd --gid "${agent_gid}" --home-dir /home/agent --shell /bin/bash agent; \
+    else \
+      useradd --uid 1000 --gid "${agent_gid}" --home-dir /home/agent --shell /bin/bash agent; \
+    fi; \
+  fi; \
   ln -sfn /usr/bin/fdfind /usr/local/bin/fd; \
   mkdir -p /home/agent/workspaces /tmp/.X11-unix /etc/apt/keyrings; \
   chown -R agent:agent /home/agent; \

@@ -1,4 +1,4 @@
-export const DEFAULT_HEAD_IMAGE_ID = 'suhjohn/agentdesktop'
+export const DEFAULT_HEAD_IMAGE_ID = 'ghcr.io/suhjohn/agentsandbox:latest'
 
 export function normalizeHeadImageId (
   value: string | null | undefined

@@ -10,7 +10,6 @@
 // - Coordinator session tools: post/get_coordinator_session, post_coordinator_session_coordinatorSessionId_runs, get/patch/delete_coordinator_session_coordinatorSessionId, get_coordinator_session_coordinatorSessionId_messages
 
 import type { ReactNode } from "react";
-import { CodeBlock } from "./code-block";
 
 // =============================================================================
 // Common Types
@@ -30,10 +29,6 @@ interface Image {
   description?: string | null;
   createdBy: string;
   currentImageId?: string | null;
-  setupScript?: string | null;
-  imageSetupScript?: string | null;
-  // Deprecated alias (kept for backward compatibility).
-  imageBuildScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -57,10 +52,6 @@ interface CreateImageArgs {
     name: string;
     description?: string;
     visibility?: Visibility;
-    setupScript?: string;
-    imageSetupScript?: string;
-    // Deprecated alias (kept for backward compatibility).
-    imageBuildScript?: string;
   };
 }
 
@@ -74,10 +65,6 @@ interface UpdateImageArgs {
     name?: string;
     description?: string;
     visibility?: Visibility;
-    setupScript?: string;
-    imageSetupScript?: string;
-    // Deprecated alias (kept for backward compatibility).
-    imageBuildScript?: string;
   };
 }
 
@@ -325,19 +312,14 @@ export const ToolUIMap: Record<string, ToolUI> = {
   post_images: {
     args: ({ args }) => {
       const a = args as CreateImageArgs;
-      const script =
-        a.body?.setupScript ?? a.body?.imageSetupScript ?? a.body?.imageBuildScript;
       return (
-        <div className="text-sm space-y-2">
+        <div className="text-sm">
           <div>
             <span className="font-medium">Create image:</span> {a.body?.name}
             {a.body?.visibility && (
               <span className="text-muted-foreground"> ({a.body.visibility})</span>
             )}
           </div>
-          {script && (
-            <CodeBlock code={script} language="bash" />
-          )}
         </div>
       );
     },
@@ -376,17 +358,12 @@ export const ToolUIMap: Record<string, ToolUI> = {
   patch_images_imageId: {
     args: ({ args }) => {
       const a = args as UpdateImageArgs;
-      const script =
-        a.body?.setupScript ?? a.body?.imageSetupScript ?? a.body?.imageBuildScript;
       return (
-        <div className="text-sm space-y-2">
+        <div className="text-sm">
           <div>
             <span className="font-medium">Update image:</span> {a.params?.imageId}
             {a.body?.name && <span> → {a.body.name}</span>}
           </div>
-          {script && (
-            <CodeBlock code={script} language="bash" />
-          )}
         </div>
       );
     },

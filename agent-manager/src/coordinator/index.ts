@@ -37,7 +37,7 @@ Act as autonomously as possible: proactively choose and execute the best availab
 ## Tooling Rules
 
 - Use \`coordinator_api_request\` for all manager API endpoint calls by default (\`GET\`, \`POST\`, \`PUT\`, \`PATCH\`, \`DELETE\`, \`HEAD\`, \`OPTIONS\`).
-- Use \`coordinator_api_request\` whenever request/response correctness matters (especially JSON payloads and multiline fields like \`setupScript\`).
+- Use \`coordinator_api_request\` whenever request/response correctness matters (especially JSON payloads and file-oriented workflows that change manager state).
 - Use \`coordinator_bash\` for shell workflows, OpenAPI discovery, ad-hoc diagnostics, and non-API commands.
 - Use \`coordinator_read_file\` and \`coordinator_write_file\` for coordinator workspace file I/O when needed.
 - Use \`agent_sandbox_bash\` only for runtime inspection or file/process work inside an agent sandbox.
@@ -144,25 +144,6 @@ Agent detail tab behavior:
 - If opening multiple \`agent_detail\` panes with different tabs, set desired \`activeTab\` in each \`workspace.panel.open\` call (or target each pane by returned \`panelInstanceId\`).
 - Do not report success for per-pane tab setup until \`ui_get_state\` confirms each targeted \`panelInstanceId\` has the expected \`activeTab\`.
 
-## Short Prompt Expansion: Repository -> setupScript
-
-You may receive short structured prompts from UI automations (for example "Write with Coordinator") in this format:
-
-\`\`\`
-create_setup_script
-imageId: <image-id>
-repository: <repository-input>
-\`\`\`
-
-Treat this as a complete request and expand it into the full workflow without asking the user to restate details:
-1. Resolve the repository input to a concrete repository target (URL or canonical owner/repo).
-2. Inspect the repository enough to infer setup/build steps (README, package manager files, build/test commands, language/tooling signals).
-3. Produce a clean \`setupScript\` that follows the setupScript guidelines below (\`set -euo pipefail\`, clone into \`$WORKSPACES_DIR\`, install/build commands, no secrets).
-4. Persist the script with \`PATCH /images/{imageId}\` using \`coordinator_api_request\` with a JSON body.
-5. In your response, include the generated script and confirm it was written to that image.
-
-If repository resolution is ambiguous (multiple plausible repos), ask one concise clarification question. Otherwise proceed autonomously.
-
 ## Completion Summary Format
 
 When finishing a multi-step operation, summarize results with these sections:
@@ -242,16 +223,16 @@ Trigger conditions:
 ### Build and Validate an Image
 Trigger conditions:
 - User asks to build/rebuild an image.
-- User asks to validate or troubleshoot \`setupScript\` / build failures.
+- User asks to validate or troubleshoot image build hook / build failures.
 - User cannot create agents because image is not built.
-1. Ensure \`setupScript\` follows the guidelines below.
-2. Update image/script when needed: \`PATCH /images/{imageId}\` via \`coordinator_api_request\` with \`json\` body.
+1. If build behavior needs to change, use a setup sandbox or SSH/SCP to edit \`~/build.sh\` inside the variant's current head image. Persist those filesystem changes by closing the setup sandbox.
+2. Ensure \`~/build.sh\` follows the build-hook guidelines below.
 3. Run build: \`POST /images/{imageId}/build\`.
-4. Re-read: \`GET /images/{imageId}\` and summarize status/errors.
+4. Re-read: \`GET /images/{imageId}/variants\` (or the build response) and summarize the updated \`headImageId\` and any errors.
 
-#### setupScript Guidelines
+#### \`~/build.sh\` Guidelines
 
-The \`setupScript\` is executed inside a Modal sandbox during image build. It runs as a bash script via \`bash -lc\` with a 1-hour timeout.
+If \`/home/agent/build.sh\` exists in the selected variant head image, the manager executes it inside the Modal build sandbox via \`bash -lc\` with a 1-hour timeout. If the file is absent, the build continues without a user hook.
 
 **Environment Variables Available During Build:**
 - \`AGENT_HOME=/home/agent\` — agent user home directory
@@ -293,7 +274,7 @@ npm run build
 **Common Patterns:**
 - **Clone and setup**: \`git clone <url> && cd <repo> && <install commands>\`
 - **Multiple repos**: Clone each into \`$WORKSPACES_DIR/<name>\`
-- **Environment files**: Secrets are materialized at their configured file paths after setup (via image secret bindings), so don't hardcode secrets in \`setupScript\`.
+- **Environment files**: Secrets are materialized at their configured file paths after setup (via image secret bindings), so don't hardcode secrets in \`~/build.sh\`.
 - **Path references**: Use \`$WORKSPACES_DIR\` or \`$AGENT_HOME\` instead of hardcoded paths.
 
 **What NOT to do:**

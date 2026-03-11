@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft, Copy, Loader2, Bot } from 'lucide-react'
+import { ArrowLeft, Copy, Loader2, Terminal, Key } from 'lucide-react'
 
 import { useAuth } from '../lib/auth'
 import {
@@ -34,7 +34,6 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import Editor from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
 import {
   VariantCombobox,
@@ -57,11 +56,7 @@ import {
   SettingsRow,
   SettingsRowLeft
 } from '@/components/settings'
-import {
-  getChatRuntimeController,
-  getDialogRuntimeController,
-  registerSettingsImageDetailRuntimeController
-} from '@/coordinator-actions/runtime-bridge'
+import { registerSettingsImageDetailRuntimeController } from '@/coordinator-actions/runtime-bridge'
 
 type Image = GetImagesImageId200
 type ImageVariant = GetImagesImageIdVariants200DataItem
@@ -74,59 +69,22 @@ type SetupTerminalConnection = {
   readonly authToken: string
 }
 
-const SETUP_SCRIPT_AUTOSAVE_DEBOUNCE_MS = 1200
-const OPEN_COORDINATOR_EVENT = 'agent-manager-web:open-coordinator'
+const DEFAULT_HEAD_IMAGE_ID = 'ghcr.io/suhjohn/agentsandbox:latest'
+
+const IMAGE_AUTOSAVE_DEBOUNCE_MS = 1200
 const AUTOSAVE_TOAST_ID = 'settings-image-detail-autosave'
-
-async function waitForDialogChatController (
-  timeoutMs: number
-): Promise<ReturnType<typeof getChatRuntimeController>> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    const controller = getChatRuntimeController('dialog')
-    if (controller) return controller
-    await new Promise<void>(resolve => {
-      globalThis.window.setTimeout(resolve, 50)
-    })
-  }
-  return null
-}
-
-function buildCoordinatorSetupScriptPrompt (input: {
-  readonly imageId: string
-  readonly repository: string
-}): string {
-  return [
-    'create_setup_script',
-    `imageId: ${input.imageId}`,
-    `repository: ${input.repository}`
-  ].join('\n')
-}
-
-function buildCoordinatorSessionTitle (repository: string): string {
-  const cleaned = repository
-    .trim()
-    .replace(/^https?:\/\//, '')
-    .replace(/\.git$/i, '')
-  const clipped = cleaned.length > 56 ? `${cleaned.slice(0, 53)}...` : cleaned
-  return `Setup script: ${clipped || 'repository'}`
-}
 
 type ImageDraft = {
   readonly name: string
   readonly description: string
   readonly visibility: ImageVisibility
-  readonly setupScript: string
-  readonly runScript: string
 }
 
 function toDraft (image: Image): ImageDraft {
   return {
     name: image.name,
     description: image.description ?? '',
-    visibility: image.visibility,
-    setupScript: image.setupScript ?? '',
-    runScript: image.runScript ?? ''
+    visibility: image.visibility
   }
 }
 
@@ -134,8 +92,6 @@ type ImagePatch = {
   readonly name?: string
   readonly description?: string
   readonly visibility?: ImageVisibility
-  readonly setupScript?: string
-  readonly runScript?: string
 }
 
 function buildPatch (initial: ImageDraft, draft: ImageDraft): ImagePatch {
@@ -145,13 +101,6 @@ function buildPatch (initial: ImageDraft, draft: ImageDraft): ImagePatch {
     patch.description = draft.description
   if (draft.visibility !== initial.visibility)
     patch.visibility = draft.visibility
-
-  if (draft.setupScript !== initial.setupScript) {
-    patch.setupScript = draft.setupScript
-  }
-  if (draft.runScript !== initial.runScript) {
-    patch.runScript = draft.runScript
-  }
 
   return patch as ImagePatch
 }
@@ -197,14 +146,21 @@ export function SettingsImageDetailPage () {
   const [showArchiveConfirmDialog, setShowArchiveConfirmDialog] =
     useState(false)
   const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
-  const [showCoordinatorPromptDialog, setShowCoordinatorPromptDialog] =
-    useState(false)
-  const [coordinatorRepositoryInput, setCoordinatorRepositoryInput] =
-    useState('')
   const [environmentModalSecretName, setEnvironmentModalSecretName] =
     useState('')
   const [environmentContents, setEnvironmentContents] = useState('')
   const [environmentDraftTouched, setEnvironmentDraftTouched] = useState(false)
+  const [variantNameDraft, setVariantNameDraft] = useState('')
+  const [extendMode, setExtendMode] = useState<'browser' | 'ssh' | 'api'>(
+    'browser'
+  )
+  const [sshPublicKey, setSshPublicKey] = useState('')
+  const [setupSshInfo, setSetupSshInfo] = useState<{
+    readonly username: string
+    readonly host: string
+    readonly port: number
+    readonly knownHostsLine: string
+  } | null>(null)
 
   const imageQuery = useGetImagesImageId(imageId, {
     query: {
@@ -335,6 +291,18 @@ export function SettingsImageDetailPage () {
       })
     }
 
+    if (!seen.has(DEFAULT_HEAD_IMAGE_ID)) {
+      seen.add(DEFAULT_HEAD_IMAGE_ID)
+      options.push({
+        id: DEFAULT_HEAD_IMAGE_ID,
+        updatedAt:
+          image?.updatedAt ??
+          selectedVariant?.updatedAt ??
+          new Date().toISOString(),
+        isCurrent: false
+      })
+    }
+
     // Add successful build outputs (these are previous head images)
     for (const build of variantBuilds) {
       if (
@@ -352,7 +320,12 @@ export function SettingsImageDetailPage () {
     }
 
     return options
-  }, [selectedVariant?.headImageId, selectedVariant?.updatedAt, variantBuilds])
+  }, [
+    image?.updatedAt,
+    selectedVariant?.headImageId,
+    selectedVariant?.updatedAt,
+    variantBuilds
+  ])
 
   const isImageOwner = Boolean(
     auth.user && image && auth.user.id === image.createdBy
@@ -377,7 +350,16 @@ export function SettingsImageDetailPage () {
     return 'You can only modify your own personal variants'
   }, [auth.user, canMutateSelectedVariant, image, selectedVariant])
 
-  const selectedVariantScope = (selectedVariant?.scope as VariantScope | undefined) ?? null
+  const selectedVariantScope =
+    (selectedVariant?.scope as VariantScope | undefined) ?? null
+  const variantNameValidationError = useMemo((): string | null => {
+    if (!selectedVariant) return null
+    if (variantNameDraft.trim().length === 0) return 'Variant name is required.'
+    return null
+  }, [selectedVariant, variantNameDraft])
+  const isVariantNameDirty = Boolean(
+    selectedVariant && variantNameDraft.trim() !== selectedVariant.name
+  )
   const canChangeSelectedVariantScope = Boolean(
     auth.user && image && auth.user.id === image.createdBy && selectedVariant
   )
@@ -390,6 +372,10 @@ export function SettingsImageDetailPage () {
     }
     return null
   }, [auth.user, image, selectedVariant])
+
+  useEffect(() => {
+    setVariantNameDraft(selectedVariant?.name ?? '')
+  }, [selectedVariant?.id, selectedVariant?.name])
 
   const connectSetupSandboxTerminal = useCallback(
     async (sandboxId: string): Promise<SetupTerminalConnection> => {
@@ -439,10 +425,6 @@ export function SettingsImageDetailPage () {
     setInitial(next)
     setDraft(next)
   }, [image?.id])
-
-  const isScriptDirty = Boolean(
-    initial && draft && draft.setupScript !== initial.setupScript
-  )
   const buildOutput = useMemo(
     () => buildLogs.map(entry => entry.text).join(''),
     [buildLogs]
@@ -482,40 +464,6 @@ export function SettingsImageDetailPage () {
     },
     onError: err => {
       const msg = err instanceof Error ? err.message : 'Auto-save failed'
-      toast.error(msg, { id: AUTOSAVE_TOAST_ID })
-    }
-  })
-
-  const saveSetupScriptMutation = useMutation({
-    mutationFn: async (setupScript: string) =>
-      auth.api.updateImage(imageId, { setupScript }),
-    onMutate: () => {
-      toast.loading('Autosaving…', { id: AUTOSAVE_TOAST_ID })
-    },
-    onSuccess: (_, setupScript) => {
-      setInitial(prev => (prev ? { ...prev, setupScript } : prev))
-      toast.success('Saved', { id: AUTOSAVE_TOAST_ID, duration: 1200 })
-    },
-    onError: err => {
-      const msg =
-        err instanceof Error ? err.message : 'Failed to auto-save setup script'
-      toast.error(msg, { id: AUTOSAVE_TOAST_ID })
-    }
-  })
-
-  const saveRunScriptMutation = useMutation({
-    mutationFn: async (runScript: string) =>
-      auth.api.updateImage(imageId, { runScript }),
-    onMutate: () => {
-      toast.loading('Autosaving…', { id: AUTOSAVE_TOAST_ID })
-    },
-    onSuccess: (_, runScript) => {
-      setInitial(prev => (prev ? { ...prev, runScript } : prev))
-      toast.success('Saved', { id: AUTOSAVE_TOAST_ID, duration: 1200 })
-    },
-    onError: err => {
-      const msg =
-        err instanceof Error ? err.message : 'Failed to auto-save run script'
       toast.error(msg, { id: AUTOSAVE_TOAST_ID })
     }
   })
@@ -631,7 +579,7 @@ export function SettingsImageDetailPage () {
 
     const timeout = window.setTimeout(() => {
       autosaveImageMutation.mutate(typedMetadataPatch)
-    }, SETUP_SCRIPT_AUTOSAVE_DEBOUNCE_MS)
+    }, IMAGE_AUTOSAVE_DEBOUNCE_MS)
 
     return () => window.clearTimeout(timeout)
   }, [
@@ -647,42 +595,6 @@ export function SettingsImageDetailPage () {
     nameValidationError
   ])
 
-  useEffect(() => {
-    if (!canEdit || !draft || !initial) return
-    if (draft.setupScript === initial.setupScript) return
-    if (saveSetupScriptMutation.isPending) return
-
-    const timeout = window.setTimeout(() => {
-      saveSetupScriptMutation.mutate(draft.setupScript)
-    }, SETUP_SCRIPT_AUTOSAVE_DEBOUNCE_MS)
-
-    return () => window.clearTimeout(timeout)
-  }, [
-    canEdit,
-    draft?.setupScript,
-    initial?.setupScript,
-    saveSetupScriptMutation.isPending,
-    saveSetupScriptMutation.mutate
-  ])
-
-  useEffect(() => {
-    if (!canEdit || !draft || !initial) return
-    if (draft.runScript === initial.runScript) return
-    if (saveRunScriptMutation.isPending) return
-
-    const timeout = window.setTimeout(() => {
-      saveRunScriptMutation.mutate(draft.runScript)
-    }, SETUP_SCRIPT_AUTOSAVE_DEBOUNCE_MS)
-
-    return () => window.clearTimeout(timeout)
-  }, [
-    canEdit,
-    draft?.runScript,
-    initial?.runScript,
-    saveRunScriptMutation.isPending,
-    saveRunScriptMutation.mutate
-  ])
-
   const cloneMutation = useMutation({
     mutationFn: async () => auth.api.cloneImage(imageId),
     onSuccess: async cloned => {
@@ -695,58 +607,6 @@ export function SettingsImageDetailPage () {
     },
     onError: err => {
       const msg = err instanceof Error ? err.message : 'Clone failed'
-      toast.error(msg)
-    }
-  })
-
-  const writeWithCoordinatorMutation = useMutation({
-    mutationFn: async (repositoryInput: string) => {
-      const repository = repositoryInput.trim().replace(/\s+/g, ' ')
-      if (repository.length === 0) throw new Error('Repository is required')
-      if (imageId.trim().length === 0) throw new Error('Image ID is missing')
-
-      globalThis.window.dispatchEvent(new Event(OPEN_COORDINATOR_EVENT))
-
-      let dialogController = getDialogRuntimeController()
-      if (!dialogController) {
-        await new Promise<void>(resolve => {
-          globalThis.window.setTimeout(resolve, 0)
-        })
-        dialogController = getDialogRuntimeController()
-      }
-      if (!dialogController) throw new Error('Coordinator dialog is not ready')
-
-      await dialogController.createSession({
-        title: buildCoordinatorSessionTitle(repository)
-      })
-      await new Promise<void>(resolve => {
-        globalThis.window.requestAnimationFrame(() => {
-          globalThis.window.requestAnimationFrame(() => resolve())
-        })
-      })
-
-      const chatController = await waitForDialogChatController(5_000)
-      if (!chatController) {
-        throw new Error('Coordinator conversation is not ready')
-      }
-
-      await chatController.sendMessage(
-        buildCoordinatorSetupScriptPrompt({
-          imageId,
-          repository
-        })
-      )
-    },
-    onSuccess: () => {
-      setShowCoordinatorPromptDialog(false)
-      setCoordinatorRepositoryInput('')
-      toast.success('Coordinator prompt sent')
-    },
-    onError: err => {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Failed to hand off request to coordinator'
       toast.error(msg)
     }
   })
@@ -898,17 +758,18 @@ export function SettingsImageDetailPage () {
     }
   })
 
-  const updateVariantScopeMutation = useMutation({
-    mutationFn: async (scope: VariantScope) => {
+  const updateVariantMutation = useMutation({
+    mutationFn: async (input: {
+      readonly scope?: VariantScope
+      readonly name?: string
+      readonly headImageId?: string
+    }) => {
       if (!selectedVariantId) throw new Error('Select a variant first.')
-      return auth.api.updateImageVariant(imageId, selectedVariantId, { scope })
+      return auth.api.updateImageVariant(imageId, selectedVariantId, input)
     },
     onSuccess: async updated => {
-      toast.success(
-        updated.scope === 'shared'
-          ? 'Variant is now shared'
-          : 'Variant is now personal'
-      )
+      setVariantNameDraft(updated.name)
+      toast.success('Variant updated')
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
@@ -974,27 +835,46 @@ export function SettingsImageDetailPage () {
   })
 
   const createSetupSandboxMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (input: {
+      readonly sshPublicKeys?: readonly string[]
+    }) => {
       if (!selectedVariantId) throw new Error('Select a variant first.')
       return auth.api.createImageSetupSandbox({
         imageId,
-        variantId: selectedVariantId
+        variantId: selectedVariantId,
+        sshPublicKeys: input.sshPublicKeys?.length
+          ? [...input.sshPublicKeys]
+          : undefined
       })
     },
-    onSuccess: async result => {
+    onSuccess: async (result, input) => {
       setSetupSandboxId(result.sandboxId)
-      try {
-        const terminalConnection = await connectSetupSandboxTerminal(
-          result.sandboxId
-        )
-        setSetupTerminalConnection(terminalConnection)
-      } catch (err) {
-        const msg =
-          err instanceof Error
-            ? err.message
-            : 'Failed to initialize terminal connection'
-        toast.error(msg)
-        setSetupTerminalConnection(null)
+      // Store SSH info if available
+      if (result.ssh) {
+        setSetupSshInfo({
+          username: result.ssh.username,
+          host: result.ssh.host,
+          port: result.ssh.port,
+          knownHostsLine: result.ssh.knownHostsLine
+        })
+      } else {
+        setSetupSshInfo(null)
+      }
+      // Only connect terminal for browser mode
+      if (!input.sshPublicKeys?.length) {
+        try {
+          const terminalConnection = await connectSetupSandboxTerminal(
+            result.sandboxId
+          )
+          setSetupTerminalConnection(terminalConnection)
+        } catch (err) {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : 'Failed to initialize terminal connection'
+          toast.error(msg)
+          setSetupTerminalConnection(null)
+        }
       }
       toast.success('Setup sandbox ready')
     },
@@ -1016,6 +896,7 @@ export function SettingsImageDetailPage () {
     onSuccess: async () => {
       setSetupSandboxId(null)
       setSetupTerminalConnection(null)
+      setSetupSshInfo(null)
       toast.success('Head image updated')
       await Promise.all([
         queryClient.invalidateQueries({
@@ -1067,20 +948,6 @@ export function SettingsImageDetailPage () {
     setupSandboxId
   ])
 
-  const onBuildClick = useCallback(() => {
-    if (saveSetupScriptMutation.isPending) return
-    if (isScriptDirty) {
-      if (!draft) return
-      saveSetupScriptMutation.mutate(draft.setupScript, {
-        onSuccess: () => {
-          buildStreamMutation.mutate()
-        }
-      })
-      return
-    }
-    buildStreamMutation.mutate()
-  }, [buildStreamMutation, draft, isScriptDirty, saveSetupScriptMutation])
-
   const onCopy = useCallback(async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -1095,6 +962,7 @@ export function SettingsImageDetailPage () {
       setSetupTerminalConnection(null)
       return
     }
+    if (setupSshInfo) return
     if (setupTerminalConnection) return
     void connectSetupSandboxTerminal(setupSandboxId)
       .then(terminalConnection => {
@@ -1108,7 +976,12 @@ export function SettingsImageDetailPage () {
         toast.error(msg)
         setSetupTerminalConnection(null)
       })
-  }, [connectSetupSandboxTerminal, setupSandboxId, setupTerminalConnection])
+  }, [
+    connectSetupSandboxTerminal,
+    setupSandboxId,
+    setupSshInfo,
+    setupTerminalConnection
+  ])
 
   useEffect(() => {
     return () => {
@@ -1125,7 +998,7 @@ export function SettingsImageDetailPage () {
     cloneMutation.isPending ||
     saveEnvironmentSecretMutation.isPending ||
     createVariantMutation.isPending ||
-    updateVariantScopeMutation.isPending ||
+    updateVariantMutation.isPending ||
     deleteVariantMutation.isPending ||
     setDefaultVariantMutation.isPending ||
     createSetupSandboxMutation.isPending ||
@@ -1159,11 +1032,6 @@ export function SettingsImageDetailPage () {
         setDraft(prev => (prev ? { ...prev, description } : prev))
         return { description, dirty: true as const }
       },
-      setSetupScript: async script => {
-        if (!draft) throw new Error('Image detail draft is not ready')
-        setDraft(prev => (prev ? { ...prev, setupScript: script } : prev))
-        return { scriptUpdated: true as const, dirty: true as const }
-      },
       save: async () => {
         if (!initial || !draft) {
           throw new Error('Image detail draft is not ready')
@@ -1184,12 +1052,6 @@ export function SettingsImageDetailPage () {
         if (Object.keys(metadataPatch).length > 0) {
           await autosaveImageMutation.mutateAsync(metadataPatch as ImagePatch)
         }
-        if (Object.prototype.hasOwnProperty.call(patch, 'setupScript')) {
-          await saveSetupScriptMutation.mutateAsync(draft.setupScript)
-        }
-        if (Object.prototype.hasOwnProperty.call(patch, 'runScript')) {
-          await saveRunScriptMutation.mutateAsync(draft.runScript)
-        }
         return { saved: true as const }
       },
       revert: async () => {
@@ -1209,13 +1071,6 @@ export function SettingsImageDetailPage () {
         if (!selectedVariantId) throw new Error('Select a variant first')
         if (buildStreamMutation.isPending)
           throw new Error('Build already running')
-        if (saveSetupScriptMutation.isPending) {
-          throw new Error('Setup script save already in progress')
-        }
-        if (isScriptDirty) {
-          if (!draft) throw new Error('Image detail draft is not ready')
-          await saveSetupScriptMutation.mutateAsync(draft.setupScript)
-        }
         buildStreamMutation.mutate()
         return { buildStarted: true as const }
       },
@@ -1250,10 +1105,7 @@ export function SettingsImageDetailPage () {
     initial,
     isArchived,
     isBusy,
-    isScriptDirty,
     nameValidationError,
-    saveRunScriptMutation,
-    saveSetupScriptMutation,
     selectedVariantId
   ])
 
@@ -1275,7 +1127,6 @@ export function SettingsImageDetailPage () {
   }
 
   const draftValue = draft ?? null
-  const initialValue = initial ?? null
   const selectedCurrentImageId = selectedVariant?.headImageId ?? null
 
   const pageTitle = (
@@ -1530,68 +1381,6 @@ export function SettingsImageDetailPage () {
           </SettingsPanel>
         </SettingsSection>
 
-        <Dialog
-          open={showCoordinatorPromptDialog}
-          onOpenChange={open => {
-            if (open) {
-              setShowCoordinatorPromptDialog(true)
-              return
-            }
-            if (writeWithCoordinatorMutation.isPending) return
-            setShowCoordinatorPromptDialog(false)
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Write Setup Script with Coordinator</DialogTitle>
-              <DialogDescription>
-                Enter a repository URL or owner/repo. Coordinator will search it
-                and generate an image setup script.
-              </DialogDescription>
-            </DialogHeader>
-            <form
-              className='space-y-4'
-              onSubmit={event => {
-                event.preventDefault()
-                if (writeWithCoordinatorMutation.isPending) return
-                void writeWithCoordinatorMutation.mutateAsync(
-                  coordinatorRepositoryInput
-                )
-              }}
-            >
-              <Input
-                value={coordinatorRepositoryInput}
-                onChange={e => setCoordinatorRepositoryInput(e.target.value)}
-                placeholder='https://github.com/org/repo or org/repo'
-                disabled={writeWithCoordinatorMutation.isPending}
-                autoFocus
-              />
-              <DialogFooter>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  disabled={writeWithCoordinatorMutation.isPending}
-                  onClick={() => setShowCoordinatorPromptDialog(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type='submit'
-                  disabled={
-                    writeWithCoordinatorMutation.isPending ||
-                    coordinatorRepositoryInput.trim().length === 0
-                  }
-                >
-                  {writeWithCoordinatorMutation.isPending ? (
-                    <Loader2 className='h-4 w-4 animate-spin' />
-                  ) : null}
-                  Send to Coordinator
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
         <SettingsSection
           title='Secret environment'
           description='Set a Modal secret name and contents for full-stack environment variables.'
@@ -1690,9 +1479,9 @@ export function SettingsImageDetailPage () {
           description='Manage image variants, current images, and builds for this image.'
         >
           <SettingsPanel>
-            <div className='flex items-center gap-2 border-b border-border px-4 py-3'>
-              <span className='text-sm text-text-secondary'>Variant:</span>
+            <div className='flex items-center gap-2 border-b border-border px-3 py-2'>
               <VariantCombobox
+                className='min-w-48 max-w-64'
                 value={selectedVariantId}
                 onChange={setSelectedVariantId}
                 variants={variantOptions}
@@ -1758,6 +1547,58 @@ export function SettingsImageDetailPage () {
                 className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
                 left={
                   <SettingsRowLeft
+                    title='Variant name'
+                    description='Rename the selected variant.'
+                  />
+                }
+                right={
+                  <div
+                    className='flex w-full sm:w-[420px] items-center gap-2'
+                    title={
+                      !canMutateSelectedVariant
+                        ? variantMutabilityReason ?? undefined
+                        : undefined
+                    }
+                  >
+                    <div className='flex-1'>
+                      <Input
+                        value={variantNameDraft}
+                        disabled={!canMutateSelectedVariant || isBusy}
+                        onChange={event =>
+                          setVariantNameDraft(event.target.value)
+                        }
+                        placeholder='Variant name'
+                        aria-invalid={Boolean(variantNameValidationError)}
+                      />
+                      {variantNameValidationError ? (
+                        <div className='pt-1 text-xs text-destructive'>
+                          {variantNameValidationError}
+                        </div>
+                      ) : null}
+                    </div>
+                    <Button
+                      variant='secondary'
+                      disabled={
+                        !canMutateSelectedVariant ||
+                        isBusy ||
+                        !isVariantNameDirty ||
+                        variantNameValidationError !== null
+                      }
+                      onClick={() => {
+                        void updateVariantMutation.mutateAsync({
+                          name: variantNameDraft.trim()
+                        })
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                }
+              />
+              <SettingsRow
+                className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
+                left={
+                  <SettingsRowLeft
                     title='Variant visibility'
                     description='Toggle whether this variant is personal to you or shared across the image.'
                   />
@@ -1768,9 +1609,9 @@ export function SettingsImageDetailPage () {
                     value={selectedVariantScope ?? undefined}
                     onValueChange={value => {
                       if (value) {
-                        void updateVariantScopeMutation.mutateAsync(
-                          value as VariantScope
-                        )
+                        void updateVariantMutation.mutateAsync({
+                          scope: value as VariantScope
+                        })
                       }
                     }}
                     disabled={!canChangeSelectedVariantScope || isBusy}
@@ -1821,63 +1662,238 @@ export function SettingsImageDetailPage () {
                 className='items-start sm:items-center flex-col sm:flex-row border-b border-border'
                 left={
                   <SettingsRowLeft
-                    title='Current Image'
+                    title='Head Image ID'
                     description='Image ref used for builds, setup sandboxes, and new agent sandboxes.'
                   />
                 }
                 right={
-                  <ImageIdCombobox
-                    value={selectedCurrentImageId ?? null}
-                    options={imageIdOptions}
-                    disabled={!canEdit || isBusy}
-                    placeholder='No image selected'
-                    className='w-full sm:w-[320px]'
-                    onCopy={id => void onCopy(id, 'image id')}
-                    readOnly
-                  />
+                  <div
+                    title={
+                      !canMutateSelectedVariant
+                        ? variantMutabilityReason ?? undefined
+                        : undefined
+                    }
+                  >
+                    <ImageIdCombobox
+                      value={selectedCurrentImageId ?? null}
+                      options={imageIdOptions}
+                      disabled={!canMutateSelectedVariant || isBusy}
+                      placeholder='No image selected'
+                      className='w-full sm:w-[320px]'
+                      onCopy={id => void onCopy(id, 'image id')}
+                      onChange={value => {
+                        void updateVariantMutation.mutateAsync({
+                          headImageId: value
+                        })
+                      }}
+                    />
+                  </div>
                 }
               />
-              <div>
-                <SettingsRow
-                  className='items-start sm:items-center flex-col sm:flex-row'
-                  left={
-                    <SettingsRowLeft
-                      title='Extend'
-                      description='Open a live shell to make manual changes. Closing the sandbox snapshots and updates the current image.'
-                    />
-                  }
-                  right={
-                    <div className='flex items-center gap-2'>
-                      {!setupSandboxId ? (
-                        <Button
-                          variant='secondary'
-                          size='sm'
-                          disabled={!canEdit || isBusy || !selectedVariantId}
-                          onClick={() => createSetupSandboxMutation.mutate()}
-                        >
-                          {createSetupSandboxMutation.isPending ? (
-                            <Loader2 className='h-4 w-4 animate-spin' />
-                          ) : null}
-                          Activate Shell
-                        </Button>
-                      ) : (
-                        <>
-                          <Button
-                            variant='secondary'
-                            size='sm'
-                            disabled={!canEdit || isBusy}
-                            onClick={() => closeSetupSandboxMutation.mutate()}
-                          >
-                            {closeSetupSandboxMutation.isPending ? (
-                              <Loader2 className='h-4 w-4 animate-spin' />
-                            ) : null}
-                            Close and Save
-                          </Button>
-                        </>
-                      )}
+              <div className=''>
+                <div className='px-4 py-3'>
+                  <div className='flex items-center justify-between'>
+                    <div>
+                      <div className='text-sm font-medium text-text-primary'>
+                        Customize
+                      </div>
+                      <div className='text-xs text-text-tertiary'>
+                        Open a sandbox to edit the current head image directly.
+                        Closing snapshots the filesystem and updates the variant
+                        head image. Agent sandboxes also run ~/start.sh on boot
+                        if that file exists.
+                      </div>
                     </div>
-                  }
-                />
+                    {!setupSandboxId && (
+                      <ToggleGroup
+                        type='single'
+                        value={extendMode}
+                        onValueChange={value => {
+                          if (value) {
+                            setExtendMode(value as 'browser' | 'ssh' | 'api')
+                          }
+                        }}
+                        size='sm'
+                      >
+                        <ToggleGroupItem value='browser'>
+                          <Terminal className='h-3.5 w-3.5 mr-1.5' />
+                          Browser
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value='ssh'>
+                          <Key className='h-3.5 w-3.5 mr-1.5' />
+                          SSH
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value='api'>API</ToggleGroupItem>
+                      </ToggleGroup>
+                    )}
+                  </div>
+
+                  {/* SSH Public Key Input - shown when SSH mode and no active sandbox */}
+                  {extendMode === 'ssh' && !setupSandboxId && (
+                    <div className='mt-3'>
+                      <label className='block text-xs font-medium text-text-secondary mb-1.5'>
+                        SSH Public Key
+                      </label>
+                      <Textarea
+                        value={sshPublicKey}
+                        onChange={e => setSshPublicKey(e.target.value)}
+                        placeholder='ssh-ed25519 AAAA... or ssh-rsa AAAA...'
+                        className='font-mono text-xs h-20 resize-none'
+                        disabled={!canEdit || isBusy}
+                      />
+                      <div className='text-xs text-text-tertiary mt-1'>
+                        Use an existing key or generate one with{' '}
+                        <code className='font-mono text-text-secondary'>
+                          ssh-keygen -t ed25519
+                        </code>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className='mt-3 flex items-center gap-2'>
+                    {!setupSandboxId && extendMode !== 'api' ? (
+                      <Button
+                        variant='secondary'
+                        disabled={
+                          !canEdit ||
+                          isBusy ||
+                          !selectedVariantId ||
+                          (extendMode === 'ssh' && !sshPublicKey.trim())
+                        }
+                        onClick={() => {
+                          const keys =
+                            extendMode === 'ssh' && sshPublicKey.trim()
+                              ? [sshPublicKey.trim()]
+                              : undefined
+                          createSetupSandboxMutation.mutate({
+                            sshPublicKeys: keys
+                          })
+                        }}
+                      >
+                        {createSetupSandboxMutation.isPending ? (
+                          <Loader2 className='h-4 w-4 animate-spin' />
+                        ) : null}
+                        {extendMode === 'browser'
+                          ? 'Activate Shell'
+                          : 'Create SSH Sandbox'}
+                      </Button>
+                    ) : setupSandboxId ? (
+                      <Button
+                        variant='secondary'
+                        disabled={!canEdit || isBusy}
+                        onClick={() => closeSetupSandboxMutation.mutate()}
+                      >
+                        {closeSetupSandboxMutation.isPending ? (
+                          <Loader2 className='h-4 w-4 animate-spin' />
+                        ) : null}
+                        Close and Save
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className='border-t border-border px-4 py-3'>
+                  <div className='text-xs font-medium text-text-secondary'>
+                    Hook files
+                  </div>
+                  <div className='mt-1 text-xs text-text-tertiary'>
+                    <code className='font-mono text-text-primary'>
+                      ~/build.sh
+                    </code>{' '}
+                    runs during image builds if present.{' '}
+                    <code className='font-mono text-text-primary'>
+                      ~/start.sh
+                    </code>{' '}
+                    runs before agent-server starts in new agent sandboxes if
+                    present.
+                  </div>
+                </div>
+
+                {/* SSH Connection Info - shown when sandbox active with SSH */}
+                {setupSandboxId && setupSshInfo && (
+                  <div className='border-t border-border px-4 py-3'>
+                    <div className='text-xs font-medium text-text-secondary mb-2'>
+                      SSH Connection
+                    </div>
+                    <div className='space-y-2'>
+                      <div className='rounded-md bg-surface-2 px-3 py-2'>
+                        <div className='text-xs text-text-tertiary mb-1'>
+                          Connect via SSH:
+                        </div>
+                        <div className='flex items-center gap-2'>
+                          <code className='flex-1 text-xs font-mono text-text-primary break-all'>
+                            ssh -p {setupSshInfo.port} {setupSshInfo.username}@
+                            {setupSshInfo.host}
+                          </code>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-6 w-6 shrink-0'
+                            onClick={() =>
+                              void onCopy(
+                                `ssh -p ${setupSshInfo.port} ${setupSshInfo.username}@${setupSshInfo.host}`,
+                                'SSH command'
+                              )
+                            }
+                          >
+                            <Copy className='h-3.5 w-3.5' />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className='rounded-md bg-surface-2 px-3 py-2'>
+                        <div className='text-xs text-text-tertiary mb-1'>
+                          Copy files via SCP:
+                        </div>
+                        <div className='flex items-center gap-2'>
+                          <code className='flex-1 text-xs font-mono text-text-primary break-all'>
+                            scp -P {setupSshInfo.port} ./file{' '}
+                            {setupSshInfo.username}@{setupSshInfo.host}
+                            :/home/agent/
+                          </code>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-6 w-6 shrink-0'
+                            onClick={() =>
+                              void onCopy(
+                                `scp -P ${setupSshInfo.port} ./file ${setupSshInfo.username}@${setupSshInfo.host}:/home/agent/`,
+                                'SCP command'
+                              )
+                            }
+                          >
+                            <Copy className='h-3.5 w-3.5' />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className='rounded-md bg-surface-2 px-3 py-2'>
+                        <div className='text-xs text-text-tertiary mb-1'>
+                          Known hosts line (add to ~/.ssh/known_hosts):
+                        </div>
+                        <div className='flex items-center gap-2'>
+                          <code className='flex-1 text-xs font-mono text-text-primary break-all'>
+                            {setupSshInfo.knownHostsLine}
+                          </code>
+                          <Button
+                            variant='ghost'
+                            size='icon'
+                            className='h-6 w-6 shrink-0'
+                            onClick={() =>
+                              void onCopy(
+                                setupSshInfo.knownHostsLine,
+                                'known hosts line'
+                              )
+                            }
+                          >
+                            <Copy className='h-3.5 w-3.5' />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Browser Terminal - shown when sandbox active in browser mode */}
                 {setupSandboxId && setupTerminalConnection ? (
                   <div className='p-2 h-[320px] w-full'>
                     <TerminalPanel
@@ -1887,6 +1903,35 @@ export function SettingsImageDetailPage () {
                     />
                   </div>
                 ) : null}
+
+                {!setupSandboxId && extendMode === 'api' && (
+                  <div className='border-t border-border px-4 py-3 space-y-2 text-xs text-text-secondary'>
+                    <div className='font-medium text-text-secondary'>
+                      API reference for agents
+                    </div>
+                    <p>
+                      <span className='font-mono text-text-primary'>
+                        POST /images/:imageId/setup-sandbox
+                      </span>{' '}
+                      with{' '}
+                      <span className='font-mono text-text-primary'>
+                        {`{ variantId, sshPublicKeys[] }`}
+                      </span>
+                    </p>
+                    <p>
+                      Returns{' '}
+                      <span className='font-mono text-text-primary'>
+                        {`{ sandboxId, ssh: { username, host, port, knownHostsLine } }`}
+                      </span>
+                    </p>
+                    <p>
+                      <span className='font-mono text-text-primary'>
+                        DELETE /images/:imageId/setup-sandbox/:sandboxId
+                      </span>{' '}
+                      to close and persist changes.
+                    </p>
+                  </div>
+                )}
               </div>
             </SettingsList>
             {buildLogs.length > 0 ? (
@@ -1901,126 +1946,6 @@ export function SettingsImageDetailPage () {
                 </pre>
               </div>
             ) : null}
-          </SettingsPanel>
-        </SettingsSection>
-
-        <SettingsSection
-          title={
-            <div className='flex items-center gap-2'>
-              <p>Setup Script</p>
-            </div>
-          }
-          description={
-            <div>
-              Every 30 minutes, we will create a new head image id for all
-              variants by running this script.
-            </div>
-          }
-          action={
-            <div className='flex items-center gap-2'>
-              <Button
-                variant='secondary'
-                disabled={
-                  !canMutateSelectedVariant ||
-                  isBusy ||
-                  saveSetupScriptMutation.isPending ||
-                  !selectedVariantId
-                }
-                onClick={onBuildClick}
-                title={
-                  !canMutateSelectedVariant
-                    ? variantMutabilityReason ?? undefined
-                    : 'Run the setup script to create a new image'
-                }
-              >
-                {buildStreamMutation.isPending ? (
-                  <Loader2 className='h-4 w-4 animate-spin' />
-                ) : null}
-                Build
-              </Button>
-            </div>
-          }
-        >
-          <SettingsPanel>
-            {!draftValue || !initialValue ? (
-              <SettingsPanelBody className='text-sm text-text-secondary'>
-                Loading...
-              </SettingsPanelBody>
-            ) : (
-              <div className='overflow-hidden h-[400px] relative'>
-                <Editor
-                  height='100%'
-                  defaultLanguage='shell'
-                  value={draftValue.setupScript}
-                  onChange={value =>
-                    setDraft(prev =>
-                      prev ? { ...prev, setupScript: value ?? '' } : prev
-                    )
-                  }
-                  theme='vs-dark'
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    readOnly: isBusy,
-                    padding: { top: 12, bottom: 12 }
-                  }}
-                />
-                {!draftValue.setupScript && (
-                  <div className='absolute top-3 left-14 text-text-tertiary text-[13px] pointer-events-none select-none'>
-                    # Install dependencies, configure environment, etc.
-                  </div>
-                )}
-              </div>
-            )}
-          </SettingsPanel>
-        </SettingsSection>
-        <SettingsSection
-          title={
-            <div className='flex items-center gap-2'>
-              <p>Run Script</p>
-            </div>
-          }
-          description={
-            <div>
-              Every time we start a new agent sandbox, we will run this script.
-            </div>
-          }
-        >
-          <SettingsPanel>
-            {!draftValue || !initialValue ? (
-              <SettingsPanelBody className='text-sm text-text-secondary'>
-                Loading...
-              </SettingsPanelBody>
-            ) : (
-              <div className='overflow-hidden h-[300px] relative'>
-                <Editor
-                  height='100%'
-                  defaultLanguage='shell'
-                  value={draftValue.runScript}
-                  onChange={value =>
-                    setDraft(prev =>
-                      prev ? { ...prev, runScript: value ?? '' } : prev
-                    )
-                  }
-                  theme='vs-dark'
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    lineNumbers: 'on',
-                    scrollBeyondLastLine: false,
-                    readOnly: isBusy,
-                    padding: { top: 12, bottom: 12 }
-                  }}
-                />
-                {!draftValue.runScript && (
-                  <div className='absolute top-3 left-14 text-text-tertiary text-[13px] pointer-events-none select-none'>
-                    # Prepare runtime state before agent-server starts.
-                  </div>
-                )}
-              </div>
-            )}
           </SettingsPanel>
         </SettingsSection>
 

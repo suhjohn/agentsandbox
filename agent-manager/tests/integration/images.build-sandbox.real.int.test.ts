@@ -2,7 +2,7 @@ import "../setup.test";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { ModalClient, type Sandbox } from "modal";
+import { ModalClient, Sandbox } from "modal";
 import { startServer } from "../../src/server";
 import { deleteImage } from "../../src/services/image.service";
 import { terminateAgentSandbox } from "../../src/services/sandbox.service";
@@ -71,7 +71,7 @@ describe("Images build sandbox (real)", () => {
   });
 
   it(
-    "build sandbox runs setup script on default GHCR base image and snapshots marker artifacts",
+    "build sandbox runs ~/build.sh on default GHCR base image and snapshots marker artifacts",
     async () => {
       const modalTokenId = process.env.MODAL_TOKEN_ID?.trim() ?? "";
       const modalTokenSecret = process.env.MODAL_TOKEN_SECRET?.trim() ?? "";
@@ -89,14 +89,6 @@ describe("Images build sandbox (real)", () => {
       const { accessToken } = await registerUser(server.baseUrl);
       const runId = crypto.randomUUID();
 
-      const setupScript = [
-        "set -euo pipefail",
-        "mkdir -p /opt/agent-image/test-markers",
-        "code=0",
-        "curl -fsS --max-time 3 http://127.0.0.1:48213/health >/opt/agent-image/test-markers/build-sandbox-health.out 2>/opt/agent-image/test-markers/build-sandbox-health.err || code=$?",
-        "printf '%s\\n' \"$code\" >/opt/agent-image/test-markers/build-sandbox-health.exit",
-      ].join("\n");
-
       let imageId = "";
       let builtImageId = "";
       let verifySandbox: Sandbox | null = null;
@@ -107,7 +99,6 @@ describe("Images build sandbox (real)", () => {
           body: JSON.stringify({
             name: `Build sandbox marker test ${runId}`,
             visibility: "private",
-            setupScript,
           }),
         });
         expect(imageRes.status).toBe(201);
@@ -119,6 +110,49 @@ describe("Images build sandbox (real)", () => {
         expect(typeof imageId).toBe("string");
         expect(typeof imageBody.defaultVariantId).toBe("string");
         const variantId = imageBody.defaultVariantId as string;
+
+        const setupSandboxRes = await fetch(
+          `${server.baseUrl}/images/${imageId}/setup-sandbox`,
+          {
+            method: "POST",
+            headers: authedHeaders(accessToken, { "Content-Type": "application/json" }),
+            body: JSON.stringify({ variantId }),
+          },
+        );
+        expect(setupSandboxRes.status).toBe(201);
+        const setupSandboxBody = (await setupSandboxRes.json()) as {
+          sandboxId: string;
+        };
+        expect(typeof setupSandboxBody.sandboxId).toBe("string");
+
+        const editSandbox = await Sandbox.fromId(setupSandboxBody.sandboxId);
+        const writeBuildHook = await editSandbox.exec(
+          [
+            "bash",
+            "-lc",
+            [
+              "cat > /home/agent/build.sh <<'EOF'",
+              "set -euo pipefail",
+              "mkdir -p /opt/agent-image/test-markers",
+              "code=0",
+              "curl -fsS --max-time 3 http://127.0.0.1:48213/health >/opt/agent-image/test-markers/build-sandbox-health.out 2>/opt/agent-image/test-markers/build-sandbox-health.err || code=$?",
+              "printf '%s\\n' \"$code\" >/opt/agent-image/test-markers/build-sandbox-health.exit",
+              "EOF",
+              "chmod 700 /home/agent/build.sh",
+            ].join("\n"),
+          ],
+          { stdout: "pipe", stderr: "pipe", timeoutMs: 10_000 },
+        );
+        expect(await writeBuildHook.wait()).toBe(0);
+
+        const closeSetupSandboxRes = await fetch(
+          `${server.baseUrl}/images/${imageId}/setup-sandbox/${setupSandboxBody.sandboxId}`,
+          {
+            method: "DELETE",
+            headers: authedHeaders(accessToken),
+          },
+        );
+        expect(closeSetupSandboxRes.status).toBe(200);
 
         const buildRes = await fetch(`${server.baseUrl}/images/${imageId}/build`, {
           method: "POST",

@@ -489,19 +489,6 @@ Result:
 { "description": "...", "dirty": true }
 ```
 
-### `settings.image_detail.set_setup_script`
-Params:
-```json
-{ "script": "string" }
-```
-
-`canRun`: same as `settings.image_detail.set_name`
-
-Result:
-```json
-{ "scriptUpdated": true, "dirty": true }
-```
-
 ### `settings.image_detail.save`
 Params: `{}`
 

@@ -250,7 +250,7 @@ const SETUP_TUNNELS_RPC_TIMEOUT_SECONDS = 3
 const SETUP_TUNNELS_READY_TIMEOUT_MS = 20_000
 const SETUP_TUNNELS_RETRY_INTERVAL_MS = 400
 const SETUP_SECRET_NAME = 'openinspect-build-secret'
-const SANDBOX_RUN_SCRIPT_PATH = '/tmp/agent-run.sh'
+const SANDBOX_START_SCRIPT_PATH = '/home/agent/start.sh'
 
 function splitCommaList (raw: string | null | undefined): string[] {
   return (raw ?? '')
@@ -270,14 +270,6 @@ function normalizeSecretNames (rawNames: readonly string[]): string[] {
     normalized.push(name)
   }
   return normalized
-}
-
-function normalizeNullableText (
-  value: string | null | undefined
-): string | null {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
 }
 
 function describeUnknownError (err: unknown): string {
@@ -324,13 +316,7 @@ function shellQuote (value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`
 }
 
-function buildSandboxStartCommand (
-  runScript: string | null | undefined
-): readonly string[] {
-  const normalizedRunScript = normalizeNullableText(runScript)
-  if (!normalizedRunScript) return [...SANDBOX_START_COMMAND]
-
-  const heredocTerminator = '__AGENT_MANAGER_RUN_SCRIPT__'
+function buildSandboxStartCommand (): readonly string[] {
   const serverCommand = SANDBOX_START_COMMAND.map(part =>
     shellQuote(part)
   ).join(' ')
@@ -340,13 +326,12 @@ function buildSandboxStartCommand (
     '-lc',
     [
       'set -euo pipefail',
-      `cat > ${shellQuote(SANDBOX_RUN_SCRIPT_PATH)} <<'${heredocTerminator}'`,
-      normalizedRunScript,
-      heredocTerminator,
-      `chmod 700 ${shellQuote(SANDBOX_RUN_SCRIPT_PATH)}`,
-      'echo "[sandbox-run] running image run script..." >&2',
-      `bash ${shellQuote(SANDBOX_RUN_SCRIPT_PATH)}`,
-      'echo "[sandbox-run] image run script complete." >&2',
+      `if [[ -f ${shellQuote(SANDBOX_START_SCRIPT_PATH)} ]]; then`,
+      `  chmod 700 ${shellQuote(SANDBOX_START_SCRIPT_PATH)}`,
+      '  echo "[sandbox-start] running ~/start.sh..." >&2',
+      `  bash ${shellQuote(SANDBOX_START_SCRIPT_PATH)}`,
+      '  echo "[sandbox-start] ~/start.sh complete." >&2',
+      'fi',
       `exec ${serverCommand}`
     ].join('\n')
   ]
@@ -1018,7 +1003,7 @@ async function createAgentSandboxModal (input: {
     if (!imageRecord) {
       throw new HTTPException(404, { message: 'Image not found' })
     }
-    const sandboxStartCommand = buildSandboxStartCommand(imageRecord.runScript)
+    const sandboxStartCommand = buildSandboxStartCommand()
 
     const apiKeys = {
       OPENAI_API_KEY: (process.env.OPENAI_API_KEY ?? '').trim(),

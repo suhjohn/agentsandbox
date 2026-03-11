@@ -43,12 +43,12 @@ END
 $$;--> statement-breakpoint
 
 UPDATE "image_variants"
-SET "head_image_id" = 'suhjohn/agentdesktop'
+SET "head_image_id" = 'ghcr.io/suhjohn/agentsandbox:latest'
 WHERE "head_image_id" IS NULL
    OR btrim("head_image_id") = '';--> statement-breakpoint
 
 ALTER TABLE "image_variants"
-  ALTER COLUMN "head_image_id" SET DEFAULT 'suhjohn/agentdesktop';--> statement-breakpoint
+  ALTER COLUMN "head_image_id" SET DEFAULT 'ghcr.io/suhjohn/agentsandbox:latest';--> statement-breakpoint
 
 ALTER TABLE "image_variants"
   ALTER COLUMN "head_image_id" SET NOT NULL;--> statement-breakpoint

@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { db } from "../db";
+import { env } from "../env";
 import {
   environmentSecrets,
   imageVariantBuilds,
@@ -21,20 +22,7 @@ import { runModalImageBuild, type BuildChunk } from "./build";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
-export const DEFAULT_VARIANT_HEAD_IMAGE_REF = "suhjohn/agentdesktop";
-
-const DEFAULT_SETUP_SCRIPT = [
-  "set -euo pipefail",
-  ": # no-op setup script",
-  "",
-].join("\n");
-
-function resolveSetupScript(setupScript: string | null): string {
-  if (typeof setupScript === "string" && setupScript.trim().length > 0) {
-    return setupScript;
-  }
-  return DEFAULT_SETUP_SCRIPT;
-}
+export const DEFAULT_VARIANT_HEAD_IMAGE_REF = env.AGENT_BASE_IMAGE_REF;
 
 function normalizeNullableText(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
@@ -299,6 +287,7 @@ export async function updateImageVariant(input: {
   readonly imageId: string;
   readonly variantId: string;
   readonly name?: string;
+  readonly headImageId?: string | null;
   readonly scope?: ImageVariantScope;
   readonly ownerUserId?: string | null;
 }) {
@@ -319,6 +308,9 @@ export async function updateImageVariant(input: {
   }
 
   let nextName = requestedName ?? existing.name;
+  const nextHeadImageId = Object.prototype.hasOwnProperty.call(input, "headImageId")
+    ? normalizeNullableText(input.headImageId) ?? DEFAULT_VARIANT_HEAD_IMAGE_REF
+    : existing.headImageId;
   const shouldAutoRenameOnPersonalConflict =
     requestedName === null &&
     nextScope === "personal" &&
@@ -352,6 +344,7 @@ export async function updateImageVariant(input: {
         scope: nextScope,
         ownerUserId: nextOwnerUserId,
         name: nextName,
+        headImageId: nextHeadImageId,
         updatedAt: new Date(),
       })
       .where(
@@ -564,8 +557,6 @@ export async function isDefaultVariant(input: {
 export async function createImage(input: {
   readonly name: string;
   readonly description?: string;
-  readonly setupScript?: string;
-  readonly runScript?: string;
   readonly headImageId?: string | null;
   readonly createdBy: string;
 }) {
@@ -574,8 +565,6 @@ export async function createImage(input: {
     .values({
       name: input.name,
       description: input.description,
-      setupScript: normalizeNullableText(input.setupScript),
-      runScript: normalizeNullableText(input.runScript),
       createdBy: input.createdBy,
     })
     .returning();
@@ -628,8 +617,6 @@ export async function updateImage(
   input: {
     readonly name?: string;
     readonly description?: string;
-    readonly setupScript?: string | null;
-    readonly runScript?: string | null;
   },
 ) {
   if (!isUuid(id)) return null;
@@ -639,12 +626,6 @@ export async function updateImage(
       ...(typeof input.name === "string" ? { name: input.name } : {}),
       ...(typeof input.description === "string"
         ? { description: input.description }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(input, "setupScript")
-        ? { setupScript: normalizeNullableText(input.setupScript) }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(input, "runScript")
-        ? { runScript: normalizeNullableText(input.runScript) }
         : {}),
       updatedAt: new Date(),
     })
@@ -739,8 +720,6 @@ export async function cloneImage(input: {
       name: input.nameOverride ?? `${source.name} (Copy)`,
       description: source.description,
       visibility: "private",
-      setupScript: source.setupScript,
-      runScript: source.runScript,
       createdBy: input.clonedByUserId,
     })
     .returning();
@@ -795,7 +774,6 @@ export async function runBuild(input: {
     throw new Error("Image variant is read-only");
   }
 
-  const setupScript = resolveSetupScript(image.setupScript ?? null);
   const baseImageId =
     normalizeNullableText(variant.headImageId) ?? DEFAULT_VARIANT_HEAD_IMAGE_REF;
 
@@ -816,7 +794,6 @@ export async function runBuild(input: {
   const buildInputPayload = {
     imageId: input.imageRecordId,
     variantId: variant.id,
-    setupScript,
     baseImageId,
     environmentSecretNames,
   } as const;
@@ -844,7 +821,6 @@ export async function runBuild(input: {
   try {
     const { builtImageId } = await runModalImageBuild({
       imageId: input.imageRecordId,
-      setupScript,
       environmentSecretNames,
       baseImageId,
       onChunk: (chunk) => {

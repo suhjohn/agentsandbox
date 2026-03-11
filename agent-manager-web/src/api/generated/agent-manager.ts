@@ -287,10 +287,6 @@ export type GetImages200DataItem = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
-  /** @nullable */
-  setupScript?: string | null;
-  /** @nullable */
-  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -310,8 +306,6 @@ export type PostImagesBody = {
   name: string;
   /** @maxLength 2000 */
   description?: string;
-  setupScript?: string;
-  runScript?: string;
   headImageId?: string;
 };
 
@@ -333,10 +327,6 @@ export type PostImages201 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
-  /** @nullable */
-  setupScript?: string | null;
-  /** @nullable */
-  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -360,10 +350,6 @@ export type GetImagesImageId200 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
-  /** @nullable */
-  setupScript?: string | null;
-  /** @nullable */
-  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -381,8 +367,6 @@ export type PatchImagesImageIdBody = {
   name?: string;
   /** @maxLength 2000 */
   description?: string;
-  setupScript?: string;
-  runScript?: string;
 };
 
 export type PatchImagesImageId200Visibility = typeof PatchImagesImageId200Visibility[keyof typeof PatchImagesImageId200Visibility];
@@ -403,10 +387,6 @@ export type PatchImagesImageId200 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
-  /** @nullable */
-  setupScript?: string | null;
-  /** @nullable */
-  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -512,6 +492,13 @@ export const PatchImagesImageIdVariantsVariantIdBodyScope = {
 } as const;
 
 export type PatchImagesImageIdVariantsVariantIdBody = {
+  /**
+   * @minLength 1
+   * @maxLength 255
+   */
+  name?: string;
+  /** @minLength 1 */
+  headImageId?: string;
   scope?: PatchImagesImageIdVariantsVariantIdBodyScope;
 };
 
@@ -761,10 +748,6 @@ export type PostImagesImageIdArchive200 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
-  /** @nullable */
-  setupScript?: string | null;
-  /** @nullable */
-  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -796,10 +779,6 @@ export type PostImagesImageIdUnarchive200 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
-  /** @nullable */
-  setupScript?: string | null;
-  /** @nullable */
-  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -835,10 +814,6 @@ export type PostImagesImageIdBuild200Image = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
-  /** @nullable */
-  setupScript?: string | null;
-  /** @nullable */
-  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -899,10 +874,6 @@ export type PostImagesImageIdClone201 = {
   createdBy: string | null;
   /** @nullable */
   defaultVariantId?: string | null;
-  /** @nullable */
-  setupScript?: string | null;
-  /** @nullable */
-  runScript?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;

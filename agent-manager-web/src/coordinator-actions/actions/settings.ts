@@ -266,34 +266,6 @@ export const settingsImageDetailSetDescriptionAction: SemanticActionDefinition<
   },
 };
 
-const settingsImageDetailSetSetupScriptSchema = z.object({
-  script: z.string(),
-});
-
-export const settingsImageDetailSetSetupScriptAction: SemanticActionDefinition<
-  z.infer<typeof settingsImageDetailSetSetupScriptSchema>,
-  { readonly scriptUpdated: true; readonly dirty: boolean }
-> = {
-  id: "settings.image_detail.set_setup_script",
-  version: 1,
-  description: "Set the setup script text on the image detail page.",
-  paramsSchema: settingsImageDetailSetSetupScriptSchema,
-  paramsJsonSchema: {
-    type: "object",
-    additionalProperties: false,
-    required: ["script"],
-    properties: {
-      script: { type: "string" },
-    },
-  },
-  canRun: canRunImageDetailEditable,
-  run: async (ctx, params) => {
-    const controller = ctx.settingsImageDetailController;
-    if (!controller) throw new Error("Image detail controller unavailable");
-    return await controller.setSetupScript(params.script);
-  },
-};
-
 export const settingsImageDetailSaveAction: SemanticActionDefinition<
   Record<string, never>,
   { readonly saved: true }
@@ -490,7 +462,6 @@ export const settingsActions = [
   settingsImagesOpenDetailAction,
   settingsImageDetailSetNameAction,
   settingsImageDetailSetDescriptionAction,
-  settingsImageDetailSetSetupScriptAction,
   settingsImageDetailSaveAction,
   settingsImageDetailRevertAction,
   settingsImageDetailCloneAction,

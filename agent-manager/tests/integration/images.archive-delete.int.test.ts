@@ -185,10 +185,9 @@ describe("images archive/delete lifecycle (integration)", () => {
     expect(getAfterDeleteRes.status).toBe(404);
   });
 
-  it("persists runScript separately from setupScript across create, get, and update", async () => {
+  it("persists image metadata across create, get, and update", async () => {
     const user = await registerUser(server.baseUrl, "scripts");
-    const setupScript = ["set -euo pipefail", "echo setup"].join("\n");
-    const runScript = ["set -euo pipefail", "echo run"].join("\n");
+    const description = "first description";
 
     const createRes = await fetch(`${server.baseUrl}/images`, {
       method: "POST",
@@ -198,21 +197,18 @@ describe("images archive/delete lifecycle (integration)", () => {
       },
       body: JSON.stringify({
         name: "script persistence image",
-        setupScript,
-        runScript,
+        description,
       }),
     });
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()) as {
       id: string;
-      setupScript?: string | null;
-      runScript?: string | null;
+      description?: string | null;
     };
     cleanup.push(async () => {
       await deleteImage(created.id).catch(() => {});
     });
-    expect(created.setupScript).toBe(setupScript);
-    expect(created.runScript).toBe(runScript);
+    expect(created.description).toBe(description);
 
     const getRes = await fetch(`${server.baseUrl}/images/${created.id}`, {
       method: "GET",
@@ -220,27 +216,23 @@ describe("images archive/delete lifecycle (integration)", () => {
     });
     expect(getRes.status).toBe(200);
     const fetched = (await getRes.json()) as {
-      setupScript?: string | null;
-      runScript?: string | null;
+      description?: string | null;
     };
-    expect(fetched.setupScript).toBe(setupScript);
-    expect(fetched.runScript).toBe(runScript);
+    expect(fetched.description).toBe(description);
 
-    const nextRunScript = ["set -euo pipefail", "echo run changed"].join("\n");
+    const nextDescription = "second description";
     const patchRes = await fetch(`${server.baseUrl}/images/${created.id}`, {
       method: "PATCH",
       headers: {
         Authorization: `Bearer ${user.accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ runScript: nextRunScript }),
+      body: JSON.stringify({ description: nextDescription }),
     });
     expect(patchRes.status).toBe(200);
     const patched = (await patchRes.json()) as {
-      setupScript?: string | null;
-      runScript?: string | null;
+      description?: string | null;
     };
-    expect(patched.setupScript).toBe(setupScript);
-    expect(patched.runScript).toBe(nextRunScript);
+    expect(patched.description).toBe(nextDescription);
   });
 });

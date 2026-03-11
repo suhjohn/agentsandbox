@@ -13,6 +13,7 @@ const SANDBOX_WORKSPACES_DIR = `${SANDBOX_AGENT_HOME}/workspaces`
 const SANDBOX_ROOT_DIR = `${SANDBOX_AGENT_HOME}/runtime`
 const SANDBOX_CODEX_HOME = `${SANDBOX_AGENT_HOME}/.codex`
 const SANDBOX_PI_DIR = `${SANDBOX_AGENT_HOME}/.pi`
+const SANDBOX_BUILD_SCRIPT_PATH = `${SANDBOX_AGENT_HOME}/build.sh`
 
 const BUILD_APP_NAME = 'image-builder'
 const DEFAULT_MODAL_SECRET_NAME = 'openinspect-build-secret'
@@ -45,7 +46,6 @@ export type BuildChunk = {
 
 export async function runModalImageBuild (input: {
   readonly imageId: string
-  readonly setupScript: string
   readonly environmentSecretNames?: readonly string[]
   readonly baseImageId?: string | null
   readonly modalSecretName?: string
@@ -158,17 +158,16 @@ export async function runModalImageBuild (input: {
       }
     ]
 
-    if (input.setupScript.trim().length > 0) {
-      const setupScriptPath = '/tmp/image-setup.sh'
-      await writeFile(sandbox, setupScriptPath, input.setupScript)
-      setupSteps.push({
-        label: 'user setup script',
-        command: `chmod 700 ${shellQuote(setupScriptPath)} && ${shellQuote(
-          setupScriptPath
-        )}`,
-        errorPrefix: 'setup script'
-      })
-    }
+    setupSteps.push({
+      label: 'image build hook',
+      command: [
+        'if [[ -f ' + shellQuote(SANDBOX_BUILD_SCRIPT_PATH) + ' ]]; then',
+        '  chmod 700 ' + shellQuote(SANDBOX_BUILD_SCRIPT_PATH),
+        '  ' + shellQuote(SANDBOX_BUILD_SCRIPT_PATH),
+        'fi'
+      ].join('\n'),
+      errorPrefix: 'build hook'
+    })
 
     setupSteps.push({
       label: 'agent-go binary verify',

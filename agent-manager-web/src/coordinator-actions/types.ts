@@ -301,9 +301,6 @@ export type SettingsImageDetailRuntimeController = {
   readonly setDescription: (
     description: string,
   ) => Promise<{ readonly description: string; readonly dirty: boolean }>;
-  readonly setSetupScript: (
-    script: string,
-  ) => Promise<{ readonly scriptUpdated: true; readonly dirty: boolean }>;
   readonly save: () => Promise<{ readonly saved: true }>;
   readonly revert: () => Promise<{ readonly reverted: true; readonly dirty: false }>;
   readonly clone: () => Promise<{
