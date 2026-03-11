@@ -30,6 +30,7 @@ AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent
 DATABASE_PATH="${DATABASE_PATH:-${ROOT_DIR}/agent.db}"
 
 WORKSPACES_DIR="${WORKSPACES_DIR:-${AGENT_HOME}/workspaces}"
+WORKSPACE_TOOLS_DIR="${WORKSPACE_TOOLS_DIR:-${WORKSPACES_DIR}/tools}"
 DEFAULT_WORKING_DIR="${DEFAULT_WORKING_DIR:-${WORKSPACES_DIR}}"
 
 # Browser-specific state.
@@ -59,7 +60,6 @@ OPENVSCODE_UPSTREAM_PORT="${OPENVSCODE_UPSTREAM_PORT:-39395}"
 AGENT_RUNTIME_MODE="${AGENT_RUNTIME_MODE:-all}"
 CODEX_HOME="${CODEX_HOME:-${AGENT_HOME}/.codex}"
 PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-${AGENT_HOME}/.pi}"
-WORKSPACE_TOOLS_DIR="${WORKSPACES_DIR}/tools"
 DOCKERD_ENABLED="${DOCKERD_ENABLED:-0}"
 DOCKERD_LOG_FILE="${ROOT_DIR}/logs/dockerd.log"
 DOCKERD_DATA_ROOT="${ROOT_DIR}/docker"
@@ -182,6 +182,7 @@ export DATABASE_PATH
 export AGENT_ID
 export AGENT_HOME
 export WORKSPACES_DIR
+export WORKSPACE_TOOLS_DIR
 export DEFAULT_WORKING_DIR
 export HOME="${AGENT_HOME}"
 export XDG_CONFIG_HOME
@@ -206,37 +207,50 @@ fi
 mkdir -p "${AGENT_HOME}" "${WORKSPACES_DIR}" "${DEFAULT_WORKING_DIR}" 2>/dev/null || true
 mkdir -p "${ROOT_DIR}" 2>/dev/null || true
 
-ensure_workspace_tools_link() {
-  local tools_path="${WORKSPACES_DIR}/tools"
-  local effective_tools_path="${WORKSPACES_DIR}/tools"
+ensure_workspace_tools_links() {
+  local tools_path="${WORKSPACE_TOOLS_DIR}"
+  local bundled_tools_path=""
   local src_tools="${AGENT_TOOLS_DIR}"
 
-  [[ -d "${WORKSPACES_DIR}" ]] || return 0
   [[ -d "${src_tools}" ]] || return 0
 
   if [[ -L "${tools_path}" ]]; then
     local resolved=""
     resolved="$(readlink -f "${tools_path}" 2>/dev/null || true)"
     if [[ "${resolved}" == "${src_tools}" ]]; then
-      export WORKSPACE_TOOLS_DIR_EFFECTIVE="${effective_tools_path}"
-      return 0
+      rm -f "${tools_path}" 2>/dev/null || true
     fi
-    rm -f "${tools_path}" 2>/dev/null || true
-  elif [[ -d "${tools_path}" ]]; then
-    if find "${tools_path}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .; then
-      # Don't clobber user-owned tools dir; instead, expose agent tools in a per-agent location.
-      effective_tools_path="${ROOT_DIR}/tools"
-    else
-      rmdir "${tools_path}" 2>/dev/null || true
-    fi
-  elif [[ -e "${tools_path}" ]]; then
-    # Unexpected file at tools path; don't clobber it.
-    effective_tools_path="${ROOT_DIR}/tools"
   fi
 
-  mkdir -p "$(dirname "${effective_tools_path}")" 2>/dev/null || true
-  ln -sfn "${src_tools}" "${effective_tools_path}"
-  export WORKSPACE_TOOLS_DIR_EFFECTIVE="${effective_tools_path}"
+  if [[ -e "${tools_path}" ]] && [[ ! -d "${tools_path}" ]]; then
+    tools_path="${ROOT_DIR}/tools"
+    WORKSPACE_TOOLS_DIR="${tools_path}"
+    export WORKSPACE_TOOLS_DIR
+  fi
+
+  bundled_tools_path="${tools_path}/default"
+  mkdir -p "${tools_path}" "${bundled_tools_path}" 2>/dev/null || true
+
+  local src_path=""
+  while IFS= read -r -d '' src_path; do
+    local name=""
+    local target_path=""
+    local resolved_target=""
+    name="$(basename "${src_path}")"
+    target_path="${bundled_tools_path}/${name}"
+
+    if [[ -L "${target_path}" ]]; then
+      resolved_target="$(readlink -f "${target_path}" 2>/dev/null || true)"
+      if [[ "${resolved_target}" == "${src_path}" ]]; then
+        continue
+      fi
+      rm -f "${target_path}" 2>/dev/null || true
+    fi
+    if [[ -e "${target_path}" ]]; then
+      continue
+    fi
+    ln -s "${src_path}" "${target_path}"
+  done < <(find "${src_tools}" -mindepth 1 -maxdepth 1 -print0)
 }
 
 seed_workspace_baseline_runtime() {
@@ -288,7 +302,7 @@ prepare_runtime_state() {
     "$(dirname "${VNC_PASSWD_FILE}")" \
     2>/dev/null || true
 
-  ensure_workspace_tools_link
+  ensure_workspace_tools_links
   seed_workspace_baseline_runtime
 }
 

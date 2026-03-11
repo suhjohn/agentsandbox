@@ -4,18 +4,20 @@ CDP tools for browser automation and site exploration.
 
 ## CLI Invocation
 
-From `agent-go/`:
+From the workspace root inside the sandbox:
 
 ```bash
-python3 tools/browser-tools/start.py
-python3 tools/browser-tools/nav.py https://example.com
+python3 tools/default/browser-tools/start.py
+python3 tools/default/browser-tools/nav.py https://example.com
 ```
+
+From the `agent-go/` repo checkout directly, use `tools/browser-tools/...` instead.
 
 ## Python API
 
 ```python
 import sys
-sys.path.append("tools/browser-tools")  # run from agent-go/
+sys.path.append("tools/default/browser-tools")  # run from the workspace root
 
 from start import StartBrowserInput, ensure_browser_started
 from nav import NavigateArgs, navigate_to
@@ -60,9 +62,9 @@ finally:
 ### Start Chrome
 
 ```bash
-python3 tools/browser-tools/start.py
-python3 tools/browser-tools/start.py --profile
-python3 tools/browser-tools/start.py --restart
+python3 tools/default/browser-tools/start.py
+python3 tools/default/browser-tools/start.py --profile
+python3 tools/default/browser-tools/start.py --restart
 ```
 
 In the Docker image, Chromium is already running (started by `entrypoint.sh`). This tool verifies DevTools connectivity and can trigger a restart with `--restart`. Locally, it launches Chrome with remote debugging on `:9222`.
@@ -70,15 +72,15 @@ In the Docker image, Chromium is already running (started by `entrypoint.sh`). T
 ### Navigate
 
 ```bash
-python3 tools/browser-tools/nav.py https://example.com
-python3 tools/browser-tools/nav.py https://example.com --new
+python3 tools/default/browser-tools/nav.py https://example.com
+python3 tools/default/browser-tools/nav.py https://example.com --new
 ```
 
 ### Evaluate JavaScript
 
 ```bash
-python3 tools/browser-tools/eval.py "document.title"
-python3 tools/browser-tools/eval.py "document.querySelectorAll('a').length"
+python3 tools/default/browser-tools/eval.py "document.title"
+python3 tools/default/browser-tools/eval.py "document.querySelectorAll('a').length"
 ```
 
 Tip: For longer/multiline JavaScript, use a heredoc to avoid shell escaping issues:
@@ -93,68 +95,68 @@ JS=$(cat <<'EOF'
 })()
 EOF
 )
-python3 tools/browser-tools/eval.py "$JS"
+python3 tools/default/browser-tools/eval.py "$JS"
 ```
 
 ### Screenshot
 
 ```bash
-python3 tools/browser-tools/screenshot.py
-python3 tools/browser-tools/screenshot.py --path /tmp/current-page.png
+python3 tools/default/browser-tools/screenshot.py
+python3 tools/default/browser-tools/screenshot.py --path /tmp/current-page.png
 ```
 
 ### Pick Elements
 
 ```bash
-python3 tools/browser-tools/pick.py "Click the submit button"
+python3 tools/default/browser-tools/pick.py "Click the submit button"
 ```
 
 ### Type
 
 ```bash
-python3 tools/browser-tools/type.py "hello world"
-python3 tools/browser-tools/type.py "hello" --selector "#search"
-python3 tools/browser-tools/type.py "hello" --selector "#search" --clear
-python3 tools/browser-tools/type.py --press Enter
-python3 tools/browser-tools/type.py --env API_KEY --selector "#token"
+python3 tools/default/browser-tools/type.py "hello world"
+python3 tools/default/browser-tools/type.py "hello" --selector "#search"
+python3 tools/default/browser-tools/type.py "hello" --selector "#search" --clear
+python3 tools/default/browser-tools/type.py --press Enter
+python3 tools/default/browser-tools/type.py --env API_KEY --selector "#token"
 ```
 
 ### Click
 
 ```bash
-python3 tools/browser-tools/click.py "#submit"
-python3 tools/browser-tools/click.py "#menu" --right
-python3 tools/browser-tools/click.py "#item" --double
+python3 tools/default/browser-tools/click.py "#submit"
+python3 tools/default/browser-tools/click.py "#menu" --right
+python3 tools/default/browser-tools/click.py "#item" --double
 ```
 
 ### Scroll
 
 ```bash
-python3 tools/browser-tools/scroll.py
-python3 tools/browser-tools/scroll.py down 500
-python3 tools/browser-tools/scroll.py top
-python3 tools/browser-tools/scroll.py --selector "#footer"
+python3 tools/default/browser-tools/scroll.py
+python3 tools/default/browser-tools/scroll.py down 500
+python3 tools/default/browser-tools/scroll.py top
+python3 tools/default/browser-tools/scroll.py --selector "#footer"
 ```
 
 ### Wait
 
 ```bash
-python3 tools/browser-tools/wait.py 2000
-python3 tools/browser-tools/wait.py --selector "#results"
-python3 tools/browser-tools/wait.py --visible ".modal"
-python3 tools/browser-tools/wait.py --hidden ".spinner"
-python3 tools/browser-tools/wait.py --nav
-python3 tools/browser-tools/wait.py --idle
+python3 tools/default/browser-tools/wait.py 2000
+python3 tools/default/browser-tools/wait.py --selector "#results"
+python3 tools/default/browser-tools/wait.py --visible ".modal"
+python3 tools/default/browser-tools/wait.py --hidden ".spinner"
+python3 tools/default/browser-tools/wait.py --nav
+python3 tools/default/browser-tools/wait.py --idle
 ```
 
 ### Cookies
 
 ```bash
-python3 tools/browser-tools/cookies.py
-python3 tools/browser-tools/cookies.py --json
-python3 tools/browser-tools/cookies.py --set session_id=abc123
-python3 tools/browser-tools/cookies.py --set session_id --env SESSION_TOKEN
-python3 tools/browser-tools/cookies.py --delete session_id
+python3 tools/default/browser-tools/cookies.py
+python3 tools/default/browser-tools/cookies.py --json
+python3 tools/default/browser-tools/cookies.py --set session_id=abc123
+python3 tools/default/browser-tools/cookies.py --set session_id --env SESSION_TOKEN
+python3 tools/default/browser-tools/cookies.py --delete session_id
 ```
 
 ## Guideline
@@ -177,22 +179,22 @@ python3 tools/browser-tools/cookies.py --delete session_id
 
 # 1) Ensure Chromium/CDP is up
 
-python3 tools/browser-tools/start.py
+python3 tools/default/browser-tools/start.py
 
 # 2) Go to the site
 
-python3 tools/browser-tools/nav.py '<URL>'
+python3 tools/default/browser-tools/nav.py '<URL>'
 
 # 3) Wait for an input you can type into
 
-python3 tools/browser-tools/wait.py --visible '<INPUT_SELECTOR>' --timeout 30000
+python3 tools/default/browser-tools/wait.py --visible '<INPUT_SELECTOR>' --timeout 30000
 
 # 4) Type the query (clear first) + submit
 
-python3 tools/browser-tools/type.py '<QUERY>' --selector '<INPUT_SELECTOR>' --clear
-python3 tools/browser-tools/type.py --press Enter
+python3 tools/default/browser-tools/type.py '<QUERY>' --selector '<INPUT_SELECTOR>' --clear
+python3 tools/default/browser-tools/type.py --press Enter
 
 # 5) Wait for results container (or other “next state” marker)
 
-python3 tools/browser-tools/wait.py --visible '<RESULTS_SELECTOR>' --timeout 30000
+python3 tools/default/browser-tools/wait.py --visible '<RESULTS_SELECTOR>' --timeout 30000
 ```

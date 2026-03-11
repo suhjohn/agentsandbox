@@ -45,6 +45,7 @@ type RuntimeContext struct {
 	CodexHome                  string
 	PIDir                      string
 	ToolsDir                   string
+	BundledToolsDir            string
 	ToolReadmes                []string
 	Display                    string
 	ScreenWidth                string

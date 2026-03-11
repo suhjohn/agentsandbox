@@ -22,7 +22,8 @@ func TestSetupRuntimeSeedsAgentsAndAuthFiles(t *testing.T) {
 			CodexHome:               codexHome,
 			PIDir:                   filepath.Join(tmpDir, ".pi"),
 			ToolsDir:                filepath.Join(tmpDir, "tools"),
-			ToolReadmes:             []string{filepath.Join(tmpDir, "tools", "browser-tools", "README.md")},
+			BundledToolsDir:         filepath.Join(tmpDir, "tools", "default"),
+			ToolReadmes:             []string{filepath.Join(tmpDir, "tools", "default", "browser-tools", "README.md")},
 			Display:                 ":99",
 			ScreenWidth:             "1280",
 			ScreenHeight:            "720",
@@ -46,6 +47,9 @@ func TestSetupRuntimeSeedsAgentsAndAuthFiles(t *testing.T) {
 	}
 	if !strings.Contains(agentsText, "You are Codex running inside a sandbox container.") {
 		t.Fatalf("expected Codex-specific content, got %q", agentsText)
+	}
+	if !strings.Contains(agentsText, filepath.Join(tmpDir, "tools", "default")) {
+		t.Fatalf("expected bundled tools dir, got %q", agentsText)
 	}
 
 	authRaw, err := os.ReadFile(filepath.Join(codexHome, "auth.json"))

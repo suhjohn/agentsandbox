@@ -175,9 +175,12 @@ func renderAgentsContent(ctx registry.RuntimeContext) string {
 	content.WriteString("- Prefer reusing the existing browser rather than launching a new one.\n")
 	content.WriteString("\n# Tools (Workspace)\n")
 	if toolsDir := strings.TrimSpace(ctx.ToolsDir); toolsDir != "" {
-		content.WriteString("- Tools are synced from the image tools checkout into: " + toolsDir + "\n")
+		content.WriteString("- Workspace tools root: " + toolsDir + "\n")
 	}
-	content.WriteString("- Each tool directory should contain a README.md describing usage. Read it before invoking the tool.\n")
+	if bundledToolsDir := strings.TrimSpace(ctx.BundledToolsDir); bundledToolsDir != "" {
+		content.WriteString("- Bundled agent-go tools are available under: " + bundledToolsDir + "\n")
+	}
+	content.WriteString("- Tool directories may be user-created or bundled. Read each README.md before invoking the tool.\n")
 	if len(ctx.ToolReadmes) > 0 {
 		content.WriteString("\n## Tool READMEs\n")
 		for _, path := range ctx.ToolReadmes {

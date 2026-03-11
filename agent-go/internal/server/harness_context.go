@@ -40,6 +40,7 @@ func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext 
 		piDir = envString("PI_CODING_AGENT_DIR", filepath.Join(strings.TrimSpace(cfg.AgentHome), ".pi"))
 	}
 	toolsDir := effectiveWorkspaceToolsDir(cfg)
+	bundledToolsDir := bundledWorkspaceToolsDir(toolsDir)
 
 	return harnessregistry.RuntimeContext{
 		RootDir:                    rootDir,
@@ -51,6 +52,7 @@ func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext 
 		CodexHome:                  codexHome,
 		PIDir:                      piDir,
 		ToolsDir:                   toolsDir,
+		BundledToolsDir:            bundledToolsDir,
 		ToolReadmes:                listToolReadmes(toolsDir),
 		Display:                    strings.TrimSpace(os.Getenv("DISPLAY")),
 		ScreenWidth:                envString("SCREEN_WIDTH", ""),
@@ -66,7 +68,6 @@ func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext 
 
 func effectiveWorkspaceToolsDir(cfg serveConfig) string {
 	candidates := []string{
-		strings.TrimSpace(os.Getenv("WORKSPACE_TOOLS_DIR_EFFECTIVE")),
 		strings.TrimSpace(os.Getenv("WORKSPACE_TOOLS_DIR")),
 		filepath.Join(strings.TrimSpace(cfg.WorkspacesDir), "tools"),
 		strings.TrimSpace(os.Getenv("AGENT_TOOLS_DIR")),
@@ -82,6 +83,19 @@ func effectiveWorkspaceToolsDir(cfg serveConfig) string {
 		}
 	}
 	return ""
+}
+
+func bundledWorkspaceToolsDir(root string) string {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return ""
+	}
+	candidate := filepath.Join(root, "default")
+	info, err := os.Stat(candidate)
+	if err != nil || !info.IsDir() {
+		return ""
+	}
+	return candidate
 }
 
 func listToolReadmes(root string) []string {
