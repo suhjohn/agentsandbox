@@ -23,7 +23,7 @@ func TestSetupRuntimeSeedsAgentsAndAuthFiles(t *testing.T) {
 			PIDir:            filepath.Join(tmpDir, ".pi"),
 			ToolsDir:         filepath.Join(tmpDir, "tools"),
 			BundledToolsDir:  filepath.Join(tmpDir, "tools", "default"),
-			SharedAgentsPath: filepath.Join(tmpDir, "shared", "AGENTS.md"),
+			SharedAgentsPath: filepath.Join(tmpDir, "shared", "image", "AGENTS.md"),
 			SharedAgentsContent: strings.TrimSpace(`
 # Shared Personality
 You are a happy person.

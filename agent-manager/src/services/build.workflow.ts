@@ -1,5 +1,5 @@
 import { env } from "../env";
-import { IMAGE_HOOKS_ENV_VAR, IMAGE_HOOKS_MOUNT_PATH } from "./image-hooks";
+import { IMAGE_SHARED_ENV_VAR, IMAGE_SHARED_MOUNT_PATH } from "./image-volume";
 import {
   createLineBuffer,
   writeSandboxFileIfMissing,
@@ -7,7 +7,7 @@ import {
   assembleSandboxSecrets,
   createModalSandbox,
   execSandboxTextCommand,
-  getImageHooksMount,
+  getImageSharedMount,
   normalizeNullableText,
   safeTerminateSandbox,
   SANDBOX_START_SCRIPT,
@@ -62,7 +62,7 @@ export async function runImageBuild(input: {
       AGENT_ID: input.imageId,
       AGENT_RUNTIME_MODE: "server",
       SECRET_SEED: env.SANDBOX_SIGNING_SECRET,
-      [IMAGE_HOOKS_ENV_VAR]: IMAGE_HOOKS_MOUNT_PATH,
+      [IMAGE_SHARED_ENV_VAR]: IMAGE_SHARED_MOUNT_PATH,
     },
     namedSecretNames: secretNames,
     onMissingNamedSecret: (name) => {
@@ -79,7 +79,7 @@ export async function runImageBuild(input: {
       'mkdir -p "${WORKSPACES_DIR}" && cd "${WORKSPACES_DIR}" && sleep infinity',
     ],
     secrets,
-    volumes: await getImageHooksMount({ imageId: input.imageId, readOnly: true }),
+    volumes: await getImageSharedMount({ imageId: input.imageId, readOnly: true }),
     timeoutMs: BUILD_CREATE_TIMEOUT_MS,
   });
 

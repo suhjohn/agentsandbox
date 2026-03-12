@@ -88,7 +88,7 @@ agents
                               ┌───────┴───────┐
                               │    BUILD      │
                               │ baseImageId + │
-                              │ /shared/image-hooks/build.sh │
+                              │ /shared/image/hooks/build.sh │
                               └───────┬───────┘
                                       │
                                       ▼
@@ -360,7 +360,7 @@ echo "[upgrade] Starting image build hook..."
 `.trim();
 
 // In runModalImageBuild():
-// execute /shared/image-hooks/build.sh when present
+// execute /shared/image/hooks/build.sh when present
 ```
 
 ### New Upgrade Paths

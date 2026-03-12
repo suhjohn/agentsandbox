@@ -199,7 +199,7 @@ print("active image id:", result.variant.active_image_id)
 Notes:
 
 - The generated build route expects a `variant_id`.
-- For setup-sandbox editing of `/shared/image-hooks/build.sh`, use terminal/setup sandbox APIs or other sandbox tooling; that edit path is not handled by `generated_client` alone.
+- For setup-sandbox editing of `/shared/image/hooks/build.sh`, use terminal/setup sandbox APIs or other sandbox tooling; that edit path is not handled by `generated_client` alone.
 
 ### Create and Manage Agents from an Image
 

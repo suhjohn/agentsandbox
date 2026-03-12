@@ -262,6 +262,7 @@ export class ModalVolumeClient {
     this.#ensurePromise = (async () => {
       await this.#modal.volumes.fromName(this.volumeName, {
         createIfMissing: true,
+        version: 2,
         ...(this.environment ? { environment: this.environment } : {}),
       });
     })();

@@ -22,7 +22,7 @@ import {
   createModalSandbox,
   describeUnknownError,
   fetchSandboxHealthOk,
-  getImageHooksMount,
+  getImageSharedMount,
   isSandboxAlive,
   modalClient,
   normalizeRegions,
@@ -120,9 +120,9 @@ async function createAgentSandbox(input: {
     image,
     command: STANDARD_RUNTIME_COMMAND,
     secrets,
-    volumes: await getImageHooksMount({
+    volumes: await getImageSharedMount({
       imageId: agent.imageId!,
-      readOnly: true,
+      readOnly: false,
     }),
     encryptedPorts: [
       SANDBOX_RUNTIME_API_PORT,

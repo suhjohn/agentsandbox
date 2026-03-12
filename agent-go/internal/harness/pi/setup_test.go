@@ -21,7 +21,7 @@ func TestSetupRuntimeSeedsAgentsFileWithSharedPrelude(t *testing.T) {
 			AgentID:          "agent-123",
 			CodexHome:        filepath.Join(tmpDir, ".codex"),
 			PIDir:            piDir,
-			SharedAgentsPath: filepath.Join(tmpDir, "shared", "AGENTS.md"),
+			SharedAgentsPath: filepath.Join(tmpDir, "shared", "image", "AGENTS.md"),
 			SharedAgentsContent: strings.TrimSpace(`
 # Shared Personality
 You are a happy person.

@@ -10,7 +10,7 @@ import (
 	harnessregistry "agent-go/internal/harness/registry"
 )
 
-const defaultSharedAgentsPath = "/shared/AGENTS.md"
+const defaultSharedAgentsPath = "/shared/image/AGENTS.md"
 
 func (s *server) setupHarnessRuntime() error {
 	if err := s.ensureHarnesses(); err != nil {

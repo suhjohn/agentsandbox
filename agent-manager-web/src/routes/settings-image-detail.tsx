@@ -2213,7 +2213,7 @@ export function SettingsImageDetailPage () {
                         <code className='flex-1 text-xs font-mono text-text-primary break-all'>
                           ssh -p {setupSshInfo.port} {setupSshInfo.username}@
                           {setupSshInfo.host} -- bash -lc "cat &gt;
-                          /shared/image-hooks/build.sh &lt;&lt;'EOF'
+                          /shared/image/hooks/build.sh &lt;&lt;'EOF'
                           <br />
                           set -euo pipefail
                           <br />
@@ -2227,7 +2227,7 @@ export function SettingsImageDetailPage () {
                           className='h-6 w-6 shrink-0'
                           onClick={() =>
                             void onCopy(
-                              `ssh -p ${setupSshInfo.port} ${setupSshInfo.username}@${setupSshInfo.host} -- bash -lc "cat > /shared/image-hooks/build.sh <<'EOF'\nset -euo pipefail\necho hello\nEOF"`,
+                              `ssh -p ${setupSshInfo.port} ${setupSshInfo.username}@${setupSshInfo.host} -- bash -lc "cat > /shared/image/hooks/build.sh <<'EOF'\nset -euo pipefail\necho hello\nEOF"`,
                               'SSH file write command'
                             )
                           }
@@ -2278,27 +2278,40 @@ export function SettingsImageDetailPage () {
                 <SettingsRow
                   left={
                     <SettingsRowLeft
-                      title='Shared volume'
+                      title='Shared image volume'
                       descriptionClassName='line-clamp-none'
                       description={
-                        <>
-                          <code className='font-mono text-text-primary'>
-                            /shared/image-hooks/build.sh
-                          </code>{' '}
-                          runs during image builds if present and is shared
-                          across all variants of this image.{' '}
-                          <code className='font-mono text-text-primary'>
-                            /shared/image-hooks/start.sh
-                          </code>{' '}
-                          runs before agent-server starts in new agent sandboxes
-                          if present.{' '}
-                          <code className='font-mono text-text-primary'>
-                            /shared
-                          </code>{' '}
-                          is a mounted Modal volume, so hook edits persist
-                          immediately without waiting for a setup sandbox
-                          snapshot.
-                        </>
+                        <ul className='space-y-1.5 list-none p-0 m-0'>
+                          <li>
+                            <code className='font-mono text-text-primary'>
+                              /shared/image
+                            </code>{' '}
+                            &mdash; the mounted per-image Modal volume. Hook
+                            edits persist immediately without waiting for a
+                            setup sandbox snapshot.
+                          </li>
+                          <li>
+                            <code className='font-mono text-text-primary'>
+                              /shared/image/hooks/build.sh
+                            </code>{' '}
+                            &mdash; runs during image builds when set (every 30
+                            minutes). Shared across all variants.
+                          </li>
+                          <li>
+                            <code className='font-mono text-text-primary'>
+                              /shared/image/hooks/start.sh
+                            </code>{' '}
+                            &mdash; runs before agent-server starts in new agent
+                            sandboxes.
+                          </li>
+                          <li>
+                            <code className='font-mono text-text-primary'>
+                              /shared/image/AGENTS.md
+                            </code>{' '}
+                            &mdash; loaded into the Codex/PI harness runtime as
+                            shared instructions.
+                          </li>
+                        </ul>
                       }
                     />
                   }

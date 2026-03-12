@@ -9,9 +9,10 @@ This document tracks exported service signatures and behavior details that other
 Behavior:
 
 - Image records no longer persist build/start script text.
-- Build customization now comes from `/shared/image-hooks/build.sh` in the image-scoped shared hook volume.
-- Agent sandbox startup customization now comes from `/shared/image-hooks/start.sh` in the image-scoped shared hook volume.
+- Build customization now comes from `/shared/image/hooks/build.sh` in the image-scoped shared volume.
+- Agent sandbox startup customization now comes from `/shared/image/hooks/start.sh` in the image-scoped shared volume.
 - `/shared` is a mounted Modal volume inside these sandboxes, so hook-file edits persist independently of setup-sandbox filesystem snapshots.
+- The image-scoped shared hook volume is created as a Modal Volume v2.
 - `cloneImage` copies the source image's shared hook files into the cloned image's hook volume and still copies the source default variant active/draft image pointers.
 - Hydrated image responses expose:
   - `defaultVariantId`: the image-level shared fallback.
@@ -444,7 +445,7 @@ Behavior:
   - named default secret `openinspect-build-secret` when present,
   - image-bound environment secrets,
   - inline provider API key secret when configured.
-- Mounts the image-scoped hook volume read-only.
+- Mounts the image-scoped hook volume read-write.
 
 ### `getAgentSandboxRuntimeAccess(input)`
 

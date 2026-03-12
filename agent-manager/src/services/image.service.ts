@@ -22,10 +22,10 @@ import {
 import { log } from "../log";
 import { runImageBuild, type BuildChunk } from "./sandbox.service";
 import {
-  copyImageHookFiles,
-  deleteImageHookVolume,
+  copyImageSharedFiles,
+  deleteImageSharedVolume,
   getImageBuildHookDigest,
-} from "./image-hooks";
+} from "./image-volume";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -857,7 +857,7 @@ export async function deleteImage(id: string) {
   const deleted = result.length > 0;
   if (deleted) {
     try {
-      await deleteImageHookVolume(id);
+      await deleteImageSharedVolume(id);
     } catch (err) {
       log.warn(
         "Failed to delete shared image hook volume after image delete.",
@@ -957,7 +957,7 @@ export async function cloneImage(input: {
   });
 
   try {
-    await copyImageHookFiles({
+    await copyImageSharedFiles({
       sourceImageId: input.sourceImageId,
       targetImageId: cloned.id,
     });

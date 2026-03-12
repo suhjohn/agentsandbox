@@ -18,7 +18,7 @@ import {
   createModalSandbox,
   describeUnknownError,
   execSandboxCommand,
-  getImageHooksMount,
+  getImageSharedMount,
   modalClient,
   normalizeRegions,
   normalizeSetupSandboxSshKeys,
@@ -165,7 +165,7 @@ export async function createSetupSandboxSession(input: {
       image: modalImage,
       command: STANDARD_RUNTIME_COMMAND,
       secrets,
-      volumes: await getImageHooksMount({
+      volumes: await getImageSharedMount({
         imageId: input.imageId,
         readOnly: false,
       }),

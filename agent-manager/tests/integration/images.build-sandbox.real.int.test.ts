@@ -71,7 +71,7 @@ describe("Images build sandbox (real)", () => {
   });
 
   it(
-    "build sandbox runs shared /shared/image-hooks/build.sh and snapshots marker artifacts",
+    "build sandbox runs shared /shared/image/hooks/build.sh and snapshots marker artifacts",
     async () => {
       const modalTokenId = process.env.MODAL_TOKEN_ID?.trim() ?? "";
       const modalTokenSecret = process.env.MODAL_TOKEN_SECRET?.trim() ?? "";
@@ -131,8 +131,8 @@ describe("Images build sandbox (real)", () => {
             "bash",
             "-lc",
             [
-              "mkdir -p /shared/image-hooks",
-              "cat > /shared/image-hooks/build.sh <<'EOF'",
+              "mkdir -p /shared/image/hooks",
+              "cat > /shared/image/hooks/build.sh <<'EOF'",
               "set -euo pipefail",
               "mkdir -p /opt/agent-image/test-markers",
               "code=0",

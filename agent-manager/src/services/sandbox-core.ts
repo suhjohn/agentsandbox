@@ -8,10 +8,10 @@ import {
 import { env } from "../env";
 import { tryResolveTailscaleFunnelPublicBaseUrl } from "../clients/tailscale";
 import {
-  getImageHooksVolume,
-  IMAGE_HOOKS_ENV_VAR,
-  IMAGE_HOOKS_MOUNT_PATH,
-} from "./image-hooks";
+  getImageSharedVolume,
+  IMAGE_SHARED_ENV_VAR,
+  IMAGE_SHARED_MOUNT_PATH,
+} from "./image-volume";
 import {
   isLikelyModalImageId,
   normalizeHeadImageId,
@@ -355,7 +355,7 @@ export async function buildStandardSandboxEnv(input: {
     AGENT_RUNTIME_MODE: "server",
     AGENT_MANAGER_BASE_URL: agentManagerBaseUrl,
     AGENT_ALLOWED_ORIGINS: buildAllowedOrigins(agentManagerBaseUrl),
-    [IMAGE_HOOKS_ENV_VAR]: IMAGE_HOOKS_MOUNT_PATH,
+    [IMAGE_SHARED_ENV_VAR]: IMAGE_SHARED_MOUNT_PATH,
     TERM: "xterm-256color",
   };
   if (input.managerApiKey && input.managerApiKey.trim().length > 0) {
@@ -958,15 +958,15 @@ export async function isSandboxAlive(sb: Sandbox): Promise<boolean> {
   }
 }
 
-export async function getImageHooksMount(input: {
+export async function getImageSharedMount(input: {
   readonly imageId: string;
   readonly readOnly: boolean;
 }): Promise<Record<string, unknown>> {
-  const hooksVolume = await getImageHooksVolume({
+  const sharedVolume = await getImageSharedVolume({
     imageId: input.imageId,
     readOnly: input.readOnly,
   });
-  return { [IMAGE_HOOKS_MOUNT_PATH]: hooksVolume as unknown };
+  return { [IMAGE_SHARED_MOUNT_PATH]: sharedVolume as unknown };
 }
 
 export function normalizeSetupSandboxSshKeys(

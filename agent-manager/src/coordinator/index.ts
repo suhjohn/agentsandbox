@@ -225,14 +225,14 @@ Trigger conditions:
 - User asks to build/rebuild an image.
 - User asks to validate or troubleshoot image build hook / build failures.
 - User cannot create agents because image is not built.
-1. If build behavior needs to change, use a setup sandbox or SSH/SCP to edit \`/shared/image-hooks/build.sh\` in the image's shared hook volume. Those hook edits are shared across all variants of the image.
-2. Ensure \`/shared/image-hooks/build.sh\` follows the build-hook guidelines below.
+1. If build behavior needs to change, use a setup sandbox or SSH/SCP to edit \`/shared/image/hooks/build.sh\` in the image's shared volume. Those hook edits are shared across all variants of the image.
+2. Ensure \`/shared/image/hooks/build.sh\` follows the build-hook guidelines below.
 3. Run build: \`POST /images/{imageId}/build\`.
 4. Re-read: \`GET /images/{imageId}/variants\` (or the build response) and summarize the updated \`draftImageId\` and any errors.
 
-#### \`/shared/image-hooks/build.sh\` Guidelines
+#### \`/shared/image/hooks/build.sh\` Guidelines
 
-If \`/shared/image-hooks/build.sh\` exists in the image-scoped shared hook volume, the manager executes it inside the Modal build sandbox via \`bash -lc\` with a 1-hour timeout. If the file is absent, the build continues without a user hook.
+If \`/shared/image/hooks/build.sh\` exists in the image-scoped shared volume, the manager executes it inside the Modal build sandbox via \`bash -lc\` with a 1-hour timeout. If the file is absent, the build continues without a user hook.
 
 **Environment Variables Available During Build:**
 - \`AGENT_HOME=/home/agent\` — agent user home directory
@@ -246,7 +246,8 @@ If \`/shared/image-hooks/build.sh\` exists in the image-scoped shared hook volum
 - \`XDG_CACHE_HOME=/home/agent/runtime/xdg/cache\`
 - \`XDG_DATA_HOME=/home/agent/runtime/xdg/data\`
 - \`HOME=/home/agent\`
-- \`IMAGE_HOOKS_DIR=/shared/image-hooks\`
+- \`IMAGE_SHARED_DIR=/shared/image\`
+- \`IMAGE_HOOKS_DIR=/shared/image/hooks\`
 
 **Key Assumptions:**
 1. **Working directory**: Script starts in \`$WORKSPACES_DIR\` (\`/home/agent/workspaces\`).
@@ -275,7 +276,7 @@ npm run build
 **Common Patterns:**
 - **Clone and setup**: \`git clone <url> && cd <repo> && <install commands>\`
 - **Multiple repos**: Clone each into \`$WORKSPACES_DIR/<name>\`
-- **Environment files**: Secrets are materialized at their configured file paths after setup (via image secret bindings), so don't hardcode secrets in \`/shared/image-hooks/build.sh\`.
+- **Environment files**: Secrets are materialized at their configured file paths after setup (via image secret bindings), so don't hardcode secrets in \`/shared/image/hooks/build.sh\`.
 - **Path references**: Use \`$WORKSPACES_DIR\` or \`$AGENT_HOME\` instead of hardcoded paths.
 
 **What NOT to do:**
