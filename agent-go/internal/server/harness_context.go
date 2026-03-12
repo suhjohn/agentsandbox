@@ -10,6 +10,8 @@ import (
 	harnessregistry "agent-go/internal/harness/registry"
 )
 
+const defaultSharedAgentsPath = "/shared/AGENTS.md"
+
 func (s *server) setupHarnessRuntime() error {
 	if err := s.ensureHarnesses(); err != nil {
 		return err
@@ -40,6 +42,7 @@ func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext 
 	}
 	toolsDir := effectiveWorkspaceToolsDir(cfg)
 	bundledToolsDir := bundledWorkspaceToolsDir(toolsDir)
+	sharedAgentsPath, sharedAgentsContent := loadSharedAgentsContent(defaultSharedAgentsPath)
 
 	return harnessregistry.RuntimeContext{
 		RootDir:                    rootDir,
@@ -53,6 +56,8 @@ func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext 
 		ToolsDir:                   toolsDir,
 		BundledToolsDir:            bundledToolsDir,
 		ToolReadmes:                listToolReadmes(toolsDir),
+		SharedAgentsPath:           sharedAgentsPath,
+		SharedAgentsContent:        sharedAgentsContent,
 		Display:                    strings.TrimSpace(os.Getenv("DISPLAY")),
 		ScreenWidth:                envString("SCREEN_WIDTH", ""),
 		ScreenHeight:               envString("SCREEN_HEIGHT", ""),
@@ -63,6 +68,22 @@ func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext 
 		NoVNCPort:                  envString("NOVNC_PORT", ""),
 		ChromiumUserDataDir:        envString("CHROMIUM_USER_DATA_DIR", filepath.Join(rootDir, "browser", "chromium")),
 	}
+}
+
+func loadSharedAgentsContent(path string) (string, string) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", ""
+	}
+	content := strings.TrimSpace(string(raw))
+	if content == "" {
+		return "", ""
+	}
+	return path, content
 }
 
 func effectiveWorkspaceToolsDir(cfg serveConfig) string {

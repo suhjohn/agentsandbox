@@ -2,41 +2,12 @@
 
 This document tracks exported service signatures and behavior details that other modules depend on.
 
-## build.ts
-
-### `runModalImageBuild(input)`
-
-```ts
-runModalImageBuild(input: {
-  readonly imageId: string
-  readonly environmentSecretNames?: readonly string[]
-  readonly baseImageId?: string | null
-  readonly modalSecretName?: string
-  readonly onChunk?: (chunk: BuildChunk) => void
-}): Promise<{ readonly builtImageId: string }>
-```
-
-Behavior:
-- Creates a Modal build sandbox.
-- Sets a minimal build environment in that sandbox: `AGENT_HOME`, `AGENT_ID`, `WORKSPACES_DIR`, `ROOT_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and `HOME`.
-- Boots that sandbox through `agent-go/docker/start.sh` in `AGENT_RUNTIME_MODE=server`, using a long-lived sleep command so manager-side setup can run before snapshotting.
-- Attaches Modal secrets by name from:
-  - `input.modalSecretName` (or default `openinspect-build-secret`), and
-  - `input.environmentSecretNames`.
-- Missing secret names are logged to build stderr and ignored.
-- Always runs `agent-go/docker/build.sh` inside the sandbox before snapshotting.
-- `agent-go/docker/build.sh` owns in-sandbox convergence for build sandboxes:
-  - syncing the repo checkout when git metadata is present and auto-pull is enabled,
-  - refreshing installed helper files copied from the repo checkout,
-  - recreating the runtime directory and tools baseline,
-  - running `/shared/image-hooks/build.sh` if present, with a temporary executable copy when the hook is readable but not executable,
-  - verifying `/opt/agentsandbox/agent-go/build-artifacts/agent-server-linux-amd64` exists and is executable before snapshotting.
-
 ## image.service.ts
 
 ### `createImage(input)` / `updateImage(id, input)` / `cloneImage(input)`
 
 Behavior:
+
 - Image records no longer persist build/start script text.
 - Build customization now comes from `/shared/image-hooks/build.sh` in the image-scoped shared hook volume.
 - Agent sandbox startup customization now comes from `/shared/image-hooks/start.sh` in the image-scoped shared hook volume.
@@ -61,6 +32,7 @@ createImageVariant(input: {
 ```
 
 Behavior:
+
 - For `scope: "personal"`, the variant row is owned by `ownerUserId` (and `ownerUserId` is cleared for `scope: "shared"`).
 - When `name` is omitted/blank for a personal variant, the service auto-numbers `Variant`, `Variant 2`, `Variant 3`, ... per `(imageId, ownerUserId)` to avoid unique-index collisions.
 - `activeImageId` is the stable image pointer used for new agent sandboxes.
@@ -83,6 +55,7 @@ updateImageVariant(input: {
 ```
 
 Behavior:
+
 - Updates the variant name when `name` is provided.
 - Updates the variant `activeImageId` when `activeImageId` is provided.
 - Updates the variant `draftImageId` when `draftImageId` is provided.
@@ -104,6 +77,7 @@ runBuild(input: {
 ```
 
 Behavior:
+
 - Passes environment secret names to `runModalImageBuild` via `environmentSecretNames`.
 - Includes `environmentSecretNames` in the build input payload/hash.
 - Uses the variant's current `draftImageId` as the build base and records that value as `baseImageId` in the build input payload.
@@ -112,6 +86,7 @@ Behavior:
 ### `setUserImageDefaultVariantId(input)` / `clearUserImageDefaultVariantId(input)` / `resolveImageVariantForUser(input)`
 
 Behavior:
+
 - Any user who can reach the route can set the image-level shared default variant.
 - Per-user image default overrides are stored in `user_image_variant_defaults` keyed by `(userId, imageId)`.
 - `resolveImageVariantForUser` resolves in this order:
@@ -136,6 +111,7 @@ createAgent(input: {
 ```
 
 Behavior:
+
 - Generates the agent `id` in application code as a UUIDv7 before inserting.
 - Derives the default agent `name` from that generated ID by seeding `unique-names-generator` with built-in adjective, color, and animal dictionaries, then normalizing spaces to `-`.
 - Retries creation when either the generated `id` or derived `name` collides with an existing row.
@@ -151,6 +127,7 @@ getOrCreateDefaultCoordinatorAgentForUser(input: {
 ```
 
 Behavior:
+
 - Resolves `global_settings.defaultCoordinatorImageId` as the bootstrap image source.
 - Reuses the user's latest non-archived root coordinator agent for that default image when one already exists.
 - Otherwise creates a new private `type: "coordinator"` agent for that user, seeded from the default image and that user's effective default variant for the image.
@@ -176,6 +153,7 @@ listAgents(input: {
 ```
 
 Behavior:
+
 - Only returns agents visible to `viewerUserId`: the viewer's own agents plus any `visibility: "shared"` agents.
 - Supports app-level filtering on `type` and `visibility`.
 - Continues to exclude archived agents by default unless callers explicitly request them.
@@ -194,6 +172,7 @@ listAgentGroups(input: {
 ```
 
 Behavior:
+
 - Applies the same viewer visibility rule as `listAgents`.
 - Supports grouping only across the subset of agents visible to `viewerUserId`.
 - Supports app-level filtering on `type` and `visibility` before grouping.
@@ -208,6 +187,7 @@ setAgentSandbox(input: {
 ```
 
 Behavior:
+
 - Records the current live sandbox id for an agent.
 - Clearing or replacing the current sandbox clears the live sandbox pointer for the old runtime.
 
@@ -216,6 +196,7 @@ Behavior:
 ### `registerUser(input)` / `loginUser(input)` / `loginWithGithub(input)`
 
 Behavior:
+
 - `loginUser` rejects accounts whose `passwordHash` is `NULL`; GitHub-only accounts cannot use password login until a local password is set by some future flow.
 - `loginWithGithub` accepts an optional `avatarUrl` and syncs the GitHub avatar into configured static-file storage when the user currently has no avatar or is still using a GitHub-managed avatar path.
 - New GitHub-created users are persisted with `passwordHash: null` instead of a random placeholder hash.
@@ -226,6 +207,7 @@ Behavior:
 ### `uploadGithubAvatar(input)` / `uploadCustomAvatar(input)` / `readAvatar(path)` / `deleteAvatarPath(path)`
 
 Behavior:
+
 - Uses S3-compatible object storage when `STATIC_FILES_S3_BUCKET` is configured.
 - Falls back to the local filesystem under `STATIC_FILES_LOCAL_DIR` when S3 is not configured, so avatar upload/download works in local development without extra infrastructure.
 - Stores avatar files under deterministic per-user paths:
@@ -240,6 +222,7 @@ Behavior:
 ### `createUser(input)` / `updateUser(id, input)`
 
 Behavior:
+
 - `createUser` now accepts nullable `passwordHash` and nullable `avatar`.
 - `updateUser` now accepts nullable `avatar` so avatar reset/upload flows can update the persisted storage pointer independently of profile settings.
 
@@ -264,6 +247,7 @@ createSessionBootstrap(input: {
 ```
 
 Behavior:
+
 - Creates the backing agent through `createAgent`, so bootstrap requests do not accept a caller-provided agent name.
 - Preserves optional runtime session metadata such as `title`, `harness`, `model`, and `modelReasoningEffort` when creating the deterministic runtime session and first run.
 - Treats `harness` and `modelReasoningEffort` as pass-through strings and leaves harness-specific validation to `agent-go`.
@@ -287,12 +271,43 @@ startAgentSession(input: {
 ```
 
 Behavior:
+
 - Starts a new runtime session on an existing agent without exposing sandbox credentials to the caller.
 - Creates the runtime session first, then sends the first message as the authenticated manager-side actor user.
 - Treats `harness` and `modelReasoningEffort` as pass-through strings and leaves harness-specific validation to `agent-go`.
 - Returns session IDs and stream URLs, but not browser/runtime auth tokens.
 
 ## sandbox.service.ts
+
+### `runModalImageBuild(input)`
+
+```ts
+runModalImageBuild(input: {
+  readonly imageId: string
+  readonly environmentSecretNames?: readonly string[]
+  readonly baseImageId?: string | null
+  readonly modalSecretName?: string
+  readonly onChunk?: (chunk: BuildChunk) => void
+}): Promise<{ readonly builtImageId: string }>
+```
+
+Behavior:
+
+- Creates a Modal build sandbox.
+- Injects the runtime vars needed for startup through a Modal inline secret object: `AGENT_ID`, `AGENT_RUNTIME_MODE`, `IMAGE_HOOKS_ENV_VAR`, and `SECRET_SEED`.
+- Otherwise relies on the `agent-go` image defaults for home/workspace/state paths.
+- Boots that sandbox through `agent-go/docker/start.sh` in `AGENT_RUNTIME_MODE=server`, using a long-lived sleep command so manager-side setup can run before snapshotting.
+- Attaches Modal secrets by name from:
+  - `input.modalSecretName` (or default `openinspect-build-secret`), and
+  - `input.environmentSecretNames`.
+- Missing secret names are logged to build stderr and ignored.
+- Always runs `agent-go/docker/build.sh` inside the sandbox before snapshotting.
+- `agent-go/docker/build.sh` owns in-sandbox convergence for build sandboxes:
+  - syncing the repo checkout when git metadata is present and auto-pull is enabled,
+  - refreshing installed helper files copied from the repo checkout,
+  - recreating the runtime directory and tools baseline,
+  - running `/shared/image-hooks/build.sh` if present, with a temporary executable copy when the hook is readable but not executable,
+  - verifying `/opt/agentsandbox/agent-go/build-artifacts/agent-server-linux-amd64` exists and is executable before snapshotting.
 
 ### `createSetupSandbox(input)`
 
@@ -320,6 +335,7 @@ createSetupSandbox(input: {
 ```
 
 Behavior:
+
 - Creates the setup sandbox from the selected variant `draftImageId`.
 - Continues to expose the existing setup terminal/API over encrypted port `8080`.
 - Always reserves sandbox port `22` for optional SSH access on the running setup sandbox.
@@ -347,6 +363,7 @@ upsertSetupSandboxSshAccess(input: {
 ```
 
 Behavior:
+
 - Looks up the live setup sandbox session for the caller.
 - Merges the provided SSH public keys with any keys already authorized for that sandbox.
 - Rewrites `authorized_keys`, starts or restarts `sshd`, and returns the current authorized key list plus SSH connection metadata.
@@ -365,6 +382,7 @@ closeSetupSandbox(input: {
 ```
 
 Behavior:
+
 - Before snapshotting, recursively normalizes `/home/agent` ownership back to `agent:agent` so files created over root SSH remain usable to the normal agent user in later sandboxes.
 - Snapshots the live setup sandbox filesystem, writes the snapshot image id back to the variant's `draftImageId`, and terminates the sandbox.
 - Records the previous variant `draftImageId` as `baseImageId` in a succeeded `image_variant_builds` row with source `setup-sandbox`.
@@ -381,12 +399,14 @@ ensureAgentSandbox(input: {
 ```
 
 Behavior:
+
 - When creating a new sandbox, secret attachments include:
+  - an inline secret object containing all runtime startup vars (`PORT`, Docker toggles, auth/base-URL values, identity, hook mount env, etc.),
   - named default secret `openinspect-build-secret` (if present),
   - inline API key secret object (OpenAI/Anthropic/Google keys when configured),
   - image-bound environment secrets from `listEnvironmentSecrets(agent.imageId)`.
-- Session sandboxes only inject runtime-specific env overrides (`PORT`, Docker toggles, auth/base-URL values, and optional `PI_CODING_AGENT_DIR`) and otherwise rely on the `agent-go` image defaults plus `agent-go/docker/start.sh` for paths and UI token wiring.
-- Setup sandboxes likewise rely on container defaults for home/workspace paths, but explicitly force `AGENT_RUNTIME_MODE=server`.
+- Session sandboxes inject runtime-specific startup vars through Modal inline secret objects and otherwise rely on the `agent-go` image defaults plus `agent-go/docker/start.sh` for paths and UI token wiring.
+- Setup sandboxes likewise rely on container defaults for home/workspace paths and inject their startup vars through Modal inline secret objects, including `AGENT_RUNTIME_MODE=server`.
 - Session sandboxes mount the image-scoped shared hook volume read-only at `/shared/image-hooks`; setup sandboxes mount the same volume read-write.
 - Session sandboxes start through `agent-go/docker/start.sh`, and setup sandboxes also start through that same script.
 - `agent-go/docker/start.sh` runs `/shared/image-hooks/start.sh` whenever that file exists, before it installs and starts runtime services.

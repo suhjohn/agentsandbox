@@ -20,18 +20,20 @@ import {
   userImageVariantDefaults,
 } from "../db/schema";
 import { log } from "../log";
-import { runModalImageBuild, type BuildChunk } from "./build";
+import { runModalImageBuild, type BuildChunk } from "./sandbox.service";
 import {
   copyImageHookFiles,
   deleteImageHookVolume,
-  getImageBuildHookDigest
+  getImageBuildHookDigest,
 } from "./image-hooks";
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
 export const DEFAULT_VARIANT_IMAGE_REF = env.AGENT_BASE_IMAGE_REF;
 
-function normalizeNullableText(value: string | null | undefined): string | null {
+function normalizeNullableText(
+  value: string | null | undefined,
+): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
@@ -90,7 +92,9 @@ export function getVariantDraftImageId(input: {
   readonly draftImageId: string | null | undefined;
   readonly activeImageId: string | null | undefined;
 }): string {
-  return normalizeNullableText(input.draftImageId) ?? getVariantActiveImageId(input);
+  return (
+    normalizeNullableText(input.draftImageId) ?? getVariantActiveImageId(input)
+  );
 }
 
 // ── Environment Secrets ─────────────────────────────────────────────
@@ -232,12 +236,21 @@ export function canUserMutateImageVariant(input: {
 }
 
 function isUniqueViolation(err: unknown): boolean {
-  if (!err || (typeof err !== "object" && typeof err !== "function")) return false;
-  const anyErr = err as { readonly cause?: unknown; readonly message?: unknown };
-  const cause = anyErr.cause as { readonly code?: unknown; readonly message?: unknown } | null;
+  if (!err || (typeof err !== "object" && typeof err !== "function"))
+    return false;
+  const anyErr = err as {
+    readonly cause?: unknown;
+    readonly message?: unknown;
+  };
+  const cause = anyErr.cause as {
+    readonly code?: unknown;
+    readonly message?: unknown;
+  } | null;
   if (cause?.code === "23505") return true;
-  if (typeof anyErr.message === "string" && anyErr.message.includes("23505")) return true;
-  if (typeof cause?.message === "string" && cause.message.includes("23505")) return true;
+  if (typeof anyErr.message === "string" && anyErr.message.includes("23505"))
+    return true;
+  if (typeof cause?.message === "string" && cause.message.includes("23505"))
+    return true;
   return false;
 }
 
@@ -266,7 +279,7 @@ export async function createImageVariant(input: {
   const trimmedName = (input.name ?? "").trim();
   const baseName = trimmedName.length > 0 ? trimmedName : "Variant";
   const ownerUserId =
-    input.scope === "personal" ? input.ownerUserId ?? null : null;
+    input.scope === "personal" ? (input.ownerUserId ?? null) : null;
   const activeImageId = normalizeVariantImageId(input.activeImageId);
   const draftImageId =
     normalizeNullableText(input.draftImageId) ?? activeImageId;
@@ -282,7 +295,10 @@ export async function createImageVariant(input: {
       .select({ name: imageVariants.name })
       .from(imageVariants)
       .where(
-        and(eq(imageVariants.imageId, input.imageId), eq(imageVariants.ownerUserId, ownerUserId))!,
+        and(
+          eq(imageVariants.imageId, input.imageId),
+          eq(imageVariants.ownerUserId, ownerUserId),
+        )!,
       );
     knownNames = new Set(existing.map((row) => row.name));
     candidateName = buildUniqueVariantName({
@@ -340,18 +356,25 @@ export async function updateImageVariant(input: {
 
   const nextScope = input.scope ?? (existing.scope as ImageVariantScope);
   const nextOwnerUserId =
-    nextScope === "personal" ? input.ownerUserId ?? null : null;
-  const requestedName = typeof input.name === "string" ? input.name.trim() : null;
+    nextScope === "personal" ? (input.ownerUserId ?? null) : null;
+  const requestedName =
+    typeof input.name === "string" ? input.name.trim() : null;
   if (requestedName !== null && requestedName.length === 0) {
     throw new Error("name must be non-empty");
   }
 
   let nextName = requestedName ?? existing.name;
-  const nextActiveImageId = Object.prototype.hasOwnProperty.call(input, "activeImageId")
+  const nextActiveImageId = Object.prototype.hasOwnProperty.call(
+    input,
+    "activeImageId",
+  )
     ? normalizeVariantImageId(input.activeImageId)
     : getVariantActiveImageId(existing);
-  const nextDraftImageId = Object.prototype.hasOwnProperty.call(input, "draftImageId")
-    ? normalizeNullableText(input.draftImageId) ?? nextActiveImageId
+  const nextDraftImageId = Object.prototype.hasOwnProperty.call(
+    input,
+    "draftImageId",
+  )
+    ? (normalizeNullableText(input.draftImageId) ?? nextActiveImageId)
     : getVariantDraftImageId(existing);
   const shouldAutoRenameOnPersonalConflict =
     requestedName === null &&
@@ -619,7 +642,11 @@ export async function createImageVariantBuild(input: {
   readonly errorMessage?: string | null;
   readonly finishedAt?: Date | null;
 }) {
-  if (!isUuid(input.imageId) || !isUuid(input.variantId) || !isUuid(input.requestedByUserId)) {
+  if (
+    !isUuid(input.imageId) ||
+    !isUuid(input.variantId) ||
+    !isUuid(input.requestedByUserId)
+  ) {
     return null;
   }
   const [created] = await db
@@ -675,7 +702,10 @@ export async function listImageVariantBuilds(input: {
   readonly limit?: number;
 }) {
   if (!isUuid(input.imageId) || !isUuid(input.variantId)) return [];
-  const limit = typeof input.limit === "number" ? Math.max(1, Math.min(200, input.limit)) : 50;
+  const limit =
+    typeof input.limit === "number"
+      ? Math.max(1, Math.min(200, input.limit))
+      : 50;
   return db
     .select()
     .from(imageVariantBuilds)
@@ -728,7 +758,8 @@ export async function createImage(input: {
     activeImageId: input.activeImageId,
     draftImageId: input.draftImageId,
   });
-  if (!defaultVariant) throw new Error("Failed to create default image variant");
+  if (!defaultVariant)
+    throw new Error("Failed to create default image variant");
 
   await setImageDefaultVariantId({
     imageId: image.id,
@@ -828,10 +859,13 @@ export async function deleteImage(id: string) {
     try {
       await deleteImageHookVolume(id);
     } catch (err) {
-      log.warn("Failed to delete shared image hook volume after image delete.", {
-        imageId: id,
-        err,
-      });
+      log.warn(
+        "Failed to delete shared image hook volume after image delete.",
+        {
+          imageId: id,
+          err,
+        },
+      );
     }
   }
   return deleted;
@@ -875,7 +909,7 @@ export async function listImages(input: {
   return {
     images: hydrated,
     nextCursor: hasMore
-      ? hydrated[hydrated.length - 1]?.createdAt.toISOString() ?? null
+      ? (hydrated[hydrated.length - 1]?.createdAt.toISOString() ?? null)
       : null,
   };
 }
@@ -973,14 +1007,18 @@ export async function runBuild(input: {
 
   const baseImageId = getVariantDraftImageId(variant);
 
-  let environmentSecretRows =
-    [] as Awaited<ReturnType<typeof listEnvironmentSecrets>>;
+  let environmentSecretRows = [] as Awaited<
+    ReturnType<typeof listEnvironmentSecrets>
+  >;
   try {
     environmentSecretRows = await listEnvironmentSecrets(input.imageRecordId);
   } catch (err) {
-    log.warn("Failed to load environment secret bindings; continuing without them.", {
-      err,
-    });
+    log.warn(
+      "Failed to load environment secret bindings; continuing without them.",
+      {
+        err,
+      },
+    );
     environmentSecretRows = [];
   }
   const environmentSecretNames = normalizeSecretNames(

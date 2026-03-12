@@ -16,13 +16,18 @@ func TestSetupRuntimeSeedsAgentsAndAuthFiles(t *testing.T) {
 	h := NewHarness(nil)
 	err := h.SetupRuntime(registry.SetupContext{
 		RuntimeContext: registry.RuntimeContext{
-			RootDir:         filepath.Join(tmpDir, "runtime-root"),
-			AgentHome:       tmpDir,
-			AgentID:         "agent-123",
-			CodexHome:       codexHome,
-			PIDir:           filepath.Join(tmpDir, ".pi"),
-			ToolsDir:        filepath.Join(tmpDir, "tools"),
-			BundledToolsDir: filepath.Join(tmpDir, "tools", "default"),
+			RootDir:          filepath.Join(tmpDir, "runtime-root"),
+			AgentHome:        tmpDir,
+			AgentID:          "agent-123",
+			CodexHome:        codexHome,
+			PIDir:            filepath.Join(tmpDir, ".pi"),
+			ToolsDir:         filepath.Join(tmpDir, "tools"),
+			BundledToolsDir:  filepath.Join(tmpDir, "tools", "default"),
+			SharedAgentsPath: filepath.Join(tmpDir, "shared", "AGENTS.md"),
+			SharedAgentsContent: strings.TrimSpace(`
+# Shared Personality
+You are a happy person.
+`),
 			ToolReadmes: []registry.ToolReadme{{
 				Path:    filepath.Join(tmpDir, "tools", "default", "browser-tools", "README.md"),
 				Content: "# Browser Tools\nUse me.\n",
@@ -48,8 +53,14 @@ func TestSetupRuntimeSeedsAgentsAndAuthFiles(t *testing.T) {
 	if !strings.Contains(agentsText, "agent-go:managed kind=agents-md harness=codex version=2") {
 		t.Fatalf("expected managed AGENTS header, got %q", agentsText)
 	}
+	if !strings.Contains(agentsText, "# Shared Instructions") || !strings.Contains(agentsText, "You are a happy person.") {
+		t.Fatalf("expected shared instructions, got %q", agentsText)
+	}
 	if !strings.Contains(agentsText, "You are Codex running inside a sandbox container.") {
 		t.Fatalf("expected Codex-specific content, got %q", agentsText)
+	}
+	if strings.Index(agentsText, "# Shared Instructions") > strings.Index(agentsText, "# Environment") {
+		t.Fatalf("expected shared instructions before environment, got %q", agentsText)
 	}
 	if !strings.Contains(agentsText, filepath.Join(tmpDir, "tools", "default")) {
 		t.Fatalf("expected bundled tools dir, got %q", agentsText)

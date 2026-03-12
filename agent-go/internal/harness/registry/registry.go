@@ -52,6 +52,8 @@ type RuntimeContext struct {
 	ToolsDir                   string
 	BundledToolsDir            string
 	ToolReadmes                []ToolReadme
+	SharedAgentsPath           string
+	SharedAgentsContent        string
 	Display                    string
 	ScreenWidth                string
 	ScreenHeight               string

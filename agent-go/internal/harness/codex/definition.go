@@ -163,6 +163,7 @@ func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
 
 func renderAgentsContent(ctx registry.RuntimeContext) string {
 	var content strings.Builder
+	content.WriteString(registry.SharedAgentsSection(ctx))
 	content.WriteString("# Environment\n")
 	content.WriteString("- You are Codex running inside a sandbox container.\n")
 	content.WriteString("- Runtime state root: " + strings.TrimSpace(ctx.RootDir) + "\n")
