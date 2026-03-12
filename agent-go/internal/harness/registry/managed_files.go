@@ -12,6 +12,8 @@ import (
 const (
 	managedFileOwner = "agent-go"
 	managedFileKind  = "agents-md"
+	managedStartTag  = "<!-- agent-go:managed:start -->"
+	managedEndTag    = "<!-- agent-go:managed:end -->"
 )
 
 var managedFileHeaderPattern = regexp.MustCompile(`^<!--\s*agent-go:managed\s+kind=([^\s]+)\s+harness=([^\s]+)\s+version=(\d+)\s*-->$`)
@@ -45,7 +47,8 @@ func EnsureManagedContextFile(spec ManagedFileSpec) (ManagedFileResult, error) {
 	if content == "" {
 		return ManagedFileResult{Reason: "empty-content"}, nil
 	}
-	desired := marshalManagedFile(harness, spec.Version, content)
+	userSuffix := ""
+	desired := ""
 
 	current, err := os.ReadFile(path)
 	if err == nil {
@@ -60,11 +63,15 @@ func EnsureManagedContextFile(spec ManagedFileSpec) (ManagedFileResult, error) {
 		if header.Version > spec.Version {
 			return ManagedFileResult{Reason: "existing-newer-version"}, nil
 		}
+		userSuffix = extractManagedFileSuffix(currentText)
+		desired = marshalManagedFile(harness, spec.Version, content, userSuffix)
 		if currentText == desired {
 			return ManagedFileResult{Reason: "up-to-date"}, nil
 		}
 	} else if !os.IsNotExist(err) {
 		return ManagedFileResult{}, err
+	} else {
+		desired = marshalManagedFile(harness, spec.Version, content, "")
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -103,10 +110,24 @@ type managedFileHeader struct {
 	Version int
 }
 
-func marshalManagedFile(harness string, version int, content string) string {
+func marshalManagedFile(harness string, version int, content string, suffix string) string {
 	header := fmt.Sprintf("<!-- %s:managed kind=%s harness=%s version=%d -->\n", managedFileOwner, managedFileKind, harness, version)
 	body := strings.TrimSpace(content) + "\n"
-	return header + body
+	var text strings.Builder
+	text.WriteString(header)
+	text.WriteString(managedStartTag)
+	text.WriteByte('\n')
+	text.WriteString(body)
+	text.WriteString(managedEndTag)
+	text.WriteByte('\n')
+	if suffix = strings.TrimLeft(suffix, "\n"); suffix != "" {
+		text.WriteByte('\n')
+		text.WriteString(suffix)
+		if !strings.HasSuffix(suffix, "\n") {
+			text.WriteByte('\n')
+		}
+	}
+	return text.String()
 }
 
 func parseManagedFileHeader(content string) (managedFileHeader, bool) {
@@ -124,4 +145,24 @@ func parseManagedFileHeader(content string) (managedFileHeader, bool) {
 		Harness: strings.ToLower(strings.TrimSpace(matches[2])),
 		Version: version,
 	}, true
+}
+
+func extractManagedFileSuffix(content string) string {
+	start := strings.Index(content, managedStartTag)
+	if start < 0 {
+		return ""
+	}
+	searchFrom := start + len(managedStartTag)
+	endOffset := strings.Index(content[searchFrom:], managedEndTag)
+	if endOffset < 0 {
+		return ""
+	}
+	afterEnd := searchFrom + endOffset + len(managedEndTag)
+	if afterEnd < len(content) && content[afterEnd] == '\r' {
+		afterEnd++
+	}
+	if afterEnd < len(content) && content[afterEnd] == '\n' {
+		afterEnd++
+	}
+	return content[afterEnd:]
 }

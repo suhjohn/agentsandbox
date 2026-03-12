@@ -45,7 +45,7 @@ function pathPatternToRegex(path: string): RegExp {
   const pattern = path
     .split("/")
     .map((segment) =>
-      segment.startsWith(":")
+      segment.startsWith(":") || /^\{[A-Za-z0-9_]+\}$/.test(segment)
         ? "[^/]+"
         : escapeRegex(segment),
     )
@@ -94,7 +94,10 @@ function cloneSecurityRequirement(
   return cloned;
 }
 
-function normalizeRouteSecurity(path: string, security?: RouteSecurity): RouteSecurity | undefined {
+function normalizeRouteSecurity(
+  path: string,
+  security?: RouteSecurity,
+): Array<Partial<Record<SecuritySchemeName, string[]>>> | undefined {
   if (!security) return undefined;
   const cloned = security.map((requirement) => cloneSecurityRequirement(requirement));
   if (path.startsWith("/api-keys")) {

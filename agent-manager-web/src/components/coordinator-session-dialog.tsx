@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { List, Plus } from 'lucide-react'
+import { List, Plus, Terminal } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAuth } from '../lib/auth'
 import type { Agent, AgentManagerApiClient } from '../lib/api'
+import { SandboxLoader } from './loader'
+import { TerminalPanel } from './terminal-panel'
 import {
   Dialog,
   DialogContent,
@@ -22,6 +24,7 @@ import {
   type AgentSessionPanelConfig
 } from '@/workspace/panels/agent-session'
 import type { PanelRuntime } from '@/workspace/panels/types'
+import { requestTerminalConnectAuthed } from '@/lib/terminal-connect'
 
 type DialogMode = 'conversation' | 'sessions'
 type ManagerSessionRecord = Awaited<
@@ -61,6 +64,7 @@ export function CoordinatorSessionDialog (props: {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<DialogMode>('conversation')
   const [isDraftingNewSession, setIsDraftingNewSession] = useState(false)
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false)
   const [conversationViewKey, setConversationViewKey] = useState(0)
   const [sessionConfig, setSessionConfig] = useState<AgentSessionPanelConfig>({
     agentId: '',
@@ -256,6 +260,37 @@ export function CoordinatorSessionDialog (props: {
       toast.error(toErrorMessage(error))
     }
   })
+
+  const terminalConnectQuery = useQuery({
+    queryKey: ['coordinator-dialog', 'agent-terminal', selectedAgentId],
+    queryFn: async () => {
+      if (selectedAgentId.length === 0) {
+        throw new Error('Select a coordinator agent first.')
+      }
+
+      return requestTerminalConnectAuthed({
+        fetchAuthed: auth.fetchAuthed,
+        targetType: 'agentSandbox',
+        targetId: selectedAgentId
+      })
+    },
+    enabled:
+      props.open &&
+      !!auth.user &&
+      selectedAgentId.length > 0 &&
+      isTerminalOpen,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
+    retry: false
+  })
+  const refetchTerminalConnect = terminalConnectQuery.refetch
+  const handleTerminalConnectionLost = useCallback(() => {
+    void refetchTerminalConnect()
+  }, [refetchTerminalConnect])
+
+  useEffect(() => {
+    setIsTerminalOpen(false)
+  }, [selectedAgentId])
 
   const canClearCurrentConversation = useCallback((): boolean => {
     return (
@@ -493,6 +528,24 @@ export function CoordinatorSessionDialog (props: {
                   size='icon'
                   variant='icon'
                   onClick={() => {
+                    setIsTerminalOpen(prev => !prev)
+                  }}
+                  disabled={
+                    coordinatorAgentsQuery.isLoading ||
+                    selectedAgentId.length === 0
+                  }
+                  title={
+                    isTerminalOpen
+                      ? 'Hide coordinator terminal'
+                      : 'Show coordinator terminal'
+                  }
+                >
+                  <Terminal className='h-3.5 w-3.5' />
+                </Button>
+                <Button
+                  size='icon'
+                  variant='icon'
+                  onClick={() => {
                     setMode(prev =>
                       prev === 'sessions' ? 'conversation' : 'sessions'
                     )
@@ -618,24 +671,55 @@ export function CoordinatorSessionDialog (props: {
             </div>
           ) : (
             <div className='h-full min-h-0 flex flex-col flex-1'>
+              {isTerminalOpen ? (
+                <div className='shrink-0 h-[36dvh] min-h-56 border-b border-border bg-surface-1'>
+                  {terminalConnectQuery.isLoading ? (
+                    <div className='flex h-full w-full items-center justify-center text-sm text-text-secondary'>
+                      <SandboxLoader label='starting up the sandbox' />
+                    </div>
+                  ) : terminalConnectQuery.isError ? (
+                    <div className='flex h-full w-full items-center justify-center px-6 text-sm text-destructive text-center'>
+                      {toErrorMessage(terminalConnectQuery.error)}
+                    </div>
+                  ) : !terminalConnectQuery.data ? (
+                    <div className='flex h-full w-full items-center justify-center px-6 text-sm text-text-secondary text-center'>
+                      Missing terminal connect credentials.
+                    </div>
+                  ) : terminalConnectQuery.data.wsUrl.trim().length === 0 ? (
+                    <div className='flex h-full w-full items-center justify-center px-6 text-sm text-text-secondary text-center'>
+                      Invalid terminal websocket URL.
+                    </div>
+                  ) : terminalConnectQuery.data.authToken.trim().length === 0 ? (
+                    <div className='flex h-full w-full items-center justify-center px-6 text-sm text-text-secondary text-center'>
+                      Invalid terminal websocket auth token.
+                    </div>
+                  ) : (
+                    <TerminalPanel
+                      wsUrl={terminalConnectQuery.data.wsUrl}
+                      wsAuthToken={terminalConnectQuery.data.authToken}
+                      onConnectionLost={handleTerminalConnectionLost}
+                    />
+                  )}
+                </div>
+              ) : null}
               <div
                 className='min-h-0 flex-1 overflow-y-auto overscroll-contain'
                 data-workspace-panel-scroller='true'
               >
                 <AgentSessionPanel
-                key={`${selectedAgentId}:${conversationViewKey}`}
-                config={{
-                  ...sessionConfig,
-                  agentId: selectedAgentId,
-                  agentName: selectedAgent?.name?.trim() ?? '',
-                  sessionId: activeSessionId
-                }}
-                setConfig={setConfig}
-                runtime={DIALOG_RUNTIME}
-                showToolOpenControls={false}
-                chatControllerKind='dialog'
-                allowCoordinatorComposeEvents
-              />
+                  key={`${selectedAgentId}:${conversationViewKey}`}
+                  config={{
+                    ...sessionConfig,
+                    agentId: selectedAgentId,
+                    agentName: selectedAgent?.name?.trim() ?? '',
+                    sessionId: activeSessionId
+                  }}
+                  setConfig={setConfig}
+                  runtime={DIALOG_RUNTIME}
+                  showToolOpenControls={false}
+                  chatControllerKind='dialog'
+                  allowCoordinatorComposeEvents
+                />
               </div>
             </div>
           )}
