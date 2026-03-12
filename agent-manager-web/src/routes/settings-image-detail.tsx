@@ -2325,6 +2325,7 @@ export function SettingsImageDetailPage () {
                     />
                   }
                 />
+                <div className='border-t border-border' />
                 <SettingsRow
                   disabled={
                     !canMutateSelectedVariant ||
