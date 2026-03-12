@@ -274,10 +274,6 @@ resolve_source_version() {
     git -C "${AGENT_GO_REPO_DIR}" rev-parse HEAD
     return 0
   fi
-  if [[ -f "${AGENT_SERVER_BIN}.rev" ]]; then
-    tr -d ' \n' <"${AGENT_SERVER_BIN}.rev"
-    return 0
-  fi
   if [[ -n "${AGENT_IMAGE_VERSION:-}" ]]; then
     printf '%s' "${AGENT_IMAGE_VERSION}"
     return 0

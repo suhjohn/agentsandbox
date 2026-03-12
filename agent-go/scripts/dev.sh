@@ -71,11 +71,6 @@ server_binary_output_path() {
   printf '%s/%s\n' "${MODULE_DIR}" "$(server_binary_relative_path "${goos_value}" "${goarch_value}")"
 }
 
-server_rev_file_path() {
-  local output_path="$1"
-  printf '%s.rev\n' "${output_path}"
-}
-
 module_relative_path() {
   local absolute_path="$1"
   case "${absolute_path}" in
@@ -101,7 +96,6 @@ prepare_repo_binary_for_docker() {
   goarch_value="$(docker_server_goarch)"
   repo_binary_path="$(server_binary_output_path "linux" "${goarch_value}")"
   build_server_binary "${repo_binary_path}" "linux" "${goarch_value}" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
-  write_git_rev_file "${repo_binary_path}"
 }
 
 build_server_binary() {
@@ -132,29 +126,6 @@ build_server_binary() {
 
   mv -f "${tmp_path}" "${output_path}"
   echo "built ${output_path}"
-}
-
-write_git_rev_file() {
-  local output_path="$1"
-  local rev_file=""
-  local rev=""
-  local current_rev=""
-
-  rev_file="$(server_rev_file_path "${output_path}")"
-  rev="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || true)"
-  if [[ -n "${rev}" ]]; then
-    if [[ -f "${rev_file}" ]]; then
-      current_rev="$(<"${rev_file}")"
-    fi
-    if [[ "${current_rev}" == "${rev}" ]]; then
-      echo "kept ${rev_file}"
-      return 0
-    fi
-    printf '%s\n' "${rev}" > "${rev_file}"
-    echo "wrote ${rev_file}"
-  else
-    rm -f "${rev_file}" 2>/dev/null || true
-  fi
 }
 
 cmd_build_server() {
@@ -552,7 +523,6 @@ cmd_ghcr_push_amd64() {
   elif [[ ! -x "${repo_binary_path}" ]]; then
     die "missing prebuilt binary: ${repo_binary_path}"
   fi
-  write_git_rev_file "${repo_binary_path}"
 
   local tag_args=()
   local t
