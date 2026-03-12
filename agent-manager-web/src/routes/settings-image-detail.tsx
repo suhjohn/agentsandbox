@@ -962,9 +962,7 @@ export function SettingsImageDetailPage () {
     },
     onError: err => {
       const msg =
-        err instanceof Error
-          ? err.message
-          : 'Failed to clear your default'
+        err instanceof Error ? err.message : 'Failed to clear your default'
       toast.error(msg)
     }
   })
@@ -1154,11 +1152,7 @@ export function SettingsImageDetailPage () {
         toast.error(msg)
         setSetupTerminalConnection(null)
       })
-  }, [
-    connectSetupSandboxTerminal,
-    setupSandboxId,
-    setupTerminalConnection
-  ])
+  }, [connectSetupSandboxTerminal, setupSandboxId, setupTerminalConnection])
 
   useEffect(() => {
     return () => {
@@ -1808,18 +1802,24 @@ export function SettingsImageDetailPage () {
                           : 'h-3.5 w-3.5 text-blue-500'
                       }
                     />
-                    {isSelectedVariantUserDefault ? 'My default' : 'Set as my default'}
+                    {isSelectedVariantUserDefault
+                      ? 'My default'
+                      : 'Set as my default'}
                   </Button>
                   <Button
                     variant='ghost'
                     size='sm'
                     className='gap-1.5'
-                    disabled={isBusy || !selectedVariantId || isSelectedVariantGlobalDefault}
+                    disabled={
+                      isBusy ||
+                      !selectedVariantId ||
+                      isSelectedVariantGlobalDefault
+                    }
                     onClick={() => setImageDefaultVariantMutation.mutate()}
                     title={
                       isSelectedVariantGlobalDefault
-                          ? 'This is the image default'
-                          : 'Set as image default'
+                        ? 'This is the image default'
+                        : 'Set as image default'
                     }
                   >
                     <Star
@@ -1829,7 +1829,9 @@ export function SettingsImageDetailPage () {
                           : 'h-3.5 w-3.5 text-yellow-500'
                       }
                     />
-                    {isSelectedVariantGlobalDefault ? 'Image default' : 'Set as image default'}
+                    {isSelectedVariantGlobalDefault
+                      ? 'Image default'
+                      : 'Set as image default'}
                   </Button>
                   {selectedVariant?.id && (
                     <Button
@@ -1855,9 +1857,6 @@ export function SettingsImageDetailPage () {
 
             {/* Image Workflow */}
             <div className='border-b border-border px-4 py-4'>
-              <div className='text-xs font-medium text-text-tertiary uppercase tracking-wide mb-3'>
-                Image Workflow
-              </div>
               <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-3'>
                 {/* Draft */}
                 <div className='flex-1 min-w-0'>
@@ -1963,7 +1962,9 @@ export function SettingsImageDetailPage () {
                     <div className='inline-flex rounded-md border border-border bg-surface-2 p-1'>
                       <Button
                         type='button'
-                        variant={extendMode === 'interactive' ? 'secondary' : 'ghost'}
+                        variant={
+                          extendMode === 'interactive' ? 'secondary' : 'ghost'
+                        }
                         size='sm'
                         className='h-8'
                         onClick={() => setExtendMode('interactive')}
@@ -1983,15 +1984,6 @@ export function SettingsImageDetailPage () {
                     </div>
                   )}
                 </div>
-
-                {!setupSandboxId && extendMode === 'interactive' && (
-                  <div className='mt-3 text-xs text-text-tertiary'>
-                    Start one setup sandbox first. The browser terminal is
-                    available immediately, and SSH public keys can be added
-                    later if you need external access.
-                  </div>
-                )}
-
                 {/* Action Buttons */}
                 <div className='mt-3 flex items-center gap-2'>
                   {!setupSandboxId && extendMode !== 'api' ? (
@@ -2107,7 +2099,8 @@ export function SettingsImageDetailPage () {
                         disabled={
                           !canEdit ||
                           isBusy ||
-                          parseSshPublicKeysDraft(sshPublicKeysDraft).length === 0
+                          parseSshPublicKeysDraft(sshPublicKeysDraft).length ===
+                            0
                         }
                         onClick={() => upsertSetupSandboxSshMutation.mutate()}
                       >
@@ -2292,18 +2285,19 @@ export function SettingsImageDetailPage () {
                           <code className='font-mono text-text-primary'>
                             /shared/image-hooks/build.sh
                           </code>{' '}
-                          runs during image builds if present and is shared across
-                          all variants of this image.{' '}
+                          runs during image builds if present and is shared
+                          across all variants of this image.{' '}
                           <code className='font-mono text-text-primary'>
                             /shared/image-hooks/start.sh
                           </code>{' '}
-                          runs before agent-server starts in new agent sandboxes if
-                          present.{' '}
+                          runs before agent-server starts in new agent sandboxes
+                          if present.{' '}
                           <code className='font-mono text-text-primary'>
                             /shared
                           </code>{' '}
                           is a mounted Modal volume, so hook edits persist
-                          immediately without waiting for a setup sandbox snapshot.
+                          immediately without waiting for a setup sandbox
+                          snapshot.
                         </>
                       }
                     />
