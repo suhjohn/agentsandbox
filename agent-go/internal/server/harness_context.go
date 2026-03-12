@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -103,45 +102,70 @@ func listToolReadmes(root string) []harnessregistry.ToolReadme {
 	if root == "" {
 		return nil
 	}
-	walkRoot := root
-	displayRoot := root
-	if resolved, err := filepath.EvalSymlinks(root); err == nil && strings.TrimSpace(resolved) != "" {
-		walkRoot = resolved
-	}
-	info, err := os.Stat(walkRoot)
+	info, err := os.Stat(root)
 	if err != nil || !info.IsDir() {
 		return nil
 	}
 
 	readmes := make([]harnessregistry.ToolReadme, 0, 16)
-	_ = filepath.WalkDir(walkRoot, func(path string, d fs.DirEntry, err error) error {
+	visited := make(map[string]struct{}, 16)
+	var walk func(string, string)
+	walk = func(displayDir, realDir string) {
+		resolvedDir := realDir
+		if resolved, err := filepath.EvalSymlinks(realDir); err == nil && strings.TrimSpace(resolved) != "" {
+			resolvedDir = resolved
+		}
+		if _, ok := visited[resolvedDir]; ok {
+			return
+		}
+		visited[resolvedDir] = struct{}{}
+
+		entries, err := os.ReadDir(realDir)
 		if err != nil {
-			return nil
+			return
 		}
-		name := d.Name()
-		if d.IsDir() {
-			switch name {
-			case "node_modules", ".git", "dist", "build", "coverage":
-				return filepath.SkipDir
+		for _, entry := range entries {
+			name := entry.Name()
+			displayPath := filepath.Join(displayDir, name)
+			realPath := filepath.Join(realDir, name)
+
+			if entry.IsDir() {
+				switch name {
+				case "node_modules", ".git", "dist", "build", "coverage":
+					continue
+				}
+				walk(displayPath, realPath)
+				continue
 			}
-			return nil
-		}
-		if name == "README.md" {
-			displayPath := path
-			if rel, relErr := filepath.Rel(walkRoot, path); relErr == nil {
-				displayPath = filepath.Join(displayRoot, rel)
+
+			info, err := entry.Info()
+			if err == nil && info.Mode()&os.ModeSymlink != 0 {
+				targetInfo, statErr := os.Stat(realPath)
+				if statErr == nil && targetInfo.IsDir() {
+					switch name {
+					case "node_modules", ".git", "dist", "build", "coverage":
+						continue
+					}
+					walk(displayPath, realPath)
+					continue
+				}
 			}
-			raw, readErr := os.ReadFile(path)
+
+			if name != "README.md" {
+				continue
+			}
+			raw, readErr := os.ReadFile(realPath)
 			if readErr != nil {
-				return nil
+				continue
 			}
 			readmes = append(readmes, harnessregistry.ToolReadme{
 				Path:    displayPath,
 				Content: strings.TrimSpace(string(raw)),
 			})
 		}
-		return nil
-	})
+	}
+
+	walk(root, root)
 	sort.Slice(readmes, func(i, j int) bool {
 		return readmes[i].Path < readmes[j].Path
 	})
