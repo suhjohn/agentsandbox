@@ -20,7 +20,7 @@ import {
   userImageVariantDefaults,
 } from "../db/schema";
 import { log } from "../log";
-import { runModalImageBuild, type BuildChunk } from "./sandbox.service";
+import { runImageBuild, type BuildChunk } from "./sandbox.service";
 import {
   copyImageHookFiles,
   deleteImageHookVolume,
@@ -1055,7 +1055,7 @@ export async function runBuild(input: {
   };
 
   try {
-    const { builtImageId } = await runModalImageBuild({
+    const { builtImageId } = await runImageBuild({
       imageId: input.imageRecordId,
       environmentSecretNames,
       baseImageId,

@@ -130,6 +130,7 @@ describe("POST /agents/:agentId/session (integration)", () => {
     });
 
     vi.spyOn(sandboxService, "ensureAgentSandbox").mockResolvedValue({
+      sandboxId,
       tunnels: {
         openVscodeUrl: "https://openvscode.example.com/",
         noVncUrl: "https://novnc.example.com/vnc.html",

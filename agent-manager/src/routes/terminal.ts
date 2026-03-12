@@ -6,9 +6,10 @@ import type { AppEnv } from '../types/context'
 import { registerRoute } from '../openapi/registry'
 import { getAgentById } from '../services/agent.service'
 import {
+  buildTerminalAccess,
+  getAgentSandboxRuntimeAccess,
   getImageSetupSandboxSession,
-  getAgentTerminalAccess,
-  getSetupSandboxTerminalAccess
+  getSetupSandboxRuntimeAccess
 } from '../services/sandbox.service'
 
 const app = new Hono<AppEnv>()
@@ -76,10 +77,17 @@ registerRoute(
       }
 
       try {
-        const access = await getSetupSandboxTerminalAccess({
+        const runtimeAccess = await getSetupSandboxRuntimeAccess({
           userId: user.id,
           sandboxId: session.sandboxId,
           authTtlSeconds: SANDBOX_AUTH_TOKEN_TTL_SECONDS
+        })
+        const access = buildTerminalAccess({
+          sandboxId: runtimeAccess.sandboxId,
+          baseUrl: runtimeAccess.runtime.baseUrl,
+          authToken: runtimeAccess.terminal.authToken,
+          authTokenExpiresInSeconds:
+            runtimeAccess.terminal.authExpiresInSeconds
         })
 
         return c.json({
@@ -104,10 +112,17 @@ registerRoute(
     }
 
     try {
-      const access = await getAgentTerminalAccess({
+      const runtimeAccess = await getAgentSandboxRuntimeAccess({
         userId: user.id,
         agentId: agent.id,
         authTtlSeconds: SANDBOX_AUTH_TOKEN_TTL_SECONDS
+      })
+      const access = buildTerminalAccess({
+        sandboxId: runtimeAccess.sandboxId,
+        baseUrl: runtimeAccess.runtime.baseUrl,
+        authToken: runtimeAccess.terminal.authToken,
+        authTokenExpiresInSeconds:
+          runtimeAccess.terminal.authExpiresInSeconds
       })
 
       return c.json({

@@ -28,16 +28,14 @@ import {
 import { getUserById } from '../services/user.service'
 import { startAgentSession } from '../services/session.service'
 import {
-  buildModalSandboxAccessUrls,
-  agentIdToAgentSessionId,
   terminateAgentSandbox,
   ensureAgentSandbox,
   getAgentSandbox,
+  getAgentSandboxRuntimeAccess,
   isAgentSandboxHealthy,
   snapshotAgentSandbox
 } from '../services/sandbox.service'
 import { withLock } from '../services/lock.service'
-import { getSandboxAgentToken } from '../services/sandbox.service'
 import { DEFAULT_REGION } from '../utils/region'
 import {
   agents,
@@ -52,7 +50,6 @@ const app = new Hono<AppEnv>()
 const BASE = '/agents'
 const AGENT_SANDBOX_MUTATION_LOCK_WAIT_MS = 5 * 60 * 1000
 const AGENT_SANDBOX_MUTATION_LOCK_TTL_MS = 60 * 1000
-const SANDBOX_AGENT_TOKEN_TTL_SECONDS = 5 * 60
 const AGENT_STATUS_VALUES = [
   'active',
   'snapshotting',
@@ -236,34 +233,15 @@ function isMutableAgentByUser (
 }
 
 async function buildRuntimeAccessPayload (input: {
-  readonly userId: string
-  readonly agentId: string
-  readonly tunnels: {
-    readonly openVscodeUrl: string
-    readonly noVncUrl: string
-    readonly agentApiUrl: string
-  }
-  readonly sandboxAccessToken: string
+  readonly access: Awaited<ReturnType<typeof getAgentSandboxRuntimeAccess>>
 }): Promise<RuntimeAccessPayload> {
-  const links = buildModalSandboxAccessUrls({
-    tunnels: input.tunnels,
-    sandboxAccessToken: input.sandboxAccessToken
-  })
-
-  const agentSessionId = agentIdToAgentSessionId(input.agentId)
-  const cachedAgentAuth = await getSandboxAgentToken({
-    userId: input.userId,
-    agentId: input.agentId,
-    agentSessionId,
-    expiresInSeconds: SANDBOX_AGENT_TOKEN_TTL_SECONDS
-  })
-
   return {
-    ...links,
-    agentApiUrl: input.tunnels.agentApiUrl,
-    agentSessionId,
-    agentAuthToken: cachedAgentAuth.token,
-    agentAuthExpiresInSeconds: cachedAgentAuth.expiresInSeconds
+    openVscodeUrl: input.access.ui.openVscodeUrl ?? '',
+    noVncUrl: input.access.ui.noVncUrl ?? '',
+    agentApiUrl: input.access.runtime.baseUrl,
+    agentSessionId: input.access.runtime.sessionId,
+    agentAuthToken: input.access.runtime.authToken,
+    agentAuthExpiresInSeconds: input.access.runtime.authExpiresInSeconds
   }
 }
 
@@ -529,13 +507,12 @@ registerRoute(
     })
 
     try {
-      const sandbox = await ensureAgentSandbox({ agentId })
       return c.json(
         await buildRuntimeAccessPayload({
-          userId: user.id,
-          agentId,
-          tunnels: sandbox.tunnels,
-          sandboxAccessToken: sandbox.sandboxAccessToken
+          access: await getAgentSandboxRuntimeAccess({
+            userId: user.id,
+            agentId
+          })
         })
       )
     } catch (err) {
@@ -625,9 +602,10 @@ registerRoute(
           let snapshotImageId = ''
           try {
             const { sandbox } = await getAgentSandbox({ agentId })
-            snapshotImageId = await snapshotAgentSandbox({
+            const snapshot = await snapshotAgentSandbox({
               sandboxId: sandbox.sandboxId
             })
+            snapshotImageId = snapshot.imageId
             await setAgentCheckpointSnapshot({
               id: agentId,
               snapshotImageId

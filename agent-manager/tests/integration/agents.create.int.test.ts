@@ -70,6 +70,7 @@ describe("POST /agents (integration)", () => {
       draftImageId: crypto.randomUUID(),
     } as Awaited<ReturnType<typeof imageService.resolveImageVariantForUser>>);
     vi.spyOn(sandboxService, "ensureAgentSandbox").mockResolvedValue({
+      sandboxId: `sb-${crypto.randomUUID()}`,
       tunnels: {
         openVscodeUrl: "https://openvscode.example.com/",
         noVncUrl: "https://novnc.example.com/",

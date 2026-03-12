@@ -106,6 +106,7 @@ describe("User image default variant overrides (integration)", () => {
     const ensureAgentSandboxSpy = vi
       .spyOn(sandboxService, "ensureAgentSandbox")
       .mockResolvedValue({
+        sandboxId: `sb-${crypto.randomUUID()}`,
         tunnels: {
           openVscodeUrl: "https://openvscode.example.com/",
           noVncUrl: "https://novnc.example.com/",

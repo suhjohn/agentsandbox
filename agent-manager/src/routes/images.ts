@@ -35,8 +35,8 @@ import {
 } from '../services/image.service'
 import { upsertModalSecret } from '../services/modal-secret.service'
 import {
-  closeSetupSandbox,
-  createSetupSandbox,
+  createSetupSandboxSession,
+  finalizeSetupSandboxSession,
   getImageSetupSandboxSession,
   upsertSetupSandboxSshAccess
 } from '../services/sandbox.service'
@@ -839,7 +839,7 @@ registerRoute(
       return c.json({ error: 'Image not found' }, 404)
     }
     try {
-      const created = await createSetupSandbox({
+      const created = await createSetupSandboxSession({
         imageId,
         variantId,
         userId: user.id,
@@ -952,7 +952,7 @@ registerRoute(
         return c.json({ error: 'Setup sandbox not found' }, 404)
       }
 
-      const result = await closeSetupSandbox({
+      const result = await finalizeSetupSandboxSession({
         userId: user.id,
         sandboxId
       })

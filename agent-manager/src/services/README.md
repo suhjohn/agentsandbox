@@ -78,7 +78,7 @@ runBuild(input: {
 
 Behavior:
 
-- Passes environment secret names to `runModalImageBuild` via `environmentSecretNames`.
+- Passes environment secret names to `runImageBuild` via `environmentSecretNames`.
 - Includes `environmentSecretNames` in the build input payload/hash.
 - Uses the variant's current `draftImageId` as the build base and records that value as `baseImageId` in the build input payload.
 - On success, writes the produced Modal image id directly back to the variant's `draftImageId`.
@@ -277,12 +277,63 @@ Behavior:
 - Treats `harness` and `modelReasoningEffort` as pass-through strings and leaves harness-specific validation to `agent-go`.
 - Returns session IDs and stream URLs, but not browser/runtime auth tokens.
 
-## sandbox.service.ts
+## sandbox-core.ts
 
-### `runModalImageBuild(input)`
+Shared sandbox runtime primitives used by build, setup, and agent workflows.
+
+### `buildSandboxRuntimeAccess(input)`
 
 ```ts
-runModalImageBuild(input: {
+buildSandboxRuntimeAccess(input: {
+  readonly sandboxId: string
+  readonly runtimeBaseUrl: string
+  readonly sandboxAccessToken: string
+  readonly userId: string
+  readonly sessionId: string
+  readonly subjectId: string
+  readonly authTtlSeconds?: number
+  readonly openVscodeBaseUrl?: string | null
+  readonly noVncBaseUrl?: string | null
+  readonly ssh?: SetupSandboxSshAccess | null
+}): Promise<SandboxRuntimeAccess>
+```
+
+Behavior:
+
+- Returns the unified runtime access payload used by both setup and agent workflows.
+- Folds terminal access into the runtime access object instead of treating terminal access as a separate service API.
+- Uses one runtime auth token for both runtime API and terminal access.
+- Adds OpenVSCode/noVNC URLs only when those base URLs are available.
+
+### `createModalSandbox(input)`
+
+```ts
+createModalSandbox(input: {
+  readonly appName: string
+  readonly image: ModalImage
+  readonly command: readonly string[]
+  readonly secrets: readonly unknown[]
+  readonly volumes?: Record<string, unknown>
+  readonly encryptedPorts?: readonly number[]
+  readonly unencryptedPorts?: readonly number[]
+  readonly timeoutMs: number
+  readonly idleTimeoutMs?: number
+  readonly regions?: readonly string[]
+  readonly experimentalOptions?: Record<string, unknown>
+}): Promise<SandboxHandle>
+```
+
+Behavior:
+
+- Creates a Modal sandbox from explicit create arguments without introducing a shared “sandbox spec” object.
+- Keeps Modal app selection as an internal creation parameter rather than part of the public sandbox runtime model.
+
+## build.workflow.ts
+
+### `runImageBuild(input)`
+
+```ts
+runImageBuild(input: {
   readonly imageId: string
   readonly environmentSecretNames?: readonly string[]
   readonly baseImageId?: string | null
@@ -293,26 +344,17 @@ runModalImageBuild(input: {
 
 Behavior:
 
-- Creates a Modal build sandbox.
-- Injects the runtime vars needed for startup through a Modal inline secret object: `AGENT_ID`, `AGENT_RUNTIME_MODE`, `IMAGE_HOOKS_ENV_VAR`, and `SECRET_SEED`.
-- Otherwise relies on the `agent-go` image defaults for home/workspace/state paths.
-- Boots that sandbox through `agent-go/docker/start.sh` in `AGENT_RUNTIME_MODE=server`, using a long-lived sleep command so manager-side setup can run before snapshotting.
-- Attaches Modal secrets by name from:
-  - `input.modalSecretName` (or default `openinspect-build-secret`), and
-  - `input.environmentSecretNames`.
-- Missing secret names are logged to build stderr and ignored.
+- Creates a one-shot build sandbox.
+- Injects startup env through an inline Modal secret and attaches named/environment secrets by name.
 - Always runs `agent-go/docker/build.sh` inside the sandbox before snapshotting.
-- `agent-go/docker/build.sh` owns in-sandbox convergence for build sandboxes:
-  - syncing the repo checkout when git metadata is present and auto-pull is enabled,
-  - refreshing installed helper files copied from the repo checkout,
-  - recreating the runtime directory and tools baseline,
-  - running `/shared/image-hooks/build.sh` if present, with a temporary executable copy when the hook is readable but not executable,
-  - verifying `/opt/agentsandbox/agent-go/build-artifacts/agent-server-linux-amd64` exists and is executable before snapshotting.
+- Snapshots the filesystem and terminates the sandbox on completion.
 
-### `createSetupSandbox(input)`
+## setup.workflow.ts
+
+### `createSetupSandboxSession(input)`
 
 ```ts
-createSetupSandbox(input: {
+createSetupSandboxSession(input: {
   readonly imageId: string
   readonly variantId: string
   readonly userId: string
@@ -323,24 +365,31 @@ createSetupSandbox(input: {
   readonly variantId: string
   readonly draftImageId: string
   readonly authorizedPublicKeys: readonly string[]
-  readonly ssh: {
-    readonly username: string
-    readonly host: string
-    readonly port: number
-    readonly hostPublicKey: string
-    readonly hostKeyFingerprint: string
-    readonly knownHostsLine: string
-  } | null
+  readonly ssh: SetupSandboxSshAccess | null
 }>
 ```
 
 Behavior:
 
-- Creates the setup sandbox from the selected variant `draftImageId`.
-- Continues to expose the existing setup terminal/API over encrypted port `8080`.
-- Always reserves sandbox port `22` for optional SSH access on the running setup sandbox.
-- When `sshPublicKeys` is provided and non-empty, provisions `authorized_keys` for the `root` user, starts `sshd`, and returns the tunnel host/port plus host verification material.
-- When `sshPublicKeys` is omitted or empty, the setup sandbox still starts normally, `authorizedPublicKeys` is empty, and `ssh` is returned as `null`.
+- Creates a setup sandbox using the same maximal runtime shape as agent sandboxes.
+- Exposes the standard runtime API, terminal, OpenVSCode, and noVNC ports.
+- Optionally provisions SSH on port `22` when public keys are supplied.
+- Tracks setup-session state in-memory, including the setup sandbox access token and SSH metadata.
+
+### `getSetupSandboxRuntimeAccess(input)`
+
+```ts
+getSetupSandboxRuntimeAccess(input: {
+  readonly userId: string
+  readonly sandboxId: string
+  readonly authTtlSeconds?: number
+}): Promise<SandboxRuntimeAccess>
+```
+
+Behavior:
+
+- Returns the same runtime access shape used for agent sandboxes.
+- Enforces setup-session ownership before returning runtime or UI access.
 
 ### `upsertSetupSandboxSshAccess(input)`
 
@@ -351,27 +400,14 @@ upsertSetupSandboxSshAccess(input: {
   readonly sshPublicKeys: readonly string[]
 }): Promise<{
   readonly authorizedPublicKeys: readonly string[]
-  readonly ssh: {
-    readonly username: string
-    readonly host: string
-    readonly port: number
-    readonly hostPublicKey: string
-    readonly hostKeyFingerprint: string
-    readonly knownHostsLine: string
-  } | null
+  readonly ssh: SetupSandboxSshAccess | null
 }>
 ```
 
-Behavior:
-
-- Looks up the live setup sandbox session for the caller.
-- Merges the provided SSH public keys with any keys already authorized for that sandbox.
-- Rewrites `authorized_keys`, starts or restarts `sshd`, and returns the current authorized key list plus SSH connection metadata.
-
-### `closeSetupSandbox(input)`
+### `finalizeSetupSandboxSession(input)`
 
 ```ts
-closeSetupSandbox(input: {
+finalizeSetupSandboxSession(input: {
   readonly userId: string
   readonly sandboxId: string
 }): Promise<{
@@ -383,9 +419,10 @@ closeSetupSandbox(input: {
 
 Behavior:
 
-- Before snapshotting, recursively normalizes `/home/agent` ownership back to `agent:agent` so files created over root SSH remain usable to the normal agent user in later sandboxes.
-- Snapshots the live setup sandbox filesystem, writes the snapshot image id back to the variant's `draftImageId`, and terminates the sandbox.
-- Records the previous variant `draftImageId` as `baseImageId` in a succeeded `image_variant_builds` row with source `setup-sandbox`.
+- Normalizes `/home/agent` ownership before snapshotting so files created over root SSH remain usable later.
+- Snapshots the live sandbox, updates the variant draft image id, records a succeeded `setup-sandbox` build row, and terminates the sandbox.
+
+## agent.workflow.ts
 
 ### `ensureAgentSandbox(input)`
 
@@ -395,26 +432,47 @@ ensureAgentSandbox(input: {
   readonly imageId?: string
   readonly region?: SandboxRegion
   readonly waitForLock?: boolean
-}): Promise<AgentSandboxResult>
+}): Promise<SandboxHandle>
 ```
 
 Behavior:
 
-- When creating a new sandbox, secret attachments include:
-  - an inline secret object containing all runtime startup vars (`PORT`, Docker toggles, auth/base-URL values, identity, hook mount env, etc.),
-  - named default secret `openinspect-build-secret` (if present),
-  - inline API key secret object (OpenAI/Anthropic/Google keys when configured),
-  - image-bound environment secrets from `listEnvironmentSecrets(agent.imageId)`.
-- Session sandboxes inject runtime-specific startup vars through Modal inline secret objects and otherwise rely on the `agent-go` image defaults plus `agent-go/docker/start.sh` for paths and UI token wiring.
-- Setup sandboxes likewise rely on container defaults for home/workspace paths and inject their startup vars through Modal inline secret objects, including `AGENT_RUNTIME_MODE=server`.
-- Session sandboxes mount the image-scoped shared hook volume read-only at `/shared/image-hooks`; setup sandboxes mount the same volume read-write.
-- Session sandboxes start through `agent-go/docker/start.sh`, and setup sandboxes also start through that same script.
-- `agent-go/docker/start.sh` runs `/shared/image-hooks/start.sh` whenever that file exists, before it installs and starts runtime services.
-- Because the session sandbox hook mount is read-only, a readable but non-executable `/shared/image-hooks/start.sh` is staged to a temporary file, `chmod +x` is applied to that temp copy, and the temp copy is run.
-- If an agent no longer has an owner (`created_by` is `NULL`), sandbox creation fails with `409 Agent owner is missing`.
-- Missing environment secret names are logged and skipped instead of failing sandbox creation.
-- Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).
-- Manager-side `/health` probes to `*.modal.host` sandbox tunnel URLs disable TLS certificate verification to avoid Bun-specific certificate validation failures on Modal tunnels.
-- Agent sandboxes receive a manager API key (`AGENT_MANAGER_API_KEY`) for manager calls, while browser/runtime traffic still uses the sandbox agent token flow.
-- Agent sandbox creation accepts either Modal image IDs (`im-...`) or registry refs; GHCR tag refs are resolved to digest-pinned refs before `fromRegistry(...)` is used.
-- `waitForLock: false` makes sandbox creation opportunistic: if the per-agent create lock is already held, the call fails immediately instead of waiting for the existing create/warmup flow.
+- Returns a raw sandbox handle and keeps runtime access assembly separate.
+- Reuses an existing healthy sandbox when possible.
+- Creates a maximal runtime sandbox when one does not exist, using:
+  - inline startup env secret,
+  - named default secret `openinspect-build-secret` when present,
+  - image-bound environment secrets,
+  - inline provider API key secret when configured.
+- Mounts the image-scoped hook volume read-only.
+
+### `getAgentSandboxRuntimeAccess(input)`
+
+```ts
+getAgentSandboxRuntimeAccess(input: {
+  readonly userId: string
+  readonly agentId: string
+  readonly authTtlSeconds?: number
+}): Promise<SandboxRuntimeAccess>
+```
+
+Behavior:
+
+- Returns the unified runtime access payload for agent sandboxes.
+- Uses the same runtime/terminal/UI shape as setup sandboxes.
+
+### `snapshotAgentSandbox(input)`
+
+```ts
+snapshotAgentSandbox(input: {
+  readonly sandboxId: string
+}): Promise<{ readonly imageId: string }>
+```
+
+### `terminateAgentSandbox(input)`
+
+```ts
+terminateAgentSandbox(input: {
+  readonly sandboxId: string
+}): Promise<void>
+```

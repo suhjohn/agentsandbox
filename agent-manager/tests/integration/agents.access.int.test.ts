@@ -105,6 +105,7 @@ describe("/agents/:agentId/access (integration)", () => {
     const sandboxSpy = vi
       .spyOn(sandboxService, "ensureAgentSandbox")
       .mockResolvedValue({
+        sandboxId,
         tunnels: {
           openVscodeUrl: "https://openvscode.example.com/",
           noVncUrl: "https://novnc.example.com/vnc.html",

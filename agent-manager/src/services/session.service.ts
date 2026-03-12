@@ -7,9 +7,8 @@ import {
 } from './agent.service'
 import {
   agentIdToAgentSessionId,
-  buildModalSandboxAccessUrls,
   ensureAgentSandbox,
-  getSandboxAgentToken
+  getAgentSandboxRuntimeAccess
 } from './sandbox.service'
 import {
   getVariantActiveImageId,
@@ -29,8 +28,6 @@ type RuntimeAccessPayload = {
   readonly agentAuthToken: string
   readonly agentAuthExpiresInSeconds: number
 }
-
-const SANDBOX_AGENT_TOKEN_TTL_SECONDS = 5 * 60
 
 type CreateSessionBootstrapBody = {
   readonly parentAgentId?: string
@@ -95,34 +92,15 @@ async function getAuthorizedImage (_userId: string, imageId: string) {
 }
 
 async function buildRuntimeAccessPayload (input: {
-  readonly userId: string
-  readonly agentId: string
-  readonly tunnels: {
-    readonly openVscodeUrl: string
-    readonly noVncUrl: string
-    readonly agentApiUrl: string
-  }
-  readonly sandboxAccessToken: string
+  readonly access: Awaited<ReturnType<typeof getAgentSandboxRuntimeAccess>>
 }): Promise<RuntimeAccessPayload> {
-  const links = buildModalSandboxAccessUrls({
-    tunnels: input.tunnels,
-    sandboxAccessToken: input.sandboxAccessToken
-  })
-
-  const agentSessionId = agentIdToAgentSessionId(input.agentId)
-  const cachedAgentAuth = await getSandboxAgentToken({
-    userId: input.userId,
-    agentId: input.agentId,
-    agentSessionId,
-    expiresInSeconds: SANDBOX_AGENT_TOKEN_TTL_SECONDS
-  })
-
   return {
-    ...links,
-    agentApiUrl: input.tunnels.agentApiUrl,
-    agentSessionId,
-    agentAuthToken: cachedAgentAuth.token,
-    agentAuthExpiresInSeconds: cachedAgentAuth.expiresInSeconds
+    openVscodeUrl: input.access.ui.openVscodeUrl ?? '',
+    noVncUrl: input.access.ui.noVncUrl ?? '',
+    agentApiUrl: input.access.runtime.baseUrl,
+    agentSessionId: input.access.runtime.sessionId,
+    agentAuthToken: input.access.runtime.authToken,
+    agentAuthExpiresInSeconds: input.access.runtime.authExpiresInSeconds
   }
 }
 
@@ -266,17 +244,16 @@ export async function createSessionBootstrap (input: {
     region
   })
 
-  const sandbox = await ensureAgentSandbox({
+  await ensureAgentSandbox({
     agentId: agent.id,
     imageId: effectiveCurrentImageId,
     region
   })
-
   const access = await buildRuntimeAccessPayload({
-    userId: user.id,
-    agentId: agent.id,
-    tunnels: sandbox.tunnels,
-    sandboxAccessToken: sandbox.sandboxAccessToken
+    access: await getAgentSandboxRuntimeAccess({
+      userId: user.id,
+      agentId: agent.id
+    })
   })
 
   const sessionId = agentIdToAgentSessionId(agent.id)
@@ -354,12 +331,11 @@ export async function startAgentSession (input: {
     throw new HTTPException(404, { message: 'Agent not found' })
   }
 
-  const sandbox = await ensureAgentSandbox({ agentId })
   const access = await buildRuntimeAccessPayload({
-    userId: user.id,
-    agentId,
-    tunnels: sandbox.tunnels,
-    sandboxAccessToken: sandbox.sandboxAccessToken
+    access: await getAgentSandboxRuntimeAccess({
+      userId: user.id,
+      agentId
+    })
   })
   const sessionId =
     body.sessionId?.trim() || crypto.randomUUID().replace(/-/g, '')
