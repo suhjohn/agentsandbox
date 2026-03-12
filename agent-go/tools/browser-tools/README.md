@@ -67,7 +67,7 @@ python3 tools/default/browser-tools/start.py --profile
 python3 tools/default/browser-tools/start.py --restart
 ```
 
-In the Docker image, Chromium is already running (started by `entrypoint.sh`). This tool verifies DevTools connectivity and can trigger a restart with `--restart`. Locally, it launches Chrome with remote debugging on `:9222`.
+In the Docker image, Chromium is already running (started by `start.sh`). This tool verifies DevTools connectivity and can trigger a restart with `--restart`. Locally, it launches Chrome with remote debugging on `:9222`.
 
 ### Navigate
 

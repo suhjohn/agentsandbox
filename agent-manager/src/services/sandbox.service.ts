@@ -29,8 +29,7 @@ import {
 import {
   getImageHooksVolume,
   IMAGE_HOOKS_ENV_VAR,
-  IMAGE_HOOKS_MOUNT_PATH,
-  IMAGE_START_HOOK_PATH
+  IMAGE_HOOKS_MOUNT_PATH
 } from './image-hooks'
 import { withLock } from './lock.service'
 import { getRedisClient } from './redis.service'
@@ -146,6 +145,7 @@ const MODAL_TERMINATE_RPC_TIMEOUT_MS = envInt(
   'MODAL_TERMINATE_RPC_TIMEOUT_MS',
   10_000
 )
+const SANDBOX_START_SCRIPT = '/opt/agentsandbox/agent-go/docker/start.sh'
 const MODAL_SANDBOX_CREATE_STEP_TIMEOUT_MS = envInt(
   'MODAL_SANDBOX_CREATE_STEP_TIMEOUT_MS',
   30_000
@@ -227,8 +227,9 @@ const SETUP_SANDBOX_POST_CREATE_HEALTH_RETRY_MS = envInt(
 function parseSandboxStartCommand (): readonly string[] {
   const name = 'AGENT_SANDBOX_COMMAND_JSON'
   const raw = process.env[name]?.trim()
-  if (!raw)
+  if (!raw) {
     return ['/opt/agentsandbox/agent-go/build-artifacts/agent-server', 'serve']
+  }
 
   try {
     const parsed = JSON.parse(raw) as unknown
@@ -256,6 +257,7 @@ const DEFAULT_SANDBOX_AGENT_TOKEN_TTL_SECONDS = 5 * 60
 
 const SETUP_APP_NAME = 'image-builder'
 const SETUP_SERVER_COMMAND = [
+  SANDBOX_START_SCRIPT,
   '/opt/agentsandbox/agent-go/build-artifacts/agent-server',
   'serve'
 ] as const
@@ -334,47 +336,6 @@ function describeUnknownError (err: unknown): string {
 
 function shellQuote (value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`
-}
-
-function buildHookCommand (hookPath: string): string {
-  const quotedHookPath = shellQuote(hookPath)
-  return [
-    `if [[ -r ${quotedHookPath} ]]; then`,
-    `  if [[ -x ${quotedHookPath} ]]; then`,
-    `    bash ${quotedHookPath}`,
-    '  else',
-    '    (',
-    '      staged_hook="$(mktemp)"',
-    '      trap \'rm -f "$staged_hook"\' EXIT',
-    `      cp ${quotedHookPath} "$staged_hook"`,
-    '      chmod +x "$staged_hook"',
-    '      bash "$staged_hook"',
-    '    )',
-    '  fi',
-    'fi'
-  ].join('\n')
-}
-
-function buildSandboxStartCommand (): readonly string[] {
-  const serverCommand = SANDBOX_START_COMMAND.map(part =>
-    shellQuote(part)
-  ).join(' ')
-
-  return [
-    'bash',
-    '-lc',
-    [
-      'set -euo pipefail',
-      `if [[ -r ${shellQuote(IMAGE_START_HOOK_PATH)} ]]; then`,
-      '  echo "[sandbox-start] running shared start hook..." >&2',
-      'fi',
-      buildHookCommand(IMAGE_START_HOOK_PATH),
-      `if [[ -r ${shellQuote(IMAGE_START_HOOK_PATH)} ]]; then`,
-      '  echo "[sandbox-start] shared start hook complete." >&2',
-      'fi',
-      `exec ${serverCommand}`
-    ].join('\n')
-  ]
 }
 
 function buildAllowedOrigins (agentManagerBaseUrl: string): string {
@@ -1081,8 +1042,6 @@ async function createAgentSandboxModal (input: {
         `[modal] resolved sandbox image source ${requestedImageSource} -> ${resolvedImageSource}`
       )
     }
-    const sandboxStartCommand = buildSandboxStartCommand()
-
     const apiKeys = {
       OPENAI_API_KEY: (process.env.OPENAI_API_KEY ?? '').trim(),
       ANTHROPIC_API_KEY: (process.env.ANTHROPIC_API_KEY ?? '').trim(),
@@ -1169,7 +1128,7 @@ async function createAgentSandboxModal (input: {
 
     const sandbox = await withTimeout(
       modalClient.sandboxes.create(app, image, {
-        command: [...sandboxStartCommand],
+        command: [SANDBOX_START_SCRIPT, ...SANDBOX_START_COMMAND],
         experimentalOptions: { enable_docker: true },
         env: sandboxEnv,
         secrets,

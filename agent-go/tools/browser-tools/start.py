@@ -85,7 +85,7 @@ def ensure_browser_started(input_data: StartBrowserInput, argv: list[str]) -> St
         if not wait_for_cdp(browser_url):
             raise BrowserToolsError(
                 f"Failed to connect to Chromium DevTools on {browser_url}. "
-                "In the container, Chromium is started by docker/entrypoint.sh."
+                "In the container, Chromium is started by docker/start.sh."
             )
         return StartBrowserResult(
             browser_url=browser_url,

@@ -60,7 +60,7 @@ It covers both:
 
 ### 1.5 Runtime boot and sidecar scripts consuming auth env
 
-- `agent-go/docker/entrypoint.sh`
+- `agent-go/docker/start.sh`
 - `agent-go/docker/runit/openvscode-server.sh`
 - `agent-go/docker/runit/ui-stack.sh`
 - `agent-go/docker/runit/openvscode-proxy.sh`
@@ -114,7 +114,7 @@ Sandbox-agent JWT signing key derivation (`agent-manager/src/services/sandbox.se
 
 Runtime seed hard requirements:
 
-- `agent-go/docker/entrypoint.sh` fails startup if `SECRET_SEED` is missing or `< 32` chars.
+- `agent-go/docker/start.sh` fails startup if `SECRET_SEED` is missing or `< 32` chars.
 - `agent-go/internal/server/serve.go` also rejects config if `SECRET_SEED` is `< 32` chars.
 
 ## 4. User Auth (Browser <-> Manager)

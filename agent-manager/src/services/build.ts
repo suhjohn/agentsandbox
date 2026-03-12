@@ -3,7 +3,6 @@ import { env } from '@/env'
 import { ModalClient, type Secret, type Sandbox } from 'modal'
 import {
   getImageHooksVolume,
-  IMAGE_BUILD_HOOK_PATH,
   IMAGE_HOOKS_ENV_VAR,
   IMAGE_HOOKS_MOUNT_PATH
 } from './image-hooks'
@@ -19,6 +18,8 @@ const SANDBOX_WORKSPACES_DIR = `${SANDBOX_AGENT_HOME}/workspaces`
 const SANDBOX_ROOT_DIR = `${SANDBOX_AGENT_HOME}/runtime`
 const SANDBOX_CODEX_HOME = `${SANDBOX_AGENT_HOME}/.codex`
 const SANDBOX_PI_DIR = `${SANDBOX_AGENT_HOME}/.pi`
+const SANDBOX_START_SCRIPT = '/opt/agentsandbox/agent-go/docker/start.sh'
+const SANDBOX_BUILD_SCRIPT = '/opt/agentsandbox/agent-go/docker/build.sh'
 
 const BUILD_APP_NAME = 'image-builder'
 const DEFAULT_MODAL_SECRET_NAME = 'openinspect-build-secret'
@@ -28,40 +29,6 @@ const SETUP_TIMEOUT_MS = 60 * 60 * 1000
 const SNAPSHOT_TIMEOUT_MS = 10 * 60 * 1000
 
 const MAX_LOG_CHARS = 12_000
-
-const AGENT_SOURCE_UPDATE_COMMAND = [
-  'if [[ -x "${AGENT_DOCKER_DIR:-/opt/agentsandbox/agent-go/docker}/update-agent-go-source.sh" ]]; then',
-  '  echo "[agent-go] syncing source checkout..."',
-  '  "${AGENT_DOCKER_DIR:-/opt/agentsandbox/agent-go/docker}/update-agent-go-source.sh"',
-  'fi'
-].join('\n')
-
-const AGENT_SERVER_VERIFY_COMMAND = [
-  'if [[ ! -x "${AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server}" ]]; then',
-  '  echo "[agent-go] binary missing: ${AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server}" >&2;',
-  '  exit 1;',
-  'fi',
-  'chmod +x "${AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server}"'
-].join('\n')
-
-function buildHookCommand (hookPath: string): string {
-  const quotedHookPath = shellQuote(hookPath)
-  return [
-    `if [[ -r ${quotedHookPath} ]]; then`,
-    `  if [[ -x ${quotedHookPath} ]]; then`,
-    `    bash ${quotedHookPath}`,
-    '  else',
-    '    (',
-    '      staged_hook="$(mktemp)"',
-    '      trap \'rm -f "$staged_hook"\' EXIT',
-    `      cp ${quotedHookPath} "$staged_hook"`,
-    '      chmod +x "$staged_hook"',
-    '      bash "$staged_hook"',
-    '    )',
-    '  fi',
-    'fi'
-  ].join('\n')
-}
 
 export type BuildChunk = {
   readonly source: 'stdout' | 'stderr'
@@ -147,6 +114,7 @@ export async function runModalImageBuild (input: {
   logStep('Creating sandbox...')
   const sandbox = await modalClient.sandboxes.create(app, imageForSandbox, {
     command: [
+      SANDBOX_START_SCRIPT,
       'bash',
       '-lc',
       'mkdir -p "${WORKSPACES_DIR}" && cd "${WORKSPACES_DIR}" && sleep infinity'
@@ -159,6 +127,7 @@ export async function runModalImageBuild (input: {
       CODEX_HOME: SANDBOX_CODEX_HOME,
       PI_CODING_AGENT_DIR: SANDBOX_PI_DIR,
       HOME: SANDBOX_AGENT_HOME,
+      AGENT_RUNTIME_MODE: 'server',
       [IMAGE_HOOKS_ENV_VAR]: IMAGE_HOOKS_MOUNT_PATH,
       SECRET_SEED: env.SANDBOX_SIGNING_SECRET
     },
@@ -178,66 +147,36 @@ export async function runModalImageBuild (input: {
     )
     await writeFileIfMissing(sandbox, '/etc/agent-image-version', 'unknown\n')
 
-    const setupSteps: Array<{
-      readonly label: string
-      readonly command: string
-      readonly errorPrefix: string
-    }> = [
-      {
-        label: 'source sync',
-        command: AGENT_SOURCE_UPDATE_COMMAND,
-        errorPrefix: 'setup preamble'
+    logStep('Running build sandbox convergence...')
+    const setupStdout = createLineBuffer(line => {
+      emit({
+        source: 'stderr',
+        text: `[setup:build-sh][stdout] ${line}\n`
+      })
+    })
+    const setupStderr = createLineBuffer(line => {
+      emit({
+        source: 'stderr',
+        text: `[setup:build-sh][stderr] ${line}\n`
+      })
+    })
+    const { exitCode, stderr } = await execText(sandbox, [SANDBOX_BUILD_SCRIPT], {
+      timeoutMs: SETUP_TIMEOUT_MS,
+      onStdoutChunk: chunk => {
+        setupStdout.push(chunk)
+      },
+      onStderrChunk: chunk => {
+        setupStderr.push(chunk)
       }
-    ]
-
-    setupSteps.push({
-      label: 'shared image build hook',
-      command: buildHookCommand(IMAGE_BUILD_HOOK_PATH),
-      errorPrefix: 'build hook'
     })
-
-    setupSteps.push({
-      label: 'agent-go binary verify',
-      command: AGENT_SERVER_VERIFY_COMMAND,
-      errorPrefix: 'agent-go binary verify step'
-    })
-
-    for (const step of setupSteps) {
-      logStep(`Running ${step.label}...`)
-      const setupStdout = createLineBuffer(line => {
-        emit({
-          source: 'stderr',
-          text: `[setup:${step.label}][stdout] ${line}\n`
-        })
-      })
-      const setupStderr = createLineBuffer(line => {
-        emit({
-          source: 'stderr',
-          text: `[setup:${step.label}][stderr] ${line}\n`
-        })
-      })
-      const { exitCode, stderr } = await execText(
-        sandbox,
-        ['bash', '-lc', step.command],
-        {
-          timeoutMs: SETUP_TIMEOUT_MS,
-          onStdoutChunk: chunk => {
-            setupStdout.push(chunk)
-          },
-          onStderrChunk: chunk => {
-            setupStderr.push(chunk)
-          }
-        }
+    setupStdout.flush()
+    setupStderr.flush()
+    if (exitCode !== 0) {
+      throw new Error(
+        `build sandbox convergence failed (exit ${exitCode}).${
+          stderr.trim().length > 0 ? `\n--- stderr ---\n${stderr}` : ''
+        }`
       )
-      setupStdout.flush()
-      setupStderr.flush()
-      if (exitCode !== 0) {
-        throw new Error(
-          `${step.errorPrefix} failed (exit ${exitCode}).${
-            stderr.trim().length > 0 ? `\n--- stderr ---\n${stderr}` : ''
-          }`
-        )
-      }
     }
 
     logStep('Snapshotting filesystem...')
@@ -393,10 +332,6 @@ function createLineBuffer (onLine: (line: string) => void): {
       buffer = ''
     }
   }
-}
-
-function shellQuote (value: string): string {
-  return `'${value.replace(/'/g, `'\"'\"'`)}'`
 }
 
 function normalizeNullableText (

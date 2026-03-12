@@ -1,10 +1,10 @@
 """
-Start a sandbox from the agent image, run the entrypoint in init mode
-to set up Codex/Pi/runtime state under /home/agent, then copy that
-into a Modal volume.
+Start a sandbox from the agent image, run start.sh with a no-op command
+to set up Codex/Pi/runtime state under /home/agent, then copy that into
+a Modal volume.
 
 Modal sandboxes run as root and don't execute the image ENTRYPOINT,
-so we invoke /opt/agentsandbox/agent-go/docker/entrypoint.sh --init manually.
+so we invoke /opt/agentsandbox/agent-go/docker/start.sh manually.
 """
 import modal
 import os
@@ -56,10 +56,10 @@ def run(cmd: str, label: str | None = None):
 
 
 try:
-    # 1. Run entrypoint in init mode — creates /home/agent tree,
+    # 1. Run start.sh with a no-op command — creates /home/agent tree,
     #    CODEX_HOME, PI_CODING_AGENT_DIR, workspace tools, AGENTS.md, etc.
-    print("Running tracked entrypoint --init …")
-    run("/opt/agentsandbox/agent-go/docker/entrypoint.sh --init", "init")
+    print("Running tracked start.sh bootstrap …")
+    run("/opt/agentsandbox/agent-go/docker/start.sh true", "bootstrap")
 
     # 2. Copy agent-server launcher into /home/agent
     print("Copying tracked agent-server binary → /home/agent …")

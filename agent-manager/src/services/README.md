@@ -19,14 +19,18 @@ runModalImageBuild(input: {
 Behavior:
 - Creates a Modal build sandbox.
 - Sets a minimal build environment in that sandbox: `AGENT_HOME`, `AGENT_ID`, `WORKSPACES_DIR`, `ROOT_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and `HOME`.
+- Boots that sandbox through `agent-go/docker/start.sh` in `AGENT_RUNTIME_MODE=server`, using a long-lived sleep command so manager-side setup can run before snapshotting.
 - Attaches Modal secrets by name from:
   - `input.modalSecretName` (or default `openinspect-build-secret`), and
   - `input.environmentSecretNames`.
 - Missing secret names are logged to build stderr and ignored.
-- Always runs an internal setup sequence before snapshotting:
-  - source sync via `agent-go/docker/update-agent-go-source.sh` when available, forcing the checkout to match the remote branch and failing the build if sync fails,
-  - then `/shared/image-hooks/build.sh` if that file exists in the image-scoped shared hook volume; when the hook is readable but not executable, the builder stages a temporary copy, `chmod +x`s that copy, and runs it,
-  - then verifies `/opt/agentsandbox/agent-go/build-artifacts/agent-server` exists and is executable before snapshotting.
+- Always runs `agent-go/docker/build.sh` inside the sandbox before snapshotting.
+- `agent-go/docker/build.sh` owns in-sandbox convergence for build sandboxes:
+  - syncing the repo checkout when git metadata is present and auto-pull is enabled,
+  - refreshing installed helper files copied from the repo checkout,
+  - recreating the runtime directory and tools baseline,
+  - running `/shared/image-hooks/build.sh` if present, with a temporary executable copy when the hook is readable but not executable,
+  - verifying `/opt/agentsandbox/agent-go/build-artifacts/agent-server` exists and is executable before snapshotting.
 
 ## image.service.ts
 
@@ -381,10 +385,11 @@ Behavior:
   - named default secret `openinspect-build-secret` (if present),
   - inline API key secret object (OpenAI/Anthropic/Google keys when configured),
   - image-bound environment secrets from `listEnvironmentSecrets(agent.imageId)`.
-- Session sandboxes only inject runtime-specific env overrides (`PORT`, Docker toggles, auth/base-URL values, and optional `PI_CODING_AGENT_DIR`) and otherwise rely on the `agent-go` image/entrypoint defaults for paths and UI token wiring.
+- Session sandboxes only inject runtime-specific env overrides (`PORT`, Docker toggles, auth/base-URL values, and optional `PI_CODING_AGENT_DIR`) and otherwise rely on the `agent-go` image defaults plus `agent-go/docker/start.sh` for paths and UI token wiring.
 - Setup sandboxes likewise rely on container defaults for home/workspace paths, but explicitly force `AGENT_RUNTIME_MODE=server`.
 - Session sandboxes mount the image-scoped shared hook volume read-only at `/shared/image-hooks`; setup sandboxes mount the same volume read-write.
-- When `/shared/image-hooks/start.sh` exists in the shared hook volume, session sandbox startup runs that hook once before `/opt/agentsandbox/agent-go/build-artifacts/agent-server serve`.
+- Session sandboxes start through `agent-go/docker/start.sh`, and setup sandboxes also start through that same script.
+- `agent-go/docker/start.sh` runs `/shared/image-hooks/start.sh` whenever that file exists, before it installs and starts runtime services.
 - Because the session sandbox hook mount is read-only, a readable but non-executable `/shared/image-hooks/start.sh` is staged to a temporary file, `chmod +x` is applied to that temp copy, and the temp copy is run.
 - If an agent no longer has an owner (`created_by` is `NULL`), sandbox creation fails with `409 Agent owner is missing`.
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.

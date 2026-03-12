@@ -119,7 +119,7 @@ agents
 | `agent-go/internal/server/serve.go`             | HTTP server routes (includes `/health`)                                              |
 | `agent-go/internal/openapi/openapi.json`        | OpenAPI contract served by `/openapi.json`                                           |
 | `agent-go/Dockerfile`                           | Base runtime image build (writes `/etc/agent-image-version`)                         |
-| `agent-go/docker/entrypoint.sh`                 | Runtime env setup (exports `AGENT_IMAGE_VERSION`, starts services)                   |
+| `agent-go/docker/start.sh`                      | Runtime env setup and service bootstrap (exports `AGENT_IMAGE_VERSION`, starts services) |
 | `agent-go/scripts/dev.sh`                       | Unified local workflow script for agent-go build, restart, Docker, and publish flows |
 
 ### Current Limitations

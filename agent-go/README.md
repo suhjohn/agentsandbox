@@ -97,24 +97,21 @@ Pull, rebuild, stop the existing standalone binary process, and start the new on
 ./agent-go/scripts/dev.sh restart-server
 ```
 
-In the container runtime, the entrypoint now runs the main agent API under `runit`,
+In the container runtime, `start.sh` now runs the main agent API under `runit`,
 so this helper will restart that `agent-server` service in place when available.
 
 Refresh a live sandbox from the repo checkout without replacing the runtime directory:
 
 ```bash
-./agent-go/scripts/reconcile-runtime.sh
+/opt/agentsandbox/agent-go/docker/upgrade.sh
 ```
 
-This flow can:
+This flow will:
 
-- `git pull --ff-only`
-- rebuild `build-artifacts/agent-server`
+- sync the repo checkout to the current branch, configured pull ref, or explicit target ref
 - refresh installed helper files derived from the repo checkout
-- rerun entrypoint reconciliation for runtime paths and runit service definitions
+- recreate runtime paths and runit service definitions
 - restart installed runit services in place
-
-Use `--no-pull`, `--no-build`, `--no-sync`, `--no-restart` to narrow the scope.
 
 ## Docker image (source-driven server launcher)
 
@@ -190,9 +187,9 @@ Use a different env file (for example test config):
 ./agent-go/scripts/dev.sh docker-run --env-file .env.test
 ```
 
-Runtime behavior intentionally keeps the same entrypoint/runit stack used by `agent`:
+Runtime behavior intentionally keeps the same runit-based stack used by `agent`:
 
-- `agent-go/docker/entrypoint.sh`
+- `agent-go/docker/start.sh`
 - browser/Xvfb/openbox/x11vnc/websockify startup
 - OpenVSCode service startup
 - optional dockerd service
@@ -203,17 +200,16 @@ The API server command now calls the tracked repo binary directly at
 revision is recorded in `agent-go/build-artifacts/agent-server.rev`.
 OpenVSCode proxying uses that same binary (`/opt/agentsandbox/agent-go/build-artifacts/agent-server openvscode-proxy`).
 
-### Entrypoint + `AGENT_RUNTIME_MODE`
+### `start.sh` + `AGENT_RUNTIME_MODE`
 
 OpenVSCode/noVNC are **not** started by `agent-server serve` itself. They come up via runit services that
-are installed/launched by the container entrypoint (`/opt/agentsandbox/agent-go/docker/entrypoint.sh`).
+are installed/launched by `start.sh` (`/opt/agentsandbox/agent-go/docker/start.sh`).
 
-- Docker `ENTRYPOINT` is `/opt/agentsandbox/agent-go/docker/entrypoint.sh` (`agent-go/Dockerfile`).
-- `entrypoint.sh init` only refreshes runtime-owned directories/symlinks and exits.
-- `entrypoint.sh reconcile [cmd...]` refreshes runtime-owned directories/symlinks, rewrites runit service definitions for the provided command, and exits without starting services.
-- That entrypoint always installs the main `agent-server` service when the container command is
+- Docker `ENTRYPOINT` is `/opt/agentsandbox/agent-go/docker/start.sh` (`agent-go/Dockerfile`).
+- `start.sh` always refreshes runtime-owned directories/symlinks and installed helper files before launching the requested command.
+- That bootstrap always installs the main `agent-server` service when the container command is
   `/opt/agentsandbox/agent-go/build-artifacts/agent-server ...`. In `AGENT_RUNTIME_MODE=all` (default), it also installs the UI/OpenVSCode services.
-- When the container command is `/opt/agentsandbox/agent-go/build-artifacts/agent-server ...`, the entrypoint now installs that command
+- When the container command is `/opt/agentsandbox/agent-go/build-artifacts/agent-server ...`, `start.sh` installs that command
   as the `agent-server` runit service and keeps `runsvdir` as the foreground process.
 - In `all` mode, relevant runit services include:
   - `agent-server` (main API service, installed dynamically from the container command)
@@ -232,9 +228,10 @@ Service control:
 Operational implications:
 
 - If your runtime bypasses Docker `ENTRYPOINT` (for example some Modal execution paths), OpenVSCode/noVNC
-  will not start unless you explicitly wrap your command with `/opt/agentsandbox/agent-go/docker/entrypoint.sh`.
-- Build/setup sandboxes intentionally run with `AGENT_RUNTIME_MODE=server` (API-only), so OpenVSCode/noVNC
-  will be skipped even if the entrypoint runs.
+  will not start unless you explicitly run `/opt/agentsandbox/agent-go/docker/start.sh`.
+- Build sandboxes start through `start.sh` with a long-lived sleep command and then run `/opt/agentsandbox/agent-go/docker/build.sh` before snapshotting.
+- Setup sandboxes intentionally run with `AGENT_RUNTIME_MODE=server` (API-only), so OpenVSCode/noVNC
+  will be skipped even when `start.sh` runs.
 
 ## Tests
 
