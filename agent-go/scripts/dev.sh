@@ -80,16 +80,27 @@ build_server_binary() {
   local goarch_value="$3"
   local cgo_enabled_value="$4"
   local ldflags_value="$5"
+  local tmp_path=""
 
   mkdir -p "$(dirname -- "${output_path}")"
+  tmp_path="$(mktemp "${output_path}.tmp.XXXXXX")"
+
   (
     cd "${MODULE_DIR}"
     CGO_ENABLED="${cgo_enabled_value}" \
     GOOS="${goos_value}" \
     GOARCH="${goarch_value}" \
-    "${GO_BIN}" build -trimpath -ldflags="${ldflags_value}" -o "${output_path}" ./cmd/agent-go
+    "${GO_BIN}" build -trimpath -buildvcs=false -ldflags="${ldflags_value}" -o "${tmp_path}" ./cmd/agent-go
   )
-  chmod +x "${output_path}"
+  chmod +x "${tmp_path}"
+
+  if [[ -x "${output_path}" ]] && cmp -s "${tmp_path}" "${output_path}"; then
+    rm -f "${tmp_path}"
+    echo "kept ${output_path}"
+    return 0
+  fi
+
+  mv -f "${tmp_path}" "${output_path}"
   echo "built ${output_path}"
 }
 

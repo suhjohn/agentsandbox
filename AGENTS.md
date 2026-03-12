@@ -7,7 +7,7 @@ Compilation of all important info
 # Agent Docker Environment
 
 - Agent image build dependencies are installed natively in `agent-go/Dockerfile`.
-- Runtime sandbox prep lives in `agent-go/docker/entrypoint.sh`, and long-running services are supervised by `runit`.
+- Runtime sandbox prep lives in `agent-go/docker/start.sh`, and long-running services are supervised by `runit`.
 
 # Workspace Docs Sync Rule
 

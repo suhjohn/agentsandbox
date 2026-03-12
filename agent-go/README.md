@@ -85,6 +85,10 @@ Or from `agent-go/`:
 make build
 ```
 
+Repeated `make build` runs produce a reproducible binary (`-buildvcs=false
+-trimpath`) and only overwrite the tracked artifact when the content actually
+changed.
+
 Build to a specific output path (example used by Docker below):
 
 ```bash
@@ -142,7 +146,7 @@ export GHCR_TAG="$(git rev-parse --short HEAD)"      # optional
 
 This push flow rebuilds the tracked `agent-go/build-artifacts/agent-server`
 artifact for `linux/amd64` and updates `agent-go/build-artifacts/agent-server.rev`
-only when the recorded Git revision changed before running `docker buildx build`.
+only when the binary content changed before running `docker buildx build`.
 
 Or from `agent-go/`:
 
