@@ -391,4 +391,5 @@ Behavior:
 - Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).
 - Manager-side `/health` probes to `*.modal.host` sandbox tunnel URLs disable TLS certificate verification to avoid Bun-specific certificate validation failures on Modal tunnels.
 - Agent sandboxes receive a manager API key (`AGENT_MANAGER_API_KEY`) for manager calls, while browser/runtime traffic still uses the sandbox agent token flow.
+- Agent sandbox creation accepts either Modal image IDs (`im-...`) or registry refs; GHCR tag refs are resolved to digest-pinned refs before `fromRegistry(...)` is used.
 - `waitForLock: false` makes sandbox creation opportunistic: if the per-agent create lock is already held, the call fails immediately instead of waiting for the existing create/warmup flow.

@@ -152,7 +152,7 @@ func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
 		if _, err := registry.EnsureManagedContextFile(registry.ManagedFileSpec{
 			Harness: h.ID(),
 			Path:    filepath.Join(codexHome, "AGENTS.md"),
-			Version: 1,
+			Version: 2,
 			Content: renderAgentsContent(runtimeCtx),
 		}); err != nil {
 			return err
@@ -198,12 +198,16 @@ func renderAgentsContent(ctx registry.RuntimeContext) string {
 	content.WriteString("- Tool directories may be user-created or bundled. Read each README.md before invoking the tool.\n")
 	if len(ctx.ToolReadmes) > 0 {
 		content.WriteString("\n## Tool READMEs\n")
-		for _, path := range ctx.ToolReadmes {
-			path = strings.TrimSpace(path)
-			if path == "" {
+		for _, readme := range ctx.ToolReadmes {
+			path := strings.TrimSpace(readme.Path)
+			body := strings.TrimSpace(readme.Content)
+			if path == "" || body == "" {
 				continue
 			}
-			content.WriteString("- " + path + "\n")
+			content.WriteString("\n### " + path + "\n")
+			content.WriteString("```md\n")
+			content.WriteString(body)
+			content.WriteString("\n```\n")
 		}
 	}
 	return content.String()

@@ -16,14 +16,17 @@ func TestSetupRuntimeSeedsAgentsAndAuthFiles(t *testing.T) {
 	h := NewHarness(nil)
 	err := h.SetupRuntime(registry.SetupContext{
 		RuntimeContext: registry.RuntimeContext{
-			RootDir:                 filepath.Join(tmpDir, "runtime-root"),
-			AgentHome:               tmpDir,
-			AgentID:                 "agent-123",
-			CodexHome:               codexHome,
-			PIDir:                   filepath.Join(tmpDir, ".pi"),
-			ToolsDir:                filepath.Join(tmpDir, "tools"),
-			BundledToolsDir:         filepath.Join(tmpDir, "tools", "default"),
-			ToolReadmes:             []string{filepath.Join(tmpDir, "tools", "default", "browser-tools", "README.md")},
+			RootDir:         filepath.Join(tmpDir, "runtime-root"),
+			AgentHome:       tmpDir,
+			AgentID:         "agent-123",
+			CodexHome:       codexHome,
+			PIDir:           filepath.Join(tmpDir, ".pi"),
+			ToolsDir:        filepath.Join(tmpDir, "tools"),
+			BundledToolsDir: filepath.Join(tmpDir, "tools", "default"),
+			ToolReadmes: []registry.ToolReadme{{
+				Path:    filepath.Join(tmpDir, "tools", "default", "browser-tools", "README.md"),
+				Content: "# Browser Tools\nUse me.\n",
+			}},
 			Display:                 ":99",
 			ScreenWidth:             "1280",
 			ScreenHeight:            "720",
@@ -42,7 +45,7 @@ func TestSetupRuntimeSeedsAgentsAndAuthFiles(t *testing.T) {
 		t.Fatalf("ReadFile AGENTS.md: %v", err)
 	}
 	agentsText := string(agentsRaw)
-	if !strings.Contains(agentsText, "agent-go:managed kind=agents-md harness=codex version=1") {
+	if !strings.Contains(agentsText, "agent-go:managed kind=agents-md harness=codex version=2") {
 		t.Fatalf("expected managed AGENTS header, got %q", agentsText)
 	}
 	if !strings.Contains(agentsText, "You are Codex running inside a sandbox container.") {
@@ -50,6 +53,12 @@ func TestSetupRuntimeSeedsAgentsAndAuthFiles(t *testing.T) {
 	}
 	if !strings.Contains(agentsText, filepath.Join(tmpDir, "tools", "default")) {
 		t.Fatalf("expected bundled tools dir, got %q", agentsText)
+	}
+	if !strings.Contains(agentsText, filepath.Join(tmpDir, "tools", "default", "browser-tools", "README.md")) {
+		t.Fatalf("expected README path, got %q", agentsText)
+	}
+	if !strings.Contains(agentsText, "# Browser Tools\nUse me.") {
+		t.Fatalf("expected embedded README content, got %q", agentsText)
 	}
 
 	authRaw, err := os.ReadFile(filepath.Join(codexHome, "auth.json"))

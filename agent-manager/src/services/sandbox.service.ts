@@ -4,6 +4,7 @@ import { sign } from 'hono/jwt'
 import { ModalClient, Sandbox } from 'modal'
 import { resolveBaseImageRefForRegistry } from '@/clients/ghcr'
 import { DEFAULT_REGION } from '@/utils/region'
+import { isLikelyModalImageId, normalizeHeadImageId } from '@/utils/image-source'
 import {
   clearAgentSandboxIfMatches,
   getAgentAccessToken,
@@ -1055,14 +1056,30 @@ async function createAgentSandboxModal (input: {
       MODAL_SANDBOX_CREATE_STEP_TIMEOUT_MS,
       'app lookup (agent-sandboxes)'
     )
-    const image = await withTimeout(
-      modalClient.images.fromId(input.imageId),
-      MODAL_SANDBOX_CREATE_STEP_TIMEOUT_MS,
-      `image lookup (${input.imageId})`
-    )
+    const requestedImageSource = normalizeHeadImageId(input.imageId)
+    let resolvedImageSource = requestedImageSource
+    const image = isLikelyModalImageId(requestedImageSource)
+      ? await withTimeout(
+          modalClient.images.fromId(requestedImageSource),
+          MODAL_SANDBOX_CREATE_STEP_TIMEOUT_MS,
+          `image lookup (${requestedImageSource})`
+        )
+      : modalClient.images.fromRegistry(
+          await resolveBaseImageRefForRegistry(requestedImageSource).then(
+            resolved => {
+              resolvedImageSource = resolved
+              return resolved
+            }
+          )
+        )
     const imageRecord = await getImageByIdIncludingArchived(input.dbImageId)
     if (!imageRecord) {
       throw new HTTPException(404, { message: 'Image not found' })
+    }
+    if (resolvedImageSource !== requestedImageSource) {
+      console.log(
+        `[modal] resolved sandbox image source ${requestedImageSource} -> ${resolvedImageSource}`
+      )
     }
     const sandboxStartCommand = buildSandboxStartCommand()
 

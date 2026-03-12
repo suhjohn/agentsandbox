@@ -26,6 +26,11 @@ type RunResult struct {
 	Text              string
 }
 
+type ToolReadme struct {
+	Path    string
+	Content string
+}
+
 type ExecuteRequest struct {
 	Session                  Session
 	Input                    []Input
@@ -46,7 +51,7 @@ type RuntimeContext struct {
 	PIDir                      string
 	ToolsDir                   string
 	BundledToolsDir            string
-	ToolReadmes                []string
+	ToolReadmes                []ToolReadme
 	Display                    string
 	ScreenWidth                string
 	ScreenHeight               string

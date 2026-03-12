@@ -98,7 +98,7 @@ func bundledWorkspaceToolsDir(root string) string {
 	return candidate
 }
 
-func listToolReadmes(root string) []string {
+func listToolReadmes(root string) []harnessregistry.ToolReadme {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		return nil
@@ -113,7 +113,7 @@ func listToolReadmes(root string) []string {
 		return nil
 	}
 
-	readmes := make([]string, 0, 16)
+	readmes := make([]harnessregistry.ToolReadme, 0, 16)
 	_ = filepath.WalkDir(walkRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -131,10 +131,19 @@ func listToolReadmes(root string) []string {
 			if rel, relErr := filepath.Rel(walkRoot, path); relErr == nil {
 				displayPath = filepath.Join(displayRoot, rel)
 			}
-			readmes = append(readmes, displayPath)
+			raw, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return nil
+			}
+			readmes = append(readmes, harnessregistry.ToolReadme{
+				Path:    displayPath,
+				Content: strings.TrimSpace(string(raw)),
+			})
 		}
 		return nil
 	})
-	sort.Strings(readmes)
+	sort.Slice(readmes, func(i, j int) bool {
+		return readmes[i].Path < readmes[j].Path
+	})
 	return readmes
 }

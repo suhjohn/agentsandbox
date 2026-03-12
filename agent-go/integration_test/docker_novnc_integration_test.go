@@ -86,10 +86,10 @@ func TestDockerNoVNCSmokeAndBasicAPIs(t *testing.T) {
 	browserToolsCmd := `test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/default/browser-tools/README.md" && test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/default/browser-tools/start.py"`
 	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", browserToolsCmd}, root, nil, false)
 
-	agentsCmd := `CODEX_HOME_PATH="${CODEX_HOME:-${AGENT_HOME:-/home/agent}/.codex}"; test -f "${CODEX_HOME_PATH}/AGENTS.md" && rg -n "agent-go:managed kind=agents-md harness=codex version=1|Tool READMEs|/home/agent/workspaces/tools/default/browser-tools/README.md" "${CODEX_HOME_PATH}/AGENTS.md" >/dev/null`
+	agentsCmd := `CODEX_HOME_PATH="${CODEX_HOME:-${AGENT_HOME:-/home/agent}/.codex}"; test -f "${CODEX_HOME_PATH}/AGENTS.md" && rg -n "agent-go:managed kind=agents-md harness=codex version=2|Tool READMEs|/home/agent/workspaces/tools/default/browser-tools/README.md|# Browser Tools" "${CODEX_HOME_PATH}/AGENTS.md" >/dev/null`
 	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", agentsCmd}, root, nil, false)
 
-	piAgentsCmd := `PI_HOME_PATH="${PI_CODING_AGENT_DIR:-${AGENT_HOME:-/home/agent}/.pi}"; test -f "${PI_HOME_PATH}/AGENTS.md" && rg -n "agent-go:managed kind=agents-md harness=pi version=1|Tool READMEs|/home/agent/workspaces/tools/default/browser-tools/README.md" "${PI_HOME_PATH}/AGENTS.md" >/dev/null`
+	piAgentsCmd := `PI_HOME_PATH="${PI_CODING_AGENT_DIR:-${AGENT_HOME:-/home/agent}/.pi}"; test -f "${PI_HOME_PATH}/AGENTS.md" && rg -n "agent-go:managed kind=agents-md harness=pi version=2|Tool READMEs|/home/agent/workspaces/tools/default/browser-tools/README.md|# Browser Tools" "${PI_HOME_PATH}/AGENTS.md" >/dev/null`
 	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", piAgentsCmd}, root, nil, false)
 
 	pgContainer := fmt.Sprintf("agent_go_it_pg_%d", time.Now().UnixNano())

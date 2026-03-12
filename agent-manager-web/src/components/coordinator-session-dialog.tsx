@@ -455,7 +455,7 @@ export function CoordinatorSessionDialog (props: {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent
         data-coordinator-dialog='true'
-        className='max-w-6xl min-h-[80%] max-h-[calc(100dvh-3rem)] grid-rows-[auto_minmax(0,1fr)] p-0 overflow-hidden gap-0'
+        className='max-w-6xl h-[80dvh] max-h-[calc(100dvh-3rem)] flex flex-col p-0 overflow-hidden gap-0'
         onEscapeKeyDown={event => {
           const shouldHandleInConversation =
             !!auth.user &&
@@ -517,7 +517,7 @@ export function CoordinatorSessionDialog (props: {
           </div>
         </DialogHeader>
 
-        <div className='min-h-0 flex-1 overflow-hidden h-full'>
+        <div className='min-h-0 min-w-0 flex-1 overflow-hidden flex flex-col'>
           {!auth.user ? (
             <div className='h-full grid place-items-center text-center px-6'>
               <div className='space-y-1'>
@@ -553,8 +553,8 @@ export function CoordinatorSessionDialog (props: {
               </div>
             </div>
           ) : mode === 'sessions' ? (
-            <div className='h-full flex flex-col'>
-              <div className='h-full overflow-y-auto'>
+            <div className='min-h-0 flex-1 flex flex-col'>
+              <div className='min-h-0 min-w-0 flex-1 overflow-y-auto'>
                 {selectedAgentId.length === 0 || sessionsQuery.isLoading ? (
                   <div className='h-full grid place-items-center'>
                     <p className='text-sm text-text-secondary'>
@@ -617,8 +617,12 @@ export function CoordinatorSessionDialog (props: {
               </div>
             </div>
           ) : (
-            <div className='h-full flex flex-col flex-1'>
-              <AgentSessionPanel
+            <div className='h-full min-h-0 flex flex-col flex-1'>
+              <div
+                className='min-h-0 flex-1 overflow-y-auto overscroll-contain'
+                data-workspace-panel-scroller='true'
+              >
+                <AgentSessionPanel
                 key={`${selectedAgentId}:${conversationViewKey}`}
                 config={{
                   ...sessionConfig,
@@ -632,6 +636,7 @@ export function CoordinatorSessionDialog (props: {
                 chatControllerKind='dialog'
                 allowCoordinatorComposeEvents
               />
+              </div>
             </div>
           )}
         </div>
