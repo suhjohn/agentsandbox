@@ -312,6 +312,16 @@ if [[ "${1:-}" == "init" ]] || [[ "${1:-}" == "--init" ]]; then
   exit 0
 fi
 
+if [[ "${1:-}" == "reconcile" ]] || [[ "${1:-}" == "--reconcile" ]]; then
+  shift || true
+  prepare_runtime_state
+  if [[ "$#" -eq 0 ]]; then
+    set -- "${AGENT_SERVER_BIN}" serve
+  fi
+  setup_runit_services "$@"
+  exit 0
+fi
+
 prepare_runtime_state
 
 mkdir -p "${XDG_CONFIG_HOME}" "${XDG_CACHE_HOME}" "${XDG_DATA_HOME}" 2>/dev/null || true

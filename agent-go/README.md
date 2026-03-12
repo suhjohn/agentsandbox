@@ -100,6 +100,22 @@ Pull, rebuild, stop the existing standalone binary process, and start the new on
 In the container runtime, the entrypoint now runs the main agent API under `runit`,
 so this helper will restart that `agent-server` service in place when available.
 
+Refresh a live sandbox from the repo checkout without replacing the runtime directory:
+
+```bash
+./agent-go/scripts/reconcile-runtime.sh
+```
+
+This flow can:
+
+- `git pull --ff-only`
+- rebuild `build-artifacts/agent-server`
+- refresh installed helper files derived from the repo checkout
+- rerun entrypoint reconciliation for runtime paths and runit service definitions
+- restart installed runit services in place
+
+Use `--no-pull`, `--no-build`, `--no-sync`, `--no-restart` to narrow the scope.
+
 ## Docker image (source-driven server launcher)
 
 The image installs both CLI harness binaries during build: `codex` and `pi`.
@@ -193,6 +209,8 @@ OpenVSCode/noVNC are **not** started by `agent-server serve` itself. They come u
 are installed/launched by the container entrypoint (`/opt/agentsandbox/agent-go/docker/entrypoint.sh`).
 
 - Docker `ENTRYPOINT` is `/opt/agentsandbox/agent-go/docker/entrypoint.sh` (`agent-go/Dockerfile`).
+- `entrypoint.sh init` only refreshes runtime-owned directories/symlinks and exits.
+- `entrypoint.sh reconcile [cmd...]` refreshes runtime-owned directories/symlinks, rewrites runit service definitions for the provided command, and exits without starting services.
 - That entrypoint always installs the main `agent-server` service when the container command is
   `/opt/agentsandbox/agent-go/build-artifacts/agent-server ...`. In `AGENT_RUNTIME_MODE=all` (default), it also installs the UI/OpenVSCode services.
 - When the container command is `/opt/agentsandbox/agent-go/build-artifacts/agent-server ...`, the entrypoint now installs that command
