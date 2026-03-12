@@ -1,11 +1,5 @@
 # Keep Docker build context small while preserving source code.
 
-# VCS metadata
-.git
-**/.git
-**/.gitmodules
-**/.gitattributes
-
 # Secrets / env files
 **/.env
 **/.env.*
