@@ -1952,10 +1952,9 @@ export function SettingsImageDetailPage () {
                       Customize
                     </div>
                     <div className='text-xs text-text-tertiary'>
-                      Open a terminal to edit the current draft image directly.
-                      Closing snapshots the filesystem and updates the variant
-                      draft image. New agent sandboxes continue to use the
-                      active image.
+                      Open a terminal to edit the current draft variant
+                      directly. Closing the terminal snapshots the filesystem
+                      and updates the draft to the new image id.
                     </div>
                   </div>
                   {!setupSandboxId && (
@@ -1997,7 +1996,7 @@ export function SettingsImageDetailPage () {
                       {createSetupSandboxMutation.isPending ? (
                         <Loader2 className='h-4 w-4 animate-spin' />
                       ) : null}
-                      Activate Shell
+                      Open Terminal
                     </Button>
                   ) : setupSandboxId ? (
                     <Button
@@ -2281,39 +2280,83 @@ export function SettingsImageDetailPage () {
                       title='Shared image volume'
                       descriptionClassName='line-clamp-none'
                       description={
-                        <ul className='space-y-1.5 list-none p-0 m-0'>
-                          <li>
-                            <code className='font-mono text-text-primary'>
-                              /shared/image
-                            </code>{' '}
-                            &mdash; the mounted per-image Modal volume. Hook
-                            edits persist immediately without waiting for a
-                            setup sandbox snapshot.
-                          </li>
-                          <li>
-                            <code className='font-mono text-text-primary'>
-                              /shared/image/hooks/build.sh
-                            </code>{' '}
-                            &mdash; runs during image builds when set (every 30
-                            minutes). Shared across all variants.
-                          </li>
-                          <li>
-                            <code className='font-mono text-text-primary'>
-                              /shared/image/hooks/start.sh
-                            </code>{' '}
-                            &mdash; runs before agent-server starts in new agent
-                            sandboxes.
-                          </li>
-                          <li>
-                            <code className='font-mono text-text-primary'>
-                              /shared/image/AGENTS.md
-                            </code>{' '}
-                            &mdash; loaded into the Codex/PI harness runtime as
-                            shared instructions.
-                          </li>
-                        </ul>
+                        <div className='pt-2 flex flex-col gap-2'>
+                          <p className='text-xs text-primary'>
+                            Write your repository cloning, dependency
+                            installation, initial setup and build commands in
+                            the shared image directory. The same build script is
+                            used for all variants and versions of the image.
+                          </p>
+                          <ul className='space-y-1.5 list-none p-0 m-0'>
+                            <li>
+                              <code className='font-mono text-text-primary'>
+                                /shared/image
+                              </code>{' '}
+                              &mdash; the mounted per-image Modal volume. Hook
+                              edits persist immediately without waiting for a
+                              setup sandbox snapshot.
+                            </li>
+                            <li>
+                              <code className='font-mono text-text-primary'>
+                                /shared/image/hooks/build.sh
+                              </code>{' '}
+                              &mdash; runs during image builds when set (every
+                              30 minutes). Shared across all variants. Use the
+                              Run build row below to execute it now for the
+                              selected variant.
+                            </li>
+                            <li>
+                              <code className='font-mono text-text-primary'>
+                                /shared/image/hooks/start.sh
+                              </code>{' '}
+                              &mdash; runs before agent-server starts in new
+                              agent sandboxes.
+                            </li>
+                            <li>
+                              <code className='font-mono text-text-primary'>
+                                /shared/image/AGENTS.md
+                              </code>{' '}
+                              &mdash; loaded into the Codex/PI harness runtime
+                              as shared instructions.
+                            </li>
+                          </ul>
+                        </div>
                       }
                     />
+                  }
+                />
+                <SettingsRow
+                  disabled={
+                    !canMutateSelectedVariant ||
+                    !selectedVariantId ||
+                    buildStreamMutation.isPending
+                  }
+                  className='items-start sm:items-center flex-col sm:flex-row'
+                  left={
+                    <SettingsRowLeft
+                      title='Run build'
+                      description={
+                        selectedVariant
+                          ? `Trigger POST /images/:imageId/build for "${selectedVariant.name}". This runs /shared/image/hooks/build.sh when present and streams logs below.`
+                          : 'Select a variant, then trigger POST /images/:imageId/build. This runs /shared/image/hooks/build.sh when present and streams logs below.'
+                      }
+                    />
+                  }
+                  right={
+                    <Button
+                      variant='secondary'
+                      disabled={
+                        !canMutateSelectedVariant ||
+                        !selectedVariantId ||
+                        buildStreamMutation.isPending
+                      }
+                      onClick={() => buildStreamMutation.mutate()}
+                    >
+                      {buildStreamMutation.isPending ? (
+                        <Loader2 className='h-4 w-4 animate-spin' />
+                      ) : null}
+                      Run build
+                    </Button>
                   }
                 />
               </div>

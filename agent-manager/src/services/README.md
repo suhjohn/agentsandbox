@@ -37,7 +37,7 @@ Behavior:
 - For `scope: "personal"`, the variant row is owned by `ownerUserId` (and `ownerUserId` is cleared for `scope: "shared"`).
 - When `name` is omitted/blank for a personal variant, the service auto-numbers `Variant`, `Variant 2`, `Variant 3`, ... per `(imageId, ownerUserId)` to avoid unique-index collisions.
 - `activeImageId` is the stable image pointer used for new agent sandboxes.
-- `draftImageId` is the mutable image pointer used for builds and setup sandboxes.
+- `draftImageId` is the mutable image pointer used for setup sandboxes and manual variant edits.
 - When callers omit `activeImageId`, the variant starts from the default ref `ghcr.io/suhjohn/agentsandbox:latest`.
 - When callers omit `draftImageId`, it defaults to the resolved `activeImageId`.
 
@@ -81,8 +81,8 @@ Behavior:
 
 - Passes environment secret names to `runImageBuild` via `environmentSecretNames`.
 - Includes `environmentSecretNames` in the build input payload/hash.
-- Uses the variant's current `draftImageId` as the build base and records that value as `baseImageId` in the build input payload.
-- On success, writes the produced Modal image id directly back to the variant's `draftImageId`.
+- Uses the variant's current `activeImageId` as the build base and records that value as `baseImageId` in the build input payload.
+- On success, writes the produced Modal image id back to both the variant's `activeImageId` and `draftImageId`.
 
 ### `setUserImageDefaultVariantId(input)` / `clearUserImageDefaultVariantId(input)` / `resolveImageVariantForUser(input)`
 

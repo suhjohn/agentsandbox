@@ -630,6 +630,42 @@ export async function setImageVariantDraftImageId(input: {
   return getImageVariantById(updated.id);
 }
 
+export async function setImageVariantActiveImageId(input: {
+  readonly variantId: string;
+  readonly activeImageId: string | null;
+}) {
+  if (!isUuid(input.variantId)) return null;
+  const [updated] = await db
+    .update(imageVariants)
+    .set({
+      activeImageId: normalizeVariantImageId(input.activeImageId),
+      updatedAt: new Date(),
+    })
+    .where(eq(imageVariants.id, input.variantId))
+    .returning({ id: imageVariants.id });
+  if (!updated) return null;
+  return getImageVariantById(updated.id);
+}
+
+export async function setImageVariantBuiltImageId(input: {
+  readonly variantId: string;
+  readonly imageId: string | null;
+}) {
+  if (!isUuid(input.variantId)) return null;
+  const nextImageId = normalizeVariantImageId(input.imageId);
+  const [updated] = await db
+    .update(imageVariants)
+    .set({
+      activeImageId: nextImageId,
+      draftImageId: nextImageId,
+      updatedAt: new Date(),
+    })
+    .where(eq(imageVariants.id, input.variantId))
+    .returning({ id: imageVariants.id });
+  if (!updated) return null;
+  return getImageVariantById(updated.id);
+}
+
 export async function createImageVariantBuild(input: {
   readonly imageId: string;
   readonly variantId: string;
@@ -1005,7 +1041,7 @@ export async function runBuild(input: {
     throw new Error("Image variant is read-only");
   }
 
-  const baseImageId = getVariantDraftImageId(variant);
+  const baseImageId = getVariantActiveImageId(variant);
 
   let environmentSecretRows = [] as Awaited<
     ReturnType<typeof listEnvironmentSecrets>
@@ -1077,9 +1113,9 @@ export async function runBuild(input: {
       throw new Error("Failed to update build record");
     }
 
-    const updatedVariant = await setImageVariantDraftImageId({
+    const updatedVariant = await setImageVariantBuiltImageId({
       variantId: variant.id,
-      draftImageId: builtImageId,
+      imageId: builtImageId,
     });
     if (!updatedVariant) throw new Error("Image variant not found after build");
 
