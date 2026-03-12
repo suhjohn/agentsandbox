@@ -30,7 +30,7 @@ Behavior:
   - refreshing installed helper files copied from the repo checkout,
   - recreating the runtime directory and tools baseline,
   - running `/shared/image-hooks/build.sh` if present, with a temporary executable copy when the hook is readable but not executable,
-  - verifying `/opt/agentsandbox/agent-go/build-artifacts/agent-server` exists and is executable before snapshotting.
+  - verifying `/opt/agentsandbox/agent-go/build-artifacts/agent-server-linux-amd64` exists and is executable before snapshotting.
 
 ## image.service.ts
 

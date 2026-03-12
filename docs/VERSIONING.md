@@ -1,7 +1,7 @@
 # Agent Image Versioning & Upgrade Specification
 
 > Status update (2026-03-05):
-> The runtime now calls `/opt/agentsandbox/agent-go/build-artifacts/agent-server`
+> The runtime now calls `/opt/agentsandbox/agent-go/build-artifacts/agent-server-linux-amd64`
 > directly. Source sync
 > via `agent-go-update-source` happens during the build flow, not on sandbox startup.
 > This document still captures the previous release-infrastructure proposal and

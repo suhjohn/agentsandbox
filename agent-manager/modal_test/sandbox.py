@@ -63,7 +63,7 @@ try:
 
     # 2. Copy agent-server launcher into /home/agent
     print("Copying tracked agent-server binary → /home/agent …")
-    run(f'cp "${{AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server}}" {AGENT_HOME}/agent-server', "copy-launcher")
+    run(f'cp "${{AGENT_SERVER_BIN:-/opt/agentsandbox/agent-go/build-artifacts/agent-server-linux-amd64}}" {AGENT_HOME}/agent-server', "copy-launcher")
 
     # 3. Show what was created
     print("\n--- /home/agent after init ---")

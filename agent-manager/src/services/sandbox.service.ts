@@ -228,7 +228,7 @@ function parseSandboxStartCommand (): readonly string[] {
   const name = 'AGENT_SANDBOX_COMMAND_JSON'
   const raw = process.env[name]?.trim()
   if (!raw) {
-    return ['/opt/agentsandbox/agent-go/build-artifacts/agent-server', 'serve']
+    return ['/opt/agentsandbox/agent-go/build-artifacts/agent-server-linux-amd64', 'serve']
   }
 
   try {
@@ -258,7 +258,7 @@ const DEFAULT_SANDBOX_AGENT_TOKEN_TTL_SECONDS = 5 * 60
 const SETUP_APP_NAME = 'image-builder'
 const SETUP_SERVER_COMMAND = [
   SANDBOX_START_SCRIPT,
-  '/opt/agentsandbox/agent-go/build-artifacts/agent-server',
+  '/opt/agentsandbox/agent-go/build-artifacts/agent-server-linux-amd64',
   'serve'
 ] as const
 const SETUP_SSH_USERNAME = 'root'
