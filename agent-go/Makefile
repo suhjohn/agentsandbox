@@ -24,10 +24,9 @@ help:
 	@echo "  make docker-push             # push $(PUSH_IMAGE) with tag from GHCR_TAG or current git sha"
 
 build:
-	./scripts/dev.sh build-server --output "$(BINARY_PATH)"
-
-build-docker-binary:
 	GOOS=linux GOARCH=amd64 ./scripts/dev.sh build-server --output "$(BINARY_PATH)"
+
+build-docker-binary: build
 
 test:
 	$(GO) test ./...
