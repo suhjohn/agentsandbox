@@ -86,13 +86,13 @@ make build
 ```
 
 Repeated `make build` runs produce a reproducible binary (`-buildvcs=false
--trimpath`) and only overwrite the tracked artifact when the content actually
-changed.
+-trimpath`) and only overwrite the local host-targeted artifact when the
+content actually changed.
 
 Build to a specific output path (example used by Docker below):
 
 ```bash
-./agent-go/scripts/dev.sh build-server --output ./agent-go/build-artifacts/agent-server
+./agent-go/scripts/dev.sh build-server --output ./agent-go/build-artifacts/agent-server-linux-amd64
 ```
 
 Pull, rebuild, stop the existing standalone binary process, and start the new one:
@@ -144,8 +144,8 @@ export GHCR_TAG="$(git rev-parse --short HEAD)"      # optional
 ./agent-go/scripts/dev.sh ghcr-push-amd64
 ```
 
-This push flow rebuilds the tracked `agent-go/build-artifacts/agent-server`
-artifact for `linux/amd64` and updates `agent-go/build-artifacts/agent-server.rev`
+This push flow rebuilds the tracked `agent-go/build-artifacts/agent-server-linux-amd64`
+artifact for `linux/amd64` and updates `agent-go/build-artifacts/agent-server-linux-amd64.rev`
 only when the binary content changed before running `docker buildx build`.
 
 Or from `agent-go/`:
@@ -199,10 +199,12 @@ Runtime behavior intentionally keeps the same runit-based stack used by `agent`:
 - optional dockerd service
 - workspace tools sync + harness runtime setup on `agent-server serve` startup (`AGENTS.md`, Codex auth seeding)
 
-The API server command now calls the tracked repo binary directly at
-`/opt/agentsandbox/agent-go/build-artifacts/agent-server`. The matching source
-revision is recorded in `agent-go/build-artifacts/agent-server.rev`.
-OpenVSCode proxying uses that same binary (`/opt/agentsandbox/agent-go/build-artifacts/agent-server openvscode-proxy`).
+The image runtime resolves the API server binary through `AGENT_SERVER_BIN`
+and points it at an architecture-qualified artifact inside
+`/opt/agentsandbox/agent-go/build-artifacts/`. The tracked linux/amd64 source
+revision is recorded in `agent-go/build-artifacts/agent-server-linux-amd64.rev`.
+OpenVSCode proxying uses that same `AGENT_SERVER_BIN` path with the
+`openvscode-proxy` subcommand.
 
 ### `start.sh` + `AGENT_RUNTIME_MODE`
 
@@ -211,14 +213,14 @@ are installed/launched by `start.sh` (`/opt/agentsandbox/agent-go/docker/start.s
 
 - Docker `ENTRYPOINT` is `/opt/agentsandbox/agent-go/docker/start.sh` (`agent-go/Dockerfile`).
 - `start.sh` always refreshes runtime-owned directories/symlinks and installed helper files before launching the requested command.
-- That bootstrap always installs the main `agent-server` service when the container command is
-  `/opt/agentsandbox/agent-go/build-artifacts/agent-server ...`. In `AGENT_RUNTIME_MODE=all` (default), it also installs the UI/OpenVSCode services.
-- When the container command is `/opt/agentsandbox/agent-go/build-artifacts/agent-server ...`, `start.sh` installs that command
+- That bootstrap always installs the main `agent-server` service when the container command resolves to
+  `${AGENT_SERVER_BIN} ...`. In `AGENT_RUNTIME_MODE=all` (default), it also installs the UI/OpenVSCode services.
+- When the container command resolves to `${AGENT_SERVER_BIN} ...`, `start.sh` installs that command
   as the `agent-server` runit service and keeps `runsvdir` as the foreground process.
 - In `all` mode, relevant runit services include:
   - `agent-server` (main API service, installed dynamically from the container command)
   - `openvscode-server` (`agent-go/docker/runit/openvscode-server.sh`)
-  - `openvscode-proxy` (`agent-go/docker/runit/openvscode-proxy.sh`, runs `/opt/agentsandbox/agent-go/build-artifacts/agent-server openvscode-proxy`)
+  - `openvscode-proxy` (`agent-go/docker/runit/openvscode-proxy.sh`, runs `${AGENT_SERVER_BIN} openvscode-proxy`)
   - `ui-stack` (Xvfb/VNC/noVNC/Chromium) (`agent-go/docker/runit/ui-stack.sh`)
 
 Service control:

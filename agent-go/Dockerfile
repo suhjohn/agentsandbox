@@ -182,7 +182,9 @@ ENV ROOT_DIR=${AGENT_HOME}/runtime
 ENV AGENT_GO_REPO_DIR=${AGENT_REPO_DIR}/agent-go
 ENV AGENT_DOCKER_DIR=${AGENT_GO_REPO_DIR}/docker
 ENV AGENT_TOOLS_DIR=${AGENT_GO_REPO_DIR}/tools
-ENV AGENT_SERVER_BIN=${AGENT_GO_REPO_DIR}/build-artifacts/agent-server
+ARG AGENT_SERVER_RELATIVE_PATH=build-artifacts/agent-server-linux-amd64
+ENV AGENT_SERVER_RELATIVE_PATH=${AGENT_SERVER_RELATIVE_PATH}
+ENV AGENT_SERVER_BIN=${AGENT_GO_REPO_DIR}/${AGENT_SERVER_RELATIVE_PATH}
 ENV AGENT_GO_PULL_REF=main
 ENV CODEX_HOME=${AGENT_HOME}/.codex
 ENV PI_CODING_AGENT_DIR=${AGENT_HOME}/.pi
@@ -245,4 +247,3 @@ RUN set -eux; \
   printf '%s\n' "${AGENT_IMAGE_VERSION}" > /etc/agent-image-version
 
 ENTRYPOINT ["dumb-init", "--", "/opt/agentsandbox/agent-go/docker/start.sh"]
-CMD ["/opt/agentsandbox/agent-go/build-artifacts/agent-server"]

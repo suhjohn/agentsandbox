@@ -72,8 +72,8 @@ out/
 .turbo/
 !agent-go/build-artifacts/
 agent-go/build-artifacts/*
-!agent-go/build-artifacts/agent-server
-!agent-go/build-artifacts/agent-server.rev
+!agent-go/build-artifacts/agent-server-linux-amd64
+!agent-go/build-artifacts/agent-server-linux-amd64.rev
 
 # Lockfiles (repo standard is Bun)
 package-lock.json

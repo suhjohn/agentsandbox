@@ -6,7 +6,7 @@ ROOT_DIR="${ROOT_DIR:-${AGENT_HOME}/runtime}"
 AGENT_GO_REPO_DIR="${AGENT_GO_REPO_DIR:-/opt/agentsandbox/agent-go}"
 AGENT_DOCKER_DIR="${AGENT_DOCKER_DIR:-${AGENT_GO_REPO_DIR}/docker}"
 AGENT_TOOLS_DIR="${AGENT_TOOLS_DIR:-${AGENT_GO_REPO_DIR}/tools}"
-AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server}"
+AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server-linux-amd64}"
 WORKSPACES_DIR="${WORKSPACES_DIR:-${AGENT_HOME}/workspaces}"
 WORKSPACE_TOOLS_DIR="${WORKSPACE_TOOLS_DIR:-${WORKSPACES_DIR}/tools}"
 CODEX_HOME="${CODEX_HOME:-${AGENT_HOME}/.codex}"
@@ -55,7 +55,7 @@ Usage:
 Examples:
   /opt/agentsandbox/agent-go/docker/upgrade.sh
   /opt/agentsandbox/agent-go/docker/upgrade.sh main
-  /opt/agentsandbox/agent-go/docker/upgrade.sh 0123abcd -- /opt/agentsandbox/agent-go/build-artifacts/agent-server serve
+  /opt/agentsandbox/agent-go/docker/upgrade.sh 0123abcd -- /opt/agentsandbox/agent-go/build-artifacts/agent-server-linux-amd64 serve
 EOF
 }
 
@@ -152,8 +152,8 @@ resolve_source_version() {
     git -C "${AGENT_GO_REPO_DIR}" rev-parse HEAD
     return 0
   fi
-  if [[ -f "${AGENT_GO_REPO_DIR}/build-artifacts/agent-server.rev" ]]; then
-    tr -d ' \n' <"${AGENT_GO_REPO_DIR}/build-artifacts/agent-server.rev"
+  if [[ -f "${AGENT_SERVER_BIN}.rev" ]]; then
+    tr -d ' \n' <"${AGENT_SERVER_BIN}.rev"
     return 0
   fi
   printf '%s' "unknown"

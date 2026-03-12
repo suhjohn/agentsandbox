@@ -59,6 +59,35 @@ normalize_goarch() {
   esac
 }
 
+server_binary_relative_path() {
+  local goos_value="$1"
+  local goarch_value="$2"
+  printf 'build-artifacts/agent-server-%s-%s\n' "${goos_value}" "${goarch_value}"
+}
+
+server_binary_output_path() {
+  local goos_value="$1"
+  local goarch_value="$2"
+  printf '%s/%s\n' "${MODULE_DIR}" "$(server_binary_relative_path "${goos_value}" "${goarch_value}")"
+}
+
+server_rev_file_path() {
+  local output_path="$1"
+  printf '%s.rev\n' "${output_path}"
+}
+
+module_relative_path() {
+  local absolute_path="$1"
+  case "${absolute_path}" in
+    "${MODULE_DIR}"/*)
+      printf '%s\n' "${absolute_path#"${MODULE_DIR}/"}"
+      ;;
+    *)
+      die "path must be inside ${MODULE_DIR}: ${absolute_path}"
+      ;;
+  esac
+}
+
 docker_server_goarch() {
   local raw_arch=""
   raw_arch="$("${DOCKER_BIN}" info --format '{{.Architecture}}' 2>/dev/null || true)"
@@ -67,9 +96,10 @@ docker_server_goarch() {
 }
 
 prepare_repo_binary_for_docker() {
-  local repo_binary_path="${MODULE_DIR}/build-artifacts/agent-server"
   local goarch_value=""
+  local repo_binary_path=""
   goarch_value="$(docker_server_goarch)"
+  repo_binary_path="$(server_binary_output_path "linux" "${goarch_value}")"
   build_server_binary "${repo_binary_path}" "linux" "${goarch_value}" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
   write_git_rev_file "${repo_binary_path}"
 }
@@ -106,10 +136,11 @@ build_server_binary() {
 
 write_git_rev_file() {
   local output_path="$1"
-  local rev_file="${output_path}.rev"
+  local rev_file=""
   local rev=""
   local current_rev=""
 
+  rev_file="$(server_rev_file_path "${output_path}")"
   rev="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || true)"
   if [[ -n "${rev}" ]]; then
     if [[ -f "${rev_file}" ]]; then
@@ -127,7 +158,7 @@ write_git_rev_file() {
 }
 
 cmd_build_server() {
-  local goos_value="${GOOS:-linux}"
+  local goos_value="${GOOS:-$("${GO_BIN}" env GOOS)}"
   local goarch_value="${GOARCH:-$("${GO_BIN}" env GOARCH)}"
   local cgo_enabled_value="${CGO_ENABLED:-0}"
   local ldflags_value="${LDFLAGS:--s -w}"
@@ -158,7 +189,7 @@ cmd_build_server() {
   done
 
   if [[ -z "${output_path}" ]]; then
-    output_path="${MODULE_DIR}/build-artifacts/agent-server-${goos_value}-${goarch_value}"
+    output_path="$(server_binary_output_path "${goos_value}" "${goarch_value}")"
   fi
 
   build_server_binary "$(abs_path "${output_path}")" "${goos_value}" "${goarch_value}" "${cgo_enabled_value}" "${ldflags_value}"
@@ -185,7 +216,9 @@ wait_for_exit() {
 }
 
 cmd_restart_server() {
-  local output_path="${MODULE_DIR}/build-artifacts/agent-server"
+  local goos_value="${GOOS:-$("${GO_BIN}" env GOOS)}"
+  local goarch_value="${GOARCH:-$("${GO_BIN}" env GOARCH)}"
+  local output_path=""
   local match_substring=""
   local stop_timeout_sec=20
   local force_kill=0
@@ -237,6 +270,9 @@ cmd_restart_server() {
 
   [[ "${stop_timeout_sec}" =~ ^[0-9]+$ ]] || die "--timeout must be an integer number of seconds"
 
+  if [[ -z "${output_path}" ]]; then
+    output_path="$(server_binary_output_path "${goos_value}" "${goarch_value}")"
+  fi
   output_path="$(abs_path "${output_path}")"
   if [[ -z "${match_substring}" ]]; then
     match_substring="${output_path}"
@@ -258,7 +294,7 @@ cmd_restart_server() {
     git -C "${REPO_ROOT}" pull --ff-only
   fi
 
-  build_server_binary "${output_path}" "${GOOS:-linux}" "${GOARCH:-$("${GO_BIN}" env GOARCH)}" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
+  build_server_binary "${output_path}" "${goos_value}" "${goarch_value}" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
 
   if [[ -d "${service_dir}" ]] && command -v sv >/dev/null 2>&1; then
     echo "restarting runit service ${service_dir}"
@@ -386,8 +422,18 @@ parse_docker_mode_args() {
 }
 
 cmd_docker_build() {
+  local goarch_value=""
+  local repo_binary_path=""
+  local repo_binary_relative_path=""
+  goarch_value="$(docker_server_goarch)"
+  repo_binary_path="$(server_binary_output_path "linux" "${goarch_value}")"
+  repo_binary_relative_path="$(module_relative_path "${repo_binary_path}")"
   prepare_repo_binary_for_docker
-  "${DOCKER_BIN}" build -f "${MODULE_DIR}/Dockerfile" -t "${DOCKER_IMAGE}" "${REPO_ROOT}"
+  "${DOCKER_BIN}" build \
+    --build-arg "AGENT_SERVER_RELATIVE_PATH=${repo_binary_relative_path}" \
+    -f "${MODULE_DIR}/Dockerfile" \
+    -t "${DOCKER_IMAGE}" \
+    "${REPO_ROOT}"
 }
 
 read_docker_mode_args() {
@@ -450,9 +496,11 @@ cmd_docker_stop() {
 
 cmd_ghcr_push_amd64() {
   local docker_cmd=("${DOCKER_BIN}")
-  local repo_binary_path="${PREBUILT_BINARY_PATH:-${MODULE_DIR}/build-artifacts/agent-server}"
+  local repo_binary_path="${PREBUILT_BINARY_PATH:-$(server_binary_output_path "linux" "amd64")}"
+  local repo_binary_relative_path=""
 
   repo_binary_path="$(abs_path "${repo_binary_path}")"
+  repo_binary_relative_path="$(module_relative_path "${repo_binary_path}")"
 
   if [[ -n "${DOCKER_CONTEXT:-}" ]]; then
     docker_cmd=("${DOCKER_BIN}" --context "${DOCKER_CONTEXT}")
@@ -516,6 +564,7 @@ cmd_ghcr_push_amd64() {
     --platform linux/amd64 \
     --push \
     --build-arg "AGENT_IMAGE_VERSION=${build_version}" \
+    --build-arg "AGENT_SERVER_RELATIVE_PATH=${repo_binary_relative_path}" \
     -f "${MODULE_DIR}/Dockerfile" \
     "${tag_args[@]}" \
     "${REPO_ROOT}"

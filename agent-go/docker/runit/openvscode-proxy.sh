@@ -2,7 +2,7 @@
 set -euo pipefail
 
 AGENT_GO_REPO_DIR="${AGENT_GO_REPO_DIR:-/opt/agentsandbox/agent-go}"
-AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server}"
+AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server-linux-amd64}"
 
 if [[ ! -x "${AGENT_SERVER_BIN}" ]]; then
   echo "${AGENT_SERVER_BIN} not found for OpenVSCode proxy" >&2

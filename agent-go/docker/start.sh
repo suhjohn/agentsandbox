@@ -20,7 +20,7 @@ ROOT_DIR="${ROOT_DIR:-${AGENT_HOME}/runtime}"
 AGENT_GO_REPO_DIR="${AGENT_GO_REPO_DIR:-/opt/agentsandbox/agent-go}"
 AGENT_DOCKER_DIR="${AGENT_DOCKER_DIR:-${AGENT_GO_REPO_DIR}/docker}"
 AGENT_TOOLS_DIR="${AGENT_TOOLS_DIR:-${AGENT_GO_REPO_DIR}/tools}"
-AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server}"
+AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server-linux-amd64}"
 DATABASE_PATH="${DATABASE_PATH:-${ROOT_DIR}/agent.db}"
 WORKSPACES_DIR="${WORKSPACES_DIR:-${AGENT_HOME}/workspaces}"
 WORKSPACE_TOOLS_DIR="${WORKSPACE_TOOLS_DIR:-${WORKSPACES_DIR}/tools}"
@@ -274,8 +274,8 @@ resolve_source_version() {
     git -C "${AGENT_GO_REPO_DIR}" rev-parse HEAD
     return 0
   fi
-  if [[ -f "${AGENT_GO_REPO_DIR}/build-artifacts/agent-server.rev" ]]; then
-    tr -d ' \n' <"${AGENT_GO_REPO_DIR}/build-artifacts/agent-server.rev"
+  if [[ -f "${AGENT_SERVER_BIN}.rev" ]]; then
+    tr -d ' \n' <"${AGENT_SERVER_BIN}.rev"
     return 0
   fi
   if [[ -n "${AGENT_IMAGE_VERSION:-}" ]]; then
