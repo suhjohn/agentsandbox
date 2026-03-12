@@ -35,11 +35,10 @@ def bearer_client(
     )
 
 
-def runtime_internal_client(
+def api_key_client(
     *,
     base_url: str,
-    internal_auth_secret: str,
-    agent_id: str,
+    api_key: str,
     headers: dict[str, str] | None = None,
     timeout: httpx.Timeout | None = None,
     verify_ssl: str | bool | Any = True,
@@ -47,14 +46,12 @@ def runtime_internal_client(
     raise_on_unexpected_status: bool = False,
     httpx_args: dict[str, Any] | None = None,
 ) -> AuthenticatedClient:
-    merged_headers = dict(headers or {})
-    merged_headers["X-Agent-Id"] = agent_id.strip()
     return AuthenticatedClient(
         base_url=_normalize_base_url(base_url),
-        token=internal_auth_secret.strip(),
+        token=api_key.strip(),
         prefix="",
-        auth_header_name="X-Agent-Internal-Auth",
-        headers=merged_headers,
+        auth_header_name="X-API-Key",
+        headers=dict(headers or {}),
         timeout=timeout,
         verify_ssl=verify_ssl,
         follow_redirects=follow_redirects,

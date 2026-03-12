@@ -586,19 +586,7 @@ registerRoute(
   '/:agentId/snapshot',
   async c => {
     const user = c.get('user')
-    const authMode = (c.get('authMode') ?? 'jwt') as
-      | 'jwt'
-      | 'api-key'
-      | 'runtime-internal'
-    const runtimeAgentId = c.get('runtimeAgentId') ?? null
     const agentId = c.req.param('agentId')
-    if (
-      authMode === 'runtime-internal' &&
-      runtimeAgentId !== null &&
-      runtimeAgentId !== agentId
-    ) {
-      return c.json({ error: 'Runtime internal auth agent mismatch' }, 401)
-    }
     const existing = await getAgentById(agentId)
     if (!existing) {
       return c.json({ error: 'Agent not found' }, 404)

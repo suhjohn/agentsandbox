@@ -11,7 +11,7 @@ extendZodWithOpenApi(z);
 
 type HttpMethod = "get" | "post" | "patch" | "put" | "delete";
 
-type SecuritySchemeName = "bearerAuth";
+type SecuritySchemeName = "bearerAuth" | "apiKeyAuth";
 type RouteSecurity = ReadonlyArray<
   Readonly<Partial<Record<SecuritySchemeName, ReadonlyArray<string>>>>
 >;
@@ -36,6 +36,22 @@ export type RouteSpec = {
 
 const registry = new OpenAPIRegistry();
 const registeredSpecs: RouteSpec[] = [];
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function pathPatternToRegex(path: string): RegExp {
+  const pattern = path
+    .split("/")
+    .map((segment) =>
+      segment.startsWith(":")
+        ? "[^/]+"
+        : escapeRegex(segment),
+    )
+    .join("/");
+  return new RegExp(`^${pattern}$`);
+}
 
 function toOpenApiPath(path: string): string {
   return path.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
@@ -78,6 +94,20 @@ function cloneSecurityRequirement(
   return cloned;
 }
 
+function normalizeRouteSecurity(path: string, security?: RouteSecurity): RouteSecurity | undefined {
+  if (!security) return undefined;
+  const cloned = security.map((requirement) => cloneSecurityRequirement(requirement));
+  if (path.startsWith("/api-keys")) {
+    return cloned;
+  }
+  const hasBearer = cloned.some((requirement) => "bearerAuth" in requirement);
+  const hasApiKey = cloned.some((requirement) => "apiKeyAuth" in requirement);
+  if (hasBearer && !hasApiKey) {
+    cloned.push({ apiKeyAuth: [] });
+  }
+  return cloned;
+}
+
 export function documentRoute(spec: RouteSpec): void {
   const inferredParamsSchema =
     spec.request?.params ?? inferParamsSchemaFromPath(spec.path);
@@ -102,9 +132,7 @@ export function documentRoute(spec: RouteSpec): void {
     path: toOpenApiPath(normalizedSpec.path),
     tags: [...normalizedSpec.tags],
     summary: normalizedSpec.summary,
-    security: normalizedSpec.security
-      ? normalizedSpec.security.map((s) => cloneSecurityRequirement(s))
-      : undefined,
+    security: normalizeRouteSecurity(normalizedSpec.path, normalizedSpec.security),
     request: {
       ...(paramsSchema
         ? {
@@ -143,6 +171,11 @@ export function generateOpenApiSpec(input: {
     scheme: "bearer",
     bearerFormat: "JWT",
   });
+  registry.registerComponent("securitySchemes", "apiKeyAuth", {
+    type: "apiKey",
+    in: "header",
+    name: "X-API-Key",
+  });
 
   const generator = new OpenApiGeneratorV31(registry.definitions);
   return generator.generateDocument({
@@ -153,6 +186,24 @@ export function generateOpenApiSpec(input: {
 
 export function getRegisteredSpecs(): readonly RouteSpec[] {
   return registeredSpecs;
+}
+
+export function buildRoutePermissionId(method: string, path: string): string {
+  return `${method.toUpperCase()} ${path}`;
+}
+
+export function matchRegisteredRoute(
+  method: string,
+  path: string,
+): RouteSpec | null {
+  const normalizedMethod = method.toLowerCase();
+  for (const spec of registeredSpecs) {
+    if (spec.method !== normalizedMethod) continue;
+    if (pathPatternToRegex(spec.path).test(path)) {
+      return spec;
+    }
+  }
+  return null;
 }
 
 export function registerRoute<E extends Env>(

@@ -44,16 +44,15 @@ func newTestServer(t *testing.T) testServer {
 
 	agentID := "test-agent-id"
 	cfg := serveConfig{
-		SecretSeed:              strings.Repeat("s", 32),
-		AgentInternalAuthSecret: strings.Repeat("i", 32),
-		AgentID:                 agentID,
-		DefaultModel:            "gpt-5.2",
-		DefaultReasoningEffort:  "high",
-		AgentHome:               tmpDir,
-		DatabasePath:            dbPath,
-		WorkspacesDir:           tmpDir,
-		RuntimeDir:              tmpDir,
-		DefaultWorkingDir:       tmpDir,
+		SecretSeed:             strings.Repeat("s", 32),
+		AgentID:                agentID,
+		DefaultModel:           "gpt-5.2",
+		DefaultReasoningEffort: "high",
+		AgentHome:              tmpDir,
+		DatabasePath:           dbPath,
+		WorkspacesDir:          tmpDir,
+		RuntimeDir:             tmpDir,
+		DefaultWorkingDir:      tmpDir,
 	}
 
 	st, err := newStore(dbPath, agentID)
@@ -227,66 +226,6 @@ func TestSessionAndMessageLifecycle(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for assistant message; currently %d messages", len(msgs))
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
-
-func TestInternalAuthSessionAndMessageLifecycle(t *testing.T) {
-	ts := newTestServer(t)
-	defer ts.close()
-
-	sessionID := "11111111111111111111111111111111"
-
-	createPayload := map[string]any{
-		"id":      sessionID,
-		"harness": "codex",
-	}
-	createBody, _ := json.Marshal(createPayload)
-	req, _ := http.NewRequest(http.MethodPost, ts.server.URL+"/session", bytes.NewReader(createBody))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Agent-Internal-Auth", strings.Repeat("i", 32))
-	req.Header.Set("X-Actor-User-Id", "manager-user")
-	createRes, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-	defer createRes.Body.Close()
-	if createRes.StatusCode != http.StatusCreated {
-		t.Fatalf("expected 201, got %d", createRes.StatusCode)
-	}
-
-	messagePayload := map[string]any{
-		"input": []map[string]any{{"type": "text", "text": "hello world"}},
-	}
-	messageBody, _ := json.Marshal(messagePayload)
-	msgReq, _ := http.NewRequest(http.MethodPost, ts.server.URL+"/session/"+sessionID+"/message", bytes.NewReader(messageBody))
-	msgReq.Header.Set("Content-Type", "application/json")
-	msgReq.Header.Set("X-Agent-Internal-Auth", strings.Repeat("i", 32))
-	msgReq.Header.Set("X-Actor-User-Id", "manager-user")
-	msgRes, err := http.DefaultClient.Do(msgReq)
-	if err != nil {
-		t.Fatalf("start run: %v", err)
-	}
-	defer msgRes.Body.Close()
-	if msgRes.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", msgRes.StatusCode)
-	}
-
-	deadline := time.Now().Add(3 * time.Second)
-	for {
-		msgs, err := ts.store.getMessagesBySessionID(sessionID)
-		if err != nil {
-			t.Fatalf("get messages: %v", err)
-		}
-		if len(msgs) >= 1 {
-			if msgs[0].CreatedBy == nil || *msgs[0].CreatedBy != "manager-user" {
-				t.Fatalf("expected createdBy on user message, got %#v", msgs[0].CreatedBy)
-			}
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for user message; currently %d messages", len(msgs))
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

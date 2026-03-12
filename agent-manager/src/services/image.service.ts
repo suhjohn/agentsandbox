@@ -225,6 +225,7 @@ export function canUserMutateImageVariant(input: {
     readonly ownerUserId: string | null;
   };
 }): boolean {
+  if (input.variant.scope === "shared") return true;
   if (input.userId === input.imageCreatedBy) return true;
   if (input.variant.scope !== "personal") return false;
   return input.variant.ownerUserId === input.userId;

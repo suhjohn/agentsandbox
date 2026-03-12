@@ -583,7 +583,10 @@ registerRoute(
     const image = await getImageById(imageId)
     if (!image) return c.json({ error: 'Image not found' }, 404)
     try {
-      ensureCanWriteImage(user.id, { createdBy: image.createdBy })
+      ensureCanReadImage(user.id, {
+        visibility: image.visibility as Visibility,
+        createdBy: image.createdBy
+      })
     } catch {
       return c.json({ error: 'Image not found' }, 404)
     }

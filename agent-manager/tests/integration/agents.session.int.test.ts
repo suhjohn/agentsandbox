@@ -64,8 +64,7 @@ describe("POST /agents/:agentId/session (integration)", () => {
     const observed: Array<{
       method: string;
       path: string;
-      internalAuth: string | null;
-      actorUserId: string | null;
+      agentAuth: string | null;
       body: unknown;
     }> = [];
 
@@ -80,8 +79,7 @@ describe("POST /agents/:agentId/session (integration)", () => {
             observed.push({
               method: req.method,
               path: url.pathname,
-              internalAuth: req.headers.get("X-Agent-Internal-Auth"),
-              actorUserId: req.headers.get("X-Actor-User-Id"),
+              agentAuth: req.headers.get("X-Agent-Auth"),
               body: bodyText.length > 0 ? JSON.parse(bodyText) : null,
             });
 
@@ -126,11 +124,9 @@ describe("POST /agents/:agentId/session (integration)", () => {
     });
 
     const sandboxId = `sb-${crypto.randomUUID()}`;
-    const runtimeInternalSecret = crypto.randomUUID().replaceAll("-", "");
     await setAgentSandbox({
       id: agent.id,
       currentSandboxId: sandboxId,
-      runtimeInternalSecret,
     });
 
     vi.spyOn(sandboxService, "ensureAgentSandbox").mockResolvedValue({
@@ -180,8 +176,7 @@ describe("POST /agents/:agentId/session (integration)", () => {
       modelReasoningEffort: "deliberate",
     });
     for (const request of observed) {
-      expect(request.internalAuth).toBe(runtimeInternalSecret);
-      expect(request.actorUserId).toBe(userId);
+      expect(request.agentAuth).toMatch(/^Bearer\s+/);
     }
   });
 });

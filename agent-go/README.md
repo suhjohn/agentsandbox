@@ -248,4 +248,4 @@ RUN_LIVE_AI_IT=1 OPENAI_API_KEY=... SECRET_SEED=... go test -tags dockerintegrat
 - `PI_CODING_AGENT_DIR`
 - `AGENT_HOME`, `ROOT_DIR`, `WORKSPACES_DIR`
 - `AGENT_MANAGER_BASE_URL`
-- `AGENT_INTERNAL_AUTH_SECRET` for manager <-> runtime auth
+- `AGENT_MANAGER_API_KEY` for manager API calls from the runtime

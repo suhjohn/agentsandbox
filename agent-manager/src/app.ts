@@ -5,8 +5,12 @@ import type { AppEnv } from "./types/context";
 import { env } from "./env";
 import { verifyJwt } from "./middleware/auth";
 import { loadUser } from "./middleware/auth";
-import { sessionAuth } from "./middleware/session-auth";
+import {
+  managerAuth,
+  requireApiKeyRouteScope,
+} from "./middleware/manager-auth";
 import { authRoutes } from "./routes/auth";
+import { apiKeysRoutes } from "./routes/api-keys";
 import { userRoutes } from "./routes/users";
 import { imageRoutes } from "./routes/images";
 import { agentsRoutes } from "./routes/agents";
@@ -90,8 +94,7 @@ app.use(
     allowHeaders: [
       "Authorization",
       "Content-Type",
-      "X-Agent-Internal-Auth",
-      "X-Agent-Id",
+      "X-API-Key",
       "X-Refresh-Csrf",
     ],
   }),
@@ -112,17 +115,24 @@ app.get("/openapi.json", (c) => {
 app.route("/auth", authRoutes);
 
 // Protected routes
-app.use("/users", verifyJwt, loadUser);
-app.use("/users/*", verifyJwt, loadUser);
-app.use("/images/*", verifyJwt, loadUser);
-app.use("/settings", verifyJwt, loadUser);
-app.use("/settings/*", verifyJwt, loadUser);
-app.use("/agents", sessionAuth);
-app.use("/agents/*", sessionAuth);
-app.use("/session/*", sessionAuth);
-app.use("/coordinator/*", verifyJwt, loadUser);
-app.use("/terminal/*", verifyJwt, loadUser);
+app.use("/api-keys", verifyJwt, loadUser);
+app.use("/api-keys/*", verifyJwt, loadUser);
+app.use("/users", managerAuth, requireApiKeyRouteScope);
+app.use("/users/*", managerAuth, requireApiKeyRouteScope);
+app.use("/images", managerAuth, requireApiKeyRouteScope);
+app.use("/images/*", managerAuth, requireApiKeyRouteScope);
+app.use("/settings", managerAuth, requireApiKeyRouteScope);
+app.use("/settings/*", managerAuth, requireApiKeyRouteScope);
+app.use("/agents", managerAuth, requireApiKeyRouteScope);
+app.use("/agents/*", managerAuth, requireApiKeyRouteScope);
+app.use("/session", managerAuth, requireApiKeyRouteScope);
+app.use("/session/*", managerAuth, requireApiKeyRouteScope);
+app.use("/coordinator", managerAuth, requireApiKeyRouteScope);
+app.use("/coordinator/*", managerAuth, requireApiKeyRouteScope);
+app.use("/terminal", managerAuth, requireApiKeyRouteScope);
+app.use("/terminal/*", managerAuth, requireApiKeyRouteScope);
 app.route("/users", userRoutes);
+app.route("/api-keys", apiKeysRoutes);
 app.route("/images", imageRoutes);
 app.route("/settings", settingsRoutes);
 app.route("/agents", agentsRoutes);

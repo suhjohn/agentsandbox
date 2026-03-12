@@ -519,8 +519,8 @@ registerRoute(
     const user = c.get('user')
     const authMode = (c.get('authMode') ?? 'jwt') as
       | 'jwt'
-      | 'runtime-internal'
-    const runtimeAgentId = c.get('runtimeAgentId') ?? null
+      | 'api-key'
+    const apiKeyAgentId = c.get('apiKeyAgentId') ?? null
     const { id } = c.req.valid('param' as never) as z.infer<
       typeof sessionIdParamsSchema
     >
@@ -529,13 +529,13 @@ registerRoute(
     >
 
     if (
-      authMode === 'runtime-internal' &&
-      runtimeAgentId !== null &&
-      body.agentId !== runtimeAgentId
+      authMode === 'api-key' &&
+      apiKeyAgentId !== null &&
+      body.agentId !== apiKeyAgentId
     ) {
       return c.json(
-        { error: 'Runtime internal auth agent mismatch' },
-        401
+        { error: 'API key agent mismatch' },
+        403
       )
     }
 
@@ -544,7 +544,6 @@ registerRoute(
       return c.json({ error: 'Agent not found' }, 404)
     }
     if (
-      authMode === 'jwt' &&
       targetAgent.visibility !== 'shared' &&
       targetAgent.createdBy !== user.id
     ) {
@@ -561,7 +560,7 @@ registerRoute(
       .limit(1)
     const existingRow = existing[0] ?? null
 
-    if (existingRow && authMode === 'jwt') {
+    if (existingRow) {
       const existingAgent = await getAgentById(existingRow.agentId)
       if (!existingAgent) return c.json({ error: 'Session not found' }, 404)
       if (

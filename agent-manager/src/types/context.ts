@@ -12,7 +12,9 @@ export type AuthUser = {
 export type AppEnv = Env & {
   Variables: {
     user: AuthUser
-    authMode?: 'jwt' | 'runtime-internal'
-    runtimeAgentId?: string
+    authMode?: 'jwt' | 'api-key'
+    apiKeyId?: string
+    apiKeyScopes?: readonly string[]
+    apiKeyAgentId?: string | null
   }
 }

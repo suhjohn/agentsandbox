@@ -65,6 +65,42 @@ export const globalSettings = pgTable("global_settings", {
     .notNull(),
 });
 
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull(),
+    scopes: jsonb("scopes")
+      .$type<readonly string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id").references(() => agents.id, {
+      onDelete: "cascade",
+    }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("api_keys_key_prefix_idx").on(table.keyPrefix),
+    index("api_keys_user_id_idx").on(table.userId),
+    index("api_keys_agent_id_idx").on(table.agentId),
+    index("api_keys_revoked_at_idx").on(table.revokedAt),
+    index("api_keys_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
 // ── Images ──────────────────────────────────────────────────────────────────
 
 export const images = pgTable(
@@ -327,6 +363,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   createdImages: many(images),
   imageVariants: many(imageVariants),
   imageVariantBuilds: many(imageVariantBuilds),
+  apiKeys: many(apiKeys),
 }));
 
 export const imagesRelations = relations(images, ({ one, many }) => ({
@@ -397,6 +434,17 @@ export const agentsRelations = relations(agents, ({ one }) => ({
   createdByUser: one(users, {
     fields: [agents.createdBy],
     references: [users.id],
+  }),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+  user: one(users, {
+    fields: [apiKeys.userId],
+    references: [users.id],
+  }),
+  agent: one(agents, {
+    fields: [apiKeys.agentId],
+    references: [agents.id],
   }),
 }));
 

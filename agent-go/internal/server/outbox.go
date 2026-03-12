@@ -61,7 +61,7 @@ func newEventOutbox(store *store, client *http.Client, cfg serveConfig) *eventOu
 		store:          store,
 		client:         client,
 		managerBaseURL: normalizeBaseURL(cfg.AgentManagerBaseURL),
-		managerAuthHeaders: buildManagerAuthHeaders(cfg.AgentInternalAuthSecret, cfg.AgentID),
+		managerAuthHeaders: buildManagerAuthHeaders(cfg.AgentManagerAPIKey),
 	}
 }
 
@@ -202,7 +202,7 @@ func (s *server) queueManagerSessionSync(sessionID string) {
 	if baseURL == "" {
 		return
 	}
-	if !hasManagerAuthConfig(s.cfg.AgentInternalAuthSecret, s.cfg.AgentID) {
+	if !hasManagerAuthConfig(s.cfg.AgentManagerAPIKey) {
 		return
 	}
 	session, err := s.store.getSessionByID(sessionID)
@@ -236,7 +236,7 @@ func (s *server) queueManagerSnapshot(sessionID string) {
 	if baseURL == "" {
 		return
 	}
-	if !hasManagerAuthConfig(s.cfg.AgentInternalAuthSecret, s.cfg.AgentID) {
+	if !hasManagerAuthConfig(s.cfg.AgentManagerAPIKey) {
 		return
 	}
 	session, err := s.store.getSessionByID(sessionID)
@@ -265,21 +265,17 @@ func normalizeBaseURL(raw string) string {
 	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, path)
 }
 
-func buildManagerAuthHeaders(internalSecret, agentID string) map[string]string {
-	if secret := strings.TrimSpace(internalSecret); secret != "" {
-		headers := map[string]string{
-			"X-Agent-Internal-Auth": secret,
+func buildManagerAuthHeaders(apiKey string) map[string]string {
+	if key := strings.TrimSpace(apiKey); key != "" {
+		return map[string]string{
+			"X-API-Key": key,
 		}
-		if agent := strings.TrimSpace(agentID); agent != "" {
-			headers["X-Agent-Id"] = agent
-		}
-		return headers
 	}
 	return map[string]string{}
 }
 
-func hasManagerAuthConfig(internalSecret, agentID string) bool {
-	return len(buildManagerAuthHeaders(internalSecret, agentID)) > 0
+func hasManagerAuthConfig(apiKey string) bool {
+	return len(buildManagerAuthHeaders(apiKey)) > 0
 }
 
 func isManagerCallbackURL(managerBaseURL, targetURL string) bool {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -60,7 +59,7 @@ type serveConfig struct {
 	AgentID                 string
 	DatabasePath            string
 	SecretSeed              string
-	AgentInternalAuthSecret string
+	AgentManagerAPIKey      string
 	DefaultModel            string
 	DefaultReasoningEffort  string
 	OpenAIAPIKey            string
@@ -213,7 +212,7 @@ func parseServeConfig(args []string) (serveConfig, error) {
 		workingDirDefault = workspacesDefault
 	}
 	managerBaseURL := strings.TrimSpace(os.Getenv("AGENT_MANAGER_BASE_URL"))
-	internalAuthSecret := strings.TrimSpace(os.Getenv("AGENT_INTERNAL_AUTH_SECRET"))
+	managerAPIKey := strings.TrimSpace(os.Getenv("AGENT_MANAGER_API_KEY"))
 	allowedOriginsRaw := strings.TrimSpace(os.Getenv("AGENT_ALLOWED_ORIGINS"))
 	piDir := strings.TrimSpace(os.Getenv("PI_CODING_AGENT_DIR"))
 
@@ -230,7 +229,7 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	fs.StringVar(&cfg.DefaultWorkingDir, "working-dir", workingDirDefault, "Default working directory for agent and terminal")
 	fs.StringVar(&cfg.PIDir, "pi-dir", piDir, "PI runtime/config directory")
 	fs.StringVar(&cfg.AgentManagerBaseURL, "agent-manager-base-url", managerBaseURL, "Manager base URL for session sync")
-	fs.StringVar(&cfg.AgentInternalAuthSecret, "agent-internal-auth-secret", internalAuthSecret, "Shared manager/runtime secret for internal auth")
+	fs.StringVar(&cfg.AgentManagerAPIKey, "agent-manager-api-key", managerAPIKey, "Manager API key for runtime callbacks")
 	fs.StringVar(&allowedOriginsRaw, "allowed-origins", allowedOriginsRaw, "Comma-separated browser origins allowed for CORS and /terminal (overrides AGENT_MANAGER_BASE_URL-derived defaults when set)")
 
 	if err := fs.Parse(args); err != nil {
@@ -251,10 +250,7 @@ func parseServeConfig(args []string) (serveConfig, error) {
 	if cfg.AgentID == "" {
 		return serveConfig{}, errors.New("AGENT_ID must be set")
 	}
-	cfg.AgentInternalAuthSecret = strings.TrimSpace(cfg.AgentInternalAuthSecret)
-	if cfg.AgentInternalAuthSecret != "" && len(cfg.AgentInternalAuthSecret) < 32 {
-		return serveConfig{}, errors.New("AGENT_INTERNAL_AUTH_SECRET must be at least 32 chars when set")
-	}
+	cfg.AgentManagerAPIKey = strings.TrimSpace(cfg.AgentManagerAPIKey)
 	if cfg.Port <= 0 {
 		return serveConfig{}, errors.New("port must be positive")
 	}
@@ -413,7 +409,7 @@ func (s *server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Agent-Auth, X-Agent-Internal-Auth, X-Actor-User-Id")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Agent-Auth")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -1653,23 +1649,6 @@ type authContext struct {
 }
 
 func (s *server) requireAuth(r *http.Request) (authContext, error) {
-	if internalSecret := strings.TrimSpace(r.Header.Get("X-Agent-Internal-Auth")); internalSecret != "" {
-		if s.cfg.AgentInternalAuthSecret == "" {
-			return authContext{}, fail(http.StatusUnauthorized, "Unauthorized")
-		}
-		if subtle.ConstantTimeCompare(
-			[]byte(internalSecret),
-			[]byte(s.cfg.AgentInternalAuthSecret),
-		) != 1 {
-			return authContext{}, fail(http.StatusUnauthorized, "Unauthorized")
-		}
-		actorUserID := strings.TrimSpace(r.Header.Get("X-Actor-User-Id"))
-		if actorUserID == "" {
-			return authContext{}, fail(http.StatusUnauthorized, "Unauthorized")
-		}
-		return authContext{AgentID: s.cfg.AgentID, UserID: actorUserID}, nil
-	}
-
 	token := readAuthToken(r)
 	if token == "" {
 		return authContext{}, fail(http.StatusUnauthorized, "Unauthorized")

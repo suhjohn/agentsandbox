@@ -633,15 +633,11 @@ export async function updateAgent(id: string, input: { name?: string }) {
 export async function setAgentSandbox(input: {
   id: string;
   currentSandboxId: string;
-  runtimeInternalSecret: string;
 }) {
   const [updated] = await db
     .update(agents)
     .set({
       currentSandboxId: input.currentSandboxId,
-      runtimeInternalSecret: encryptRuntimeInternalSecret(
-        input.runtimeInternalSecret,
-      ),
       updatedAt: new Date(),
     })
     .where(eq(agents.id, input.id))

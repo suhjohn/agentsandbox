@@ -1,6 +1,6 @@
 # Agent Manager Tools (Python)
 
-`agent-manager` is the control plane for sandboxed agents. It owns manager-side records such as images, agents, sessions, access tokens, and sandbox provisioning. `agent-go` is the runtime inside the sandbox. The manager creates that sandbox, injects values like `AGENT_MANAGER_BASE_URL`, `AGENT_ID`, and `AGENT_INTERNAL_AUTH_SECRET`, and then the runtime uses those values to call back into the manager when needed.
+`agent-manager` is the control plane for sandboxed agents. It owns manager-side records such as images, agents, sessions, access tokens, API keys, and sandbox provisioning. `agent-go` is the runtime inside the sandbox. The manager creates that sandbox, injects values like `AGENT_MANAGER_BASE_URL`, `AGENT_ID`, and `AGENT_MANAGER_API_KEY`, and then the runtime uses that API key for manager calls.
 
 This README is intentionally stored under the workspace tools tree because the bundled `agent-go/tools/*` directories are exposed inside the sandbox workspace, so Codex and PI can discover this file and use the generated client from the running agent environment.
 
@@ -10,7 +10,7 @@ Use this tool when you need to talk to manager-owned APIs such as:
 - environment secret bindings
 - agent creation, access, archive, and resume
 - session creation and coordinator conversation export
-- runtime-internal manager callbacks for session sync and snapshots
+- manager callbacks and general manager API calls from inside the sandbox
 
 Do not use this tool for direct runtime shell access, browser automation, or SQLite inspection inside the sandbox. Those are runtime concerns, not manager API concerns.
 
@@ -25,7 +25,7 @@ From the `agent-go/` repo checkout directly, use `agent-go/tools/agent-manager-t
 
 ## Python API
 
-Inside a normal `agent-go` sandbox, the auth you have by default is the runtime-internal callback auth:
+Inside a normal `agent-go` sandbox, the auth you have by default is the injected manager API key:
 
 ```python
 import os
@@ -33,50 +33,40 @@ import sys
 
 sys.path.append("tools/agent-manager-tools")
 
-from agent_manager_client import runtime_internal_client
+from agent_manager_client import api_key_client
 from agent_manager_client.generated_client.api.agents import post_agents_agent_id_snapshot
 
-runtime_client = runtime_internal_client(
+client = api_key_client(
     base_url=os.environ["AGENT_MANAGER_BASE_URL"],
-    internal_auth_secret=os.environ["AGENT_INTERNAL_AUTH_SECRET"],
-    agent_id=os.environ["AGENT_ID"],
+    api_key=os.environ["AGENT_MANAGER_API_KEY"],
     raise_on_unexpected_status=True,
 )
 
 post_agents_agent_id_snapshot.sync(
     agent_id=os.environ["AGENT_ID"],
-    client=runtime_client,
+    client=client,
 )
 ```
 
-If you need to call normal manager APIs like `GET /images` or `POST /session`, you need a separate user bearer token. That token is not injected into the sandbox by default.
+The same API key can also call normal manager routes if its scopes allow them.
 
 ## Auth Modes
 
-### Runtime-internal auth
+### API key auth
 
-Use `runtime_internal_client(...)` only for the runtime callback path:
-
-- `PUT /session/{id}`
-- `POST /agents/{agentId}/snapshot`
+Use `api_key_client(...)` for manager API calls from the sandbox or any external caller with a manager API key:
 
 ```python
-from agent_manager_client import runtime_internal_client
+from agent_manager_client import api_key_client
 
-runtime_client = runtime_internal_client(
+client = api_key_client(
     base_url="https://manager.example.com",
-    internal_auth_secret="<AGENT_INTERNAL_AUTH_SECRET>",
-    agent_id="<AGENT_ID>",
+    api_key="<manager api key>",
     raise_on_unexpected_status=True,
 )
 ```
 
-This sends:
-
-- `X-Agent-Internal-Auth: <secret>`
-- `X-Agent-Id: <agent id>`
-
-It does not send `Authorization: Bearer ...`.
+This sends `X-API-Key: <key>`.
 
 ## Guideline
 
@@ -84,9 +74,9 @@ It does not send `Authorization: Bearer ...`.
 - Manager list endpoints return rows in `.data` and pagination in `.next_cursor`.
 - Treat generated models as the source of truth for field names. Use snake_case in Python; the client serializes to the manager's JSON field names.
 - Use `raise_on_unexpected_status=True` while developing so auth and transport mistakes fail loudly.
-- Inside a running `agent-go` sandbox, assume you only have `AGENT_MANAGER_BASE_URL`, `AGENT_INTERNAL_AUTH_SECRET`, and `AGENT_ID` unless some caller explicitly passes more.
-- Use `runtime_internal_client(...)` only for `PUT /session/{id}` and `POST /agents/{agentId}/snapshot`.
-- Use `bearer_client(...)` for manager routes only when you have a separate user bearer token, and never treat `AGENT_INTERNAL_AUTH_SECRET` as a bearer token.
+- Inside a running `agent-go` sandbox, assume you have `AGENT_MANAGER_BASE_URL`, `AGENT_MANAGER_API_KEY`, and `AGENT_ID`.
+- Use `api_key_client(...)` for manager routes from the sandbox.
+- Use `bearer_client(...)` only when you explicitly have a user JWT or another bearer credential intended for manager routes.
 - When you need runtime access, ask the manager for it first with `GET /agents/{agentId}/access`; then use the returned `agent_api_url` and `agent_auth_token` outside this generated client.
 - `agent_manager_client` covers manager APIs. It does not replace sandbox shell access, browser tooling, or direct runtime SQLite inspection.
 
@@ -101,17 +91,16 @@ from uuid import UUID
 
 sys.path.append("tools/agent-manager-tools")
 
-from agent_manager_client import bearer_client, runtime_internal_client
+from agent_manager_client import api_key_client, bearer_client
 from agent_manager_client.generated_client.types import UNSET
 ```
 
 The snippets below use one of these two clients:
 
 ```python
-runtime_client = runtime_internal_client(
+api_client = api_key_client(
     base_url=os.environ["AGENT_MANAGER_BASE_URL"],
-    internal_auth_secret=os.environ["AGENT_INTERNAL_AUTH_SECRET"],
-    agent_id=os.environ["AGENT_ID"],
+    api_key=os.environ["AGENT_MANAGER_API_KEY"],
     raise_on_unexpected_status=True,
 )
 
@@ -122,13 +111,13 @@ manager_client = bearer_client(
 )
 ```
 
-`runtime_client` is the default in-sandbox case. `manager_client` only works if some caller explicitly provides a user bearer token.
+`api_client` is the default in-sandbox case. `manager_client` only works if some caller explicitly provides a user bearer token.
 
 ### Spin Up Agent + First Prompt
 
 Coordinator case: create an agent from an image, create/fetch its deterministic runtime session, and start the first run.
 
-This is a manager-side flow. It requires `manager_client`, not `runtime_client`.
+This is a manager-side flow. It requires `manager_client` or an API key with permission for `POST /session`.
 
 ```python
 from agent_manager_client.generated_client.api.session import post_session
@@ -400,18 +389,17 @@ For direct runtime inspection:
 
 ### Runtime Callback Sync Back to Manager
 
-This is not a coordinator-exposed user flow, but it is part of the manager contract.
+This is not a coordinator-exposed user flow, but it is part of the manager contract. It now uses the sandbox API key like any other manager route.
 
 ```python
-from agent_manager_client import runtime_internal_client
+from agent_manager_client import api_key_client
 from agent_manager_client.generated_client.api.session import put_session_id
 from agent_manager_client.generated_client.api.agents import post_agents_agent_id_snapshot
 from agent_manager_client.generated_client.models.put_session_id_body import PutSessionIdBody
 
-runtime_client = runtime_internal_client(
+runtime_client = api_key_client(
     base_url=os.environ["AGENT_MANAGER_BASE_URL"],
-    internal_auth_secret=os.environ["AGENT_INTERNAL_AUTH_SECRET"],
-    agent_id=os.environ["AGENT_ID"],
+    api_key=os.environ["AGENT_MANAGER_API_KEY"],
     raise_on_unexpected_status=True,
 )
 

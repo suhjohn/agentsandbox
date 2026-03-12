@@ -3,8 +3,7 @@ import { agents } from '../db/schema'
 import type { AuthUser } from '../types/context'
 import {
   createAgent,
-  getAgentById,
-  getAgentRuntimeInternalSecret
+  getAgentById
 } from './agent.service'
 import {
   agentIdToAgentSessionId,
@@ -163,8 +162,7 @@ function getErrorMessageFromBody (body: unknown): string | null {
 
 async function callAgentApi (input: {
   readonly agentApiUrl: string
-  readonly runtimeInternalSecret: string
-  readonly userId: string
+  readonly agentAuthToken: string
   readonly path: string
   readonly method: 'POST'
   readonly body: unknown
@@ -178,8 +176,7 @@ async function callAgentApi (input: {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        'X-Agent-Internal-Auth': input.runtimeInternalSecret,
-        'X-Actor-User-Id': input.userId
+        'X-Agent-Auth': `Bearer ${input.agentAuthToken}`
       },
       body: JSON.stringify(input.body)
     })
@@ -295,11 +292,9 @@ export async function createSessionBootstrap (input: {
     createSessionBody.modelReasoningEffort = body.modelReasoningEffort
   }
 
-  const runtimeInternalSecret = await getAgentRuntimeInternalSecret(agent.id)
   await callAgentApi({
     agentApiUrl: access.agentApiUrl,
-    runtimeInternalSecret,
-    userId: user.id,
+    agentAuthToken: access.agentAuthToken,
     path: '/session',
     method: 'POST',
     body: createSessionBody
@@ -315,8 +310,7 @@ export async function createSessionBootstrap (input: {
 
   const runResponse = await callAgentApi({
     agentApiUrl: access.agentApiUrl,
-    runtimeInternalSecret,
-    userId: user.id,
+    agentAuthToken: access.agentAuthToken,
     path: `/session/${sessionId}/message`,
     method: 'POST',
     body: runBody
@@ -361,7 +355,12 @@ export async function startAgentSession (input: {
   }
 
   const sandbox = await ensureAgentSandbox({ agentId })
-  const runtimeInternalSecret = await getAgentRuntimeInternalSecret(agentId)
+  const access = await buildRuntimeAccessPayload({
+    userId: user.id,
+    agentId,
+    tunnels: sandbox.tunnels,
+    sandboxAccessToken: sandbox.sandboxAccessToken
+  })
   const sessionId =
     body.sessionId?.trim() || crypto.randomUUID().replace(/-/g, '')
 
@@ -378,9 +377,8 @@ export async function startAgentSession (input: {
   }
 
   await callAgentApi({
-    agentApiUrl: sandbox.tunnels.agentApiUrl,
-    runtimeInternalSecret,
-    userId: user.id,
+    agentApiUrl: access.agentApiUrl,
+    agentAuthToken: access.agentAuthToken,
     path: '/session',
     method: 'POST',
     body: createSessionBody
@@ -395,9 +393,8 @@ export async function startAgentSession (input: {
   }
 
   const runResponse = await callAgentApi({
-    agentApiUrl: sandbox.tunnels.agentApiUrl,
-    runtimeInternalSecret,
-    userId: user.id,
+    agentApiUrl: access.agentApiUrl,
+    agentAuthToken: access.agentAuthToken,
     path: `/session/${sessionId}/message`,
     method: 'POST',
     body: runBody
@@ -415,7 +412,7 @@ export async function startAgentSession (input: {
       updatedAgent
     ),
     session: buildSessionResult({
-      agentApiUrl: sandbox.tunnels.agentApiUrl,
+      agentApiUrl: access.agentApiUrl,
       sessionId,
       runId
     })

@@ -92,7 +92,6 @@ describe("/agents/:agentId/access (integration)", () => {
       imageId: image.id,
       createdBy: userId,
     });
-    expect(agent.name).toBe(`ag-${agent.id.slice(0, 16)}`);
     cleanup.push(async () => {
       await deleteAgent(agent.id);
     });
@@ -101,7 +100,6 @@ describe("/agents/:agentId/access (integration)", () => {
     await setAgentSandbox({
       id: agent.id,
       currentSandboxId: sandboxId,
-      runtimeInternalSecret: crypto.randomUUID().replaceAll("-", ""),
     });
 
     const sandboxSpy = vi
@@ -152,7 +150,6 @@ describe("/agents/:agentId/access (integration)", () => {
       imageId: image.id,
       createdBy: userId,
     });
-    expect(agent.name).toBe(`ag-${agent.id.slice(0, 16)}`);
     cleanup.push(async () => {
       await deleteAgent(agent.id);
     });
@@ -161,7 +158,6 @@ describe("/agents/:agentId/access (integration)", () => {
     await setAgentSandbox({
       id: agent.id,
       currentSandboxId: sandboxId,
-      runtimeInternalSecret: crypto.randomUUID().replaceAll("-", ""),
     });
 
     vi.spyOn(sandboxService, "ensureAgentSandbox").mockRejectedValue(

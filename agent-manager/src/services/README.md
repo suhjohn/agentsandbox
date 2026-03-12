@@ -83,6 +83,7 @@ Behavior:
 - Updates the variant `activeImageId` when `activeImageId` is provided.
 - Updates the variant `draftImageId` when `draftImageId` is provided.
 - Updates the variant scope between `personal` and `shared`.
+- Shared variants are mutable by any user who can reach the route; personal variants remain mutable only by the personal owner or the image owner.
 - Shared variants clear `ownerUserId`; personal variants assign `ownerUserId`.
 - When switching a variant to `personal`, the service auto-renames on conflict using `Variant`, `Variant 2`, ... style suffixing for that owner scope.
 - Explicit rename collisions fail with `Variant name already exists`.
@@ -107,6 +108,7 @@ Behavior:
 ### `setUserImageDefaultVariantId(input)` / `clearUserImageDefaultVariantId(input)` / `resolveImageVariantForUser(input)`
 
 Behavior:
+- Any user who can reach the route can set the image-level shared default variant.
 - Per-user image default overrides are stored in `user_image_variant_defaults` keyed by `(userId, imageId)`.
 - `resolveImageVariantForUser` resolves in this order:
   - explicit `variantId` when one is supplied,
@@ -134,7 +136,7 @@ Behavior:
 - Derives the default agent `name` from that generated ID by seeding `unique-names-generator` with built-in adjective, color, and animal dictionaries, then normalizing spaces to `-`.
 - Retries creation when either the generated `id` or derived `name` collides with an existing row.
 - Defaults `type` to `"worker"` and `visibility` to `"private"` when callers omit them.
-- Persists a browser-facing sandbox access token separately from the runtime-internal secret used for manager/runtime traffic.
+- Persists a browser-facing sandbox access token separately from manager API keys used for manager/runtime traffic.
 
 ### `getOrCreateDefaultCoordinatorAgentForUser(input)`
 
@@ -192,24 +194,18 @@ Behavior:
 - Supports grouping only across the subset of agents visible to `viewerUserId`.
 - Supports app-level filtering on `type` and `visibility` before grouping.
 
-### `setAgentSandbox(input)` / `getAgentRuntimeInternalSecret(id)` / `createAgentRuntimeInternalSecret(id)`
+### `setAgentSandbox(input)`
 
 ```ts
 setAgentSandbox(input: {
   id: string
   currentSandboxId: string
-  runtimeInternalSecret: string
 })
-
-getAgentRuntimeInternalSecret(id: string): Promise<string>
-
-createAgentRuntimeInternalSecret(id: string): Promise<string>
 ```
 
 Behavior:
-- `runtimeInternalSecret` is the encrypted-at-rest opaque secret for the current live runtime only.
-- The secret rotates whenever a new sandbox is created for an agent.
-- Clearing or replacing the current sandbox also clears the stored runtime-internal secret for the old runtime.
+- Records the current live sandbox id for an agent.
+- Clearing or replacing the current sandbox clears the live sandbox pointer for the old runtime.
 
 ## auth.service.ts
 
@@ -267,7 +263,7 @@ Behavior:
 - Creates the backing agent through `createAgent`, so bootstrap requests do not accept a caller-provided agent name.
 - Preserves optional runtime session metadata such as `title`, `harness`, `model`, and `modelReasoningEffort` when creating the deterministic runtime session and first run.
 - Treats `harness` and `modelReasoningEffort` as pass-through strings and leaves harness-specific validation to `agent-go`.
-- Uses manager-internal runtime auth (`X-Agent-Internal-Auth` + `X-Actor-User-Id`) for manager-origin `/session` and `/session/:id/message` calls, while still returning browser/runtime access payloads separately.
+- Uses the runtime's normal sandbox agent token (`X-Agent-Auth`) for manager-origin `/session` and `/session/:id/message` calls, while still returning browser/runtime access payloads separately.
 
 ### `startAgentSession(input)`
 
@@ -287,7 +283,7 @@ startAgentSession(input: {
 ```
 
 Behavior:
-- Starts a new runtime session on an existing agent without exposing the runtime-internal secret to the caller.
+- Starts a new runtime session on an existing agent without exposing sandbox credentials to the caller.
 - Creates the runtime session first, then sends the first message as the authenticated manager-side actor user.
 - Treats `harness` and `modelReasoningEffort` as pass-through strings and leaves harness-specific validation to `agent-go`.
 - Returns session IDs and stream URLs, but not browser/runtime auth tokens.
@@ -394,5 +390,5 @@ Behavior:
 - Missing environment secret names are logged and skipped instead of failing sandbox creation.
 - Post-create sandbox health waits up to 5 minutes by default (configurable via `SESSION_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS` / `AGENT_SANDBOX_POST_CREATE_HEALTH_TIMEOUT_MS`).
 - Manager-side `/health` probes to `*.modal.host` sandbox tunnel URLs disable TLS certificate verification to avoid Bun-specific certificate validation failures on Modal tunnels.
-- Agent sandboxes receive a per-runtime opaque `AGENT_INTERNAL_AUTH_SECRET`; manager/runtime traffic uses that secret exclusively.
+- Agent sandboxes receive a manager API key (`AGENT_MANAGER_API_KEY`) for manager calls, while browser/runtime traffic still uses the sandbox agent token flow.
 - `waitForLock: false` makes sandbox creation opportunistic: if the per-agent create lock is already held, the call fails immediately instead of waiting for the existing create/warmup flow.

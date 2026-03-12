@@ -5,12 +5,12 @@ import { ModalClient, Sandbox } from 'modal'
 import { resolveBaseImageRefForRegistry } from '@/clients/ghcr'
 import { DEFAULT_REGION } from '@/utils/region'
 import {
-  createAgentRuntimeInternalSecret,
   clearAgentSandboxIfMatches,
   getAgentAccessToken,
   getAgentById,
   setAgentSandbox
 } from './agent.service'
+import { createApiKey } from './api-key.service'
 import { env } from '../env'
 import {
   canUserAccessImageVariant,
@@ -1013,7 +1013,7 @@ async function createAgentSandboxModal (input: {
   readonly dbImageId: string
   readonly imageId: string
   readonly sandboxAccessToken: string
-  readonly runtimeInternalSecret: string
+  readonly managerApiKey: string
   readonly region?: SandboxRegion
 }): Promise<Sandbox> {
   const agentManagerBaseUrl = await resolveAgentManagerBaseUrl()
@@ -1032,8 +1032,8 @@ async function createAgentSandboxModal (input: {
     OPENVSCODE_CONNECTION_TOKEN: input.sandboxAccessToken,
     SECRET_SEED: env.SANDBOX_SIGNING_SECRET,
     AGENT_ID: input.agentId,
-    AGENT_INTERNAL_AUTH_SECRET: input.runtimeInternalSecret,
     AGENT_MANAGER_BASE_URL: agentManagerBaseUrl,
+    AGENT_MANAGER_API_KEY: input.managerApiKey,
     AGENT_ALLOWED_ORIGINS: allowedOrigins,
     [IMAGE_HOOKS_ENV_VAR]: IMAGE_HOOKS_MOUNT_PATH
   }
@@ -1234,16 +1234,23 @@ async function createAgentSandbox (input: {
   }
 
   const sandboxAccessToken = await getAgentAccessToken(input.agentId)
-  const runtimeInternalSecret = await createAgentRuntimeInternalSecret(
-    input.agentId
-  )
+  if (typeof agent.createdBy !== 'string' || agent.createdBy.length === 0) {
+    throw new HTTPException(409, { message: 'Agent owner is missing' })
+  }
+  const { key: managerApiKey } = await createApiKey({
+    userId: agent.createdBy!,
+    agentId: input.agentId,
+    name: `sandbox-${input.agentId}`,
+    scopes: ['*'],
+    expiresAt: new Date(Date.now() + 24*60*60*1000)
+  })
 
   const sandbox = await createAgentSandboxModal({
     agentId: input.agentId,
     dbImageId: agent.imageId!,
     imageId: input.imageId,
     sandboxAccessToken,
-    runtimeInternalSecret,
+    managerApiKey,
     region: input.region
   })
 
@@ -1278,8 +1285,7 @@ async function createAgentSandbox (input: {
     setCachedSandboxTunnels(sandbox.sandboxId, tunnels),
     setAgentSandbox({
       id: input.agentId,
-      currentSandboxId: sandbox.sandboxId,
-      runtimeInternalSecret
+      currentSandboxId: sandbox.sandboxId
     })
   ])
   AGENT_ID_TO_SANDBOX.delete(input.agentId)

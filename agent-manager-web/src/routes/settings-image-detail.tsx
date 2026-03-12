@@ -385,8 +385,8 @@ export function SettingsImageDetailPage () {
 
   const canMutateSelectedVariant = useMemo(() => {
     if (!auth.user || !image || !selectedVariant) return false
+    if (selectedVariant.scope === 'shared') return true
     if (auth.user.id === image.createdBy) return true
-    if (selectedVariant.scope !== 'personal') return false
     return selectedVariant.ownerUserId === auth.user.id
   }, [auth.user, image, selectedVariant])
 
@@ -402,9 +402,6 @@ export function SettingsImageDetailPage () {
     if (!image) return 'Loading...'
     if (!selectedVariant) return 'Select a variant'
     if (canMutateSelectedVariant) return null
-    if (selectedVariant.scope === 'shared') {
-      return 'Only the image owner can modify shared variants'
-    }
     return 'You can only modify your own personal variants'
   }, [auth.user, canMutateSelectedVariant, image, selectedVariant])
 
@@ -1817,12 +1814,10 @@ export function SettingsImageDetailPage () {
                     variant='ghost'
                     size='sm'
                     className='gap-1.5'
-                    disabled={!isImageOwner || isBusy || !selectedVariantId || isSelectedVariantGlobalDefault}
+                    disabled={isBusy || !selectedVariantId || isSelectedVariantGlobalDefault}
                     onClick={() => setImageDefaultVariantMutation.mutate()}
                     title={
-                      !isImageOwner
-                        ? 'Only the image owner can set the image default'
-                        : isSelectedVariantGlobalDefault
+                      isSelectedVariantGlobalDefault
                           ? 'This is the image default'
                           : 'Set as image default'
                     }
