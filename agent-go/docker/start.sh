@@ -297,7 +297,21 @@ is_server_command() {
   local cmd="${1:-}"
   local cmd_base=""
   cmd_base="$(basename "${cmd}")"
-  [[ "${cmd_base}" == "agent-server" ]]
+
+  case "${cmd_base}" in
+    agent-server|agent-server-*|agent-server-*.exe|agent-server.exe)
+      return 0
+      ;;
+    agent-go|agent-go.exe)
+      # "agent-go serve" is the server entrypoint; other subcommands shouldn't
+      # be treated as the main runtime service.
+      [[ "${2:-}" == "serve" ]]
+      return
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 install_runit_service() {
