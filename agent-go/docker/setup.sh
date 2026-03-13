@@ -1,3 +1,7 @@
+# agent-go/docker/setup.sh
+# Note to future: for any installation that needs to be done, also do it in the agent-go/Dockerfile.
+# We basically want any installation of programs to be doubly-bound between Dockerfile and this setup.sh script.
+
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -11,6 +15,11 @@ log() {
 APT_UPDATED=0
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 AGENT_REPO_DIR="${AGENT_REPO_DIR:-${REPO_DIR}}"
+SKIP_APT_PACKAGES="${AGENT_SETUP_SKIP_APT_PACKAGES:-0}"
+
+should_skip_apt_packages() {
+  [[ "${SKIP_APT_PACKAGES}" == "1" ]]
+}
 
 require_root() {
   if [[ "${EUID}" -ne 0 ]]; then
@@ -40,6 +49,12 @@ apt_install() {
 install_bootstrap_packages() {
   local marker="${SETUP_STATE_DIR}/bootstrap-packages.ready"
   if [[ -f "${marker}" ]] && command -v curl >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then
+    return
+  fi
+
+  if should_skip_apt_packages && command -v curl >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then
+    log "skipping bootstrap package installation"
+    touch "${marker}"
     return
   fi
 
@@ -88,6 +103,15 @@ install_base_packages() {
     return
   fi
 
+  if should_skip_apt_packages \
+    && command -v supervisord >/dev/null 2>&1 \
+    && command -v git >/dev/null 2>&1; then
+    log "skipping base package installation"
+    ln -sfn /usr/bin/fdfind /usr/local/bin/fd
+    touch "${marker}"
+    return
+  fi
+
   log "installing base packages"
   apt_update_once
   apt_install \
@@ -126,11 +150,34 @@ configure_package_repos() {
     return
   fi
 
-  log "configuring package repositories"
-  mkdir -p /etc/apt/keyrings
-
   local arch=""
   arch="$(dpkg --print-architecture)"
+
+  if should_skip_apt_packages; then
+    local browser_repo_ready="0"
+    if [[ "${arch}" == "amd64" ]]; then
+      if [[ -f /etc/apt/keyrings/google-chrome.gpg ]] && [[ -f /etc/apt/sources.list.d/google-chrome.list ]]; then
+        browser_repo_ready="1"
+      fi
+    elif [[ -f /etc/apt/keyrings/debian-archive.gpg ]] \
+      && [[ -f /etc/apt/sources.list.d/debian-bookworm-chromium.list ]] \
+      && [[ -f /etc/apt/preferences.d/debian-bookworm-chromium ]]; then
+      browser_repo_ready="1"
+    fi
+
+    if [[ "${browser_repo_ready}" == "1" ]] \
+      && [[ -f /etc/apt/keyrings/docker.gpg ]] \
+      && [[ -f /etc/apt/sources.list.d/docker.list ]] \
+      && [[ -f /etc/apt/keyrings/nodesource.gpg ]] \
+      && [[ -f /etc/apt/sources.list.d/nodesource.list ]]; then
+      log "skipping package repository configuration"
+      touch "${marker}"
+      return
+    fi
+  fi
+
+  log "configuring package repositories"
+  mkdir -p /etc/apt/keyrings
 
   if [[ "${arch}" == "amd64" ]]; then
     curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg
@@ -140,6 +187,15 @@ configure_package_repos() {
     curl -fsSL https://ftp-master.debian.org/keys/archive-key-12.asc | gpg --dearmor -o /etc/apt/keyrings/debian-archive.gpg
     chmod a+r /etc/apt/keyrings/debian-archive.gpg
     echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/debian-archive.gpg] http://deb.debian.org/debian bookworm main" >/etc/apt/sources.list.d/debian-bookworm-chromium.list
+    cat >/etc/apt/preferences.d/debian-bookworm-chromium <<'EOF'
+Package: *
+Pin: release n=bookworm
+Pin-Priority: 100
+
+Package: chromium chromium-common chromium-sandbox
+Pin: release n=bookworm
+Pin-Priority: 700
+EOF
   fi
 
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -168,6 +224,20 @@ install_external_packages() {
     && command -v node >/dev/null 2>&1 \
     && command -v dockerd >/dev/null 2>&1 \
     && { command -v chromium >/dev/null 2>&1 || command -v google-chrome >/dev/null 2>&1; }; then
+    return
+  fi
+
+  if should_skip_apt_packages \
+    && command -v node >/dev/null 2>&1 \
+    && command -v dockerd >/dev/null 2>&1 \
+    && { command -v chromium >/dev/null 2>&1 || command -v google-chrome >/dev/null 2>&1; }; then
+    log "skipping external package installation"
+    if [[ "${arch}" == "amd64" ]] && command -v google-chrome >/dev/null 2>&1; then
+      ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium
+      ln -sfn /usr/bin/google-chrome /usr/local/bin/chromium-browser
+    fi
+    rm -f "${SETUP_STATE_DIR}"/packages-*.ready
+    touch "${marker}"
     return
   fi
 

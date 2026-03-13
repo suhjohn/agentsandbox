@@ -20,6 +20,7 @@ Usage:
   dev.sh build-server [--output PATH] [--goos OS] [--goarch ARCH]
   dev.sh restart-server [--output PATH] [--service-dir PATH] [--match STRING] [--timeout SEC] [--force-kill] [--no-pull] [-- [agent-server args...]]
   dev.sh docker-build
+  dev.sh docker-dev-build
   dev.sh docker-run [--env-file PATH] [--server-only]
   dev.sh docker-refresh [--env-file PATH] [--server-only] [--no-pull]
   dev.sh docker-stop
@@ -91,9 +92,8 @@ docker_server_goarch() {
 }
 
 prepare_repo_binary_for_docker() {
-  local goarch_value=""
+  local goarch_value="$1"
   local repo_binary_path=""
-  goarch_value="$(docker_server_goarch)"
   repo_binary_path="$(server_binary_output_path "linux" "${goarch_value}")"
   build_server_binary "${repo_binary_path}" "linux" "${goarch_value}" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
 }
@@ -388,19 +388,36 @@ parse_docker_mode_args() {
   printf '%s\n%s\n%s\n' "${env_file}" "${server_only}" "${do_pull}"
 }
 
-cmd_docker_build() {
-  local goarch_value=""
+docker_build_for_arch() {
+  local goarch_value="$1"
+  local platform_value="$2"
   local repo_binary_path=""
   local repo_binary_relative_path=""
-  goarch_value="$(docker_server_goarch)"
+  local docker_args=()
   repo_binary_path="$(server_binary_output_path "linux" "${goarch_value}")"
   repo_binary_relative_path="$(module_relative_path "${repo_binary_path}")"
-  prepare_repo_binary_for_docker
-  "${DOCKER_BIN}" build \
-    --build-arg "AGENT_SERVER_RELATIVE_PATH=${repo_binary_relative_path}" \
-    -f "${MODULE_DIR}/Dockerfile" \
-    -t "${DOCKER_IMAGE}" \
+  prepare_repo_binary_for_docker "${goarch_value}"
+  docker_args=(build)
+  if [[ -n "${platform_value}" ]]; then
+    docker_args+=(--platform "${platform_value}")
+  fi
+  docker_args+=(
+    --build-arg "AGENT_SERVER_RELATIVE_PATH=${repo_binary_relative_path}"
+    -f "${MODULE_DIR}/Dockerfile"
+    -t "${DOCKER_IMAGE}"
     "${REPO_ROOT}"
+  )
+  "${DOCKER_BIN}" "${docker_args[@]}"
+}
+
+cmd_docker_build() {
+  docker_build_for_arch "amd64" "linux/amd64"
+}
+
+cmd_docker_dev_build() {
+  local goarch_value=""
+  goarch_value="$(docker_server_goarch)"
+  docker_build_for_arch "${goarch_value}" ""
 }
 
 read_docker_mode_args() {
@@ -447,7 +464,7 @@ cmd_docker_refresh() {
   fi
 
   "${DOCKER_BIN}" rm -f "${DOCKER_CONTAINER}" >/dev/null 2>&1 || true
-  cmd_docker_build
+  cmd_docker_dev_build
 
   local args=()
   while IFS= read -r -d '' item; do
@@ -554,6 +571,9 @@ case "${command}" in
     ;;
   docker-build)
     cmd_docker_build "$@"
+    ;;
+  docker-dev-build)
+    cmd_docker_dev_build "$@"
     ;;
   docker-run)
     cmd_docker_run "$@"
