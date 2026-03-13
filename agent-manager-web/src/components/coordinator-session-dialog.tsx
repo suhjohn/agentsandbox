@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { List, Plus, Terminal } from 'lucide-react'
+import { Bot, List, Plus, Terminal } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAuth } from '../lib/auth'
@@ -31,6 +31,10 @@ type ManagerSessionRecord = Awaited<
   ReturnType<AgentManagerApiClient['listSessions']>
 >['data'][number]
 
+type GlobalSettingsResponse = {
+  readonly defaultCoordinatorImageId: string
+}
+
 const DIALOG_RUNTIME: PanelRuntime = {
   leafId: 'coordinator-dialog',
   now: () => Date.now(),
@@ -40,6 +44,10 @@ const DIALOG_RUNTIME: PanelRuntime = {
 
 function toErrorMessage (value: unknown): string {
   if (value instanceof Error) return value.message
+  if (typeof value === 'object' && value !== null && 'error' in value) {
+    const err = (value as { error?: unknown }).error
+    if (typeof err === 'string' && err.trim().length > 0) return err
+  }
   if (typeof value === 'string' && value.trim().length > 0) return value
   return 'Something went wrong.'
 }
@@ -54,6 +62,30 @@ function selectCoordinatorAgent (
     if (selected) return selected
   }
   return agents[0] ?? null
+}
+
+function parseGlobalSettingsResponse (value: unknown): GlobalSettingsResponse {
+  if (typeof value !== 'object' || value === null) {
+    return { defaultCoordinatorImageId: '' }
+  }
+  const raw = (value as { defaultCoordinatorImageId?: unknown })
+    .defaultCoordinatorImageId
+  return {
+    defaultCoordinatorImageId:
+      typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : ''
+  }
+}
+
+async function fetchGlobalSettings (
+  fetchAuthed: (path: string, init?: RequestInit) => Promise<Response>
+): Promise<GlobalSettingsResponse> {
+  const res = await fetchAuthed('/settings/global')
+  const text = await res.text()
+  const body = text.trim().length > 0 ? (JSON.parse(text) as unknown) : null
+  if (!res.ok) {
+    throw new Error(toErrorMessage(body))
+  }
+  return parseGlobalSettingsResponse(body)
 }
 
 export function CoordinatorSessionDialog (props: {
@@ -74,6 +106,13 @@ export function CoordinatorSessionDialog (props: {
     sessionModel: undefined,
     sessionModelReasoningEffort: undefined,
     sessionHarness: undefined
+  })
+
+  const globalSettingsQuery = useQuery({
+    queryKey: ['settings', 'global'],
+    enabled: props.open && !!auth.user && !auth.isBootstrapping,
+    staleTime: 60_000,
+    queryFn: async () => fetchGlobalSettings(auth.fetchAuthed)
   })
 
   const coordinatorAgentsQuery = useQuery({
@@ -133,6 +172,51 @@ export function CoordinatorSessionDialog (props: {
     setMode('conversation')
     setConversationViewKey(prev => prev + 1)
   }, [])
+
+  const createCoordinatorAgentMutation = useMutation({
+    mutationFn: async () => {
+      if (!auth.user) throw new Error('Not logged in')
+
+      const settings =
+        globalSettingsQuery.data ?? (await fetchGlobalSettings(auth.fetchAuthed))
+      const defaultImageId = settings.defaultCoordinatorImageId.trim()
+      if (defaultImageId.length === 0) {
+        throw new Error(
+          'No global default coordinator image configured. Set one in Settings > General.'
+        )
+      }
+
+      return await auth.api.createAgent({
+        imageId: defaultImageId,
+        type: 'coordinator',
+        visibility: 'private'
+      })
+    },
+    onSuccess: agent => {
+      const queryKey = ['coordinatorAgents', auth.user?.id ?? null]
+      queryClient.setQueryData(queryKey, prev => {
+        const fallback = { data: [agent] as readonly Agent[], nextCursor: null }
+        if (typeof prev !== 'object' || prev === null) return fallback
+
+        const data = (prev as { data?: unknown }).data
+        if (!Array.isArray(data)) return fallback
+        if (data.some(item => (item as Agent | null)?.id === agent.id)) return prev
+
+        return { ...(prev as object), data: [agent, ...data] }
+      })
+
+      setSessionConfig(prev => ({
+        ...prev,
+        agentId: agent.id,
+        agentName: agent.name?.trim() ?? ''
+      }))
+      startDraftSession()
+      toast.success('Coordinator agent created')
+    },
+    onError: error => {
+      toast.error(toErrorMessage(error))
+    }
+  })
 
   const setConfig = useCallback(
     (
@@ -550,7 +634,9 @@ export function CoordinatorSessionDialog (props: {
                       prev === 'sessions' ? 'conversation' : 'sessions'
                     )
                   }}
-                  disabled={coordinatorAgentsQuery.isLoading}
+                  disabled={
+                    coordinatorAgentsQuery.isLoading || selectedAgentId.length === 0
+                  }
                 >
                   <List className='h-3.5 w-3.5' />
                 </Button>
@@ -558,16 +644,64 @@ export function CoordinatorSessionDialog (props: {
                   size='icon'
                   variant='icon'
                   onClick={() => {
-                    void draftNewSession()
+                    void draftNewSession().catch(error => {
+                      toast.error(toErrorMessage(error))
+                    })
                   }}
-                  disabled={coordinatorAgentsQuery.isLoading}
+                  disabled={
+                    coordinatorAgentsQuery.isLoading || selectedAgentId.length === 0
+                  }
                   title='Prepare new coordinator session'
                 >
                   <Plus className='h-3.5 w-3.5' />
                 </Button>
+                <Button
+                  size='icon'
+                  variant='icon'
+                  onClick={() => {
+                    createCoordinatorAgentMutation.mutate()
+                  }}
+                  disabled={
+                    createCoordinatorAgentMutation.isPending ||
+                    globalSettingsQuery.isLoading
+                  }
+                  title='Create a new coordinator agent'
+                >
+                  <Bot className='h-3.5 w-3.5' />
+                </Button>
               </div>
             ) : null}
           </div>
+          {auth.user && coordinatorAgents.length > 0 ? (
+            <div className='mt-2 flex items-center gap-2 min-w-0'>
+              <select
+                className='h-8 min-w-0 flex-1 rounded-md border border-border bg-surface-1 px-3 text-sm'
+                value={selectedAgentId}
+                onChange={event => {
+                  const nextAgentId = event.target.value
+                  const nextAgent =
+                    coordinatorAgents.find(agent => agent.id === nextAgentId) ??
+                    null
+                  setIsTerminalOpen(false)
+                  setConfig(prev => ({
+                    ...prev,
+                    agentId: nextAgent?.id ?? '',
+                    agentName: nextAgent?.name?.trim() ?? '',
+                    sessionId: '',
+                    sessionTitle: ''
+                  }))
+                }}
+                disabled={coordinatorAgentsQuery.isLoading}
+                aria-label='Coordinator agent'
+              >
+                {coordinatorAgents.map(agent => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name?.trim() || agent.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
         </DialogHeader>
 
         <div className='min-h-0 min-w-0 flex-1 overflow-hidden flex flex-col'>
@@ -594,15 +728,31 @@ export function CoordinatorSessionDialog (props: {
             </div>
           ) : coordinatorAgents.length === 0 ? (
             <div className='h-full grid place-items-center text-center px-6'>
-              <div className='space-y-1'>
+              <div className='space-y-3'>
                 <p className='text-sm font-medium text-text-primary'>
                   No coordinator agents yet.
                 </p>
                 <p className='text-xs text-text-tertiary'>
                   Create an agent with type{' '}
-                  <span className='font-mono'>coordinator</span> from the
-                  workspace first.
+                  <span className='font-mono'>coordinator</span> to use this
+                  dialog.
                 </p>
+                <div className='pt-2'>
+                  <Button
+                    size='sm'
+                    onClick={() => {
+                      createCoordinatorAgentMutation.mutate()
+                    }}
+                    disabled={
+                      createCoordinatorAgentMutation.isPending ||
+                      globalSettingsQuery.isLoading
+                    }
+                  >
+                    {createCoordinatorAgentMutation.isPending
+                      ? 'Creating…'
+                      : 'Create coordinator agent'}
+                  </Button>
+                </div>
               </div>
             </div>
           ) : mode === 'sessions' ? (

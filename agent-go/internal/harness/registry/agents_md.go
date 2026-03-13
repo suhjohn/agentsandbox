@@ -86,8 +86,9 @@ func RenderAgentsMD(ctx RuntimeContext, harnessID string) string {
 	if rootDir != "" {
 		content.WriteString("\n# Runtime Paths\n")
 		content.WriteString("- Agent database file (default): " + filepath.Join(rootDir, "agent.db") + "\n")
-		content.WriteString("- Logs directory: " + filepath.Join(rootDir, "logs") + " (chromium.log, openbox.log, xvfb.log, agent-server.log, dockerd.log)\n")
-		content.WriteString("- Runit services directory: " + filepath.Join(rootDir, "runit", "services") + " (agent-server, ui-stack, openvscode-server, openvscode-proxy, dockerd)\n")
+		content.WriteString("- Logs directory: " + filepath.Join(rootDir, "logs") + " (chromium.log, openbox.log, xvfb.log, agent-server.log, dockerd.log, supervisord.log)\n")
+		content.WriteString("- Supervisor socket: " + filepath.Join(rootDir, "supervisor", "supervisor.sock") + "\n")
+		content.WriteString("- Supervisor pid file: " + filepath.Join(rootDir, "supervisor", "supervisord.pid") + "\n")
 		content.WriteString("- Chromium PID file: " + filepath.Join(rootDir, "run", "chromium.pid") + "\n")
 		content.WriteString("- VNC password file (default): " + filepath.Join(rootDir, "vnc", "passwd") + "\n")
 		content.WriteString("- Upgrade markers directory: " + filepath.Join(rootDir, "upgrade-state") + "\n")
@@ -95,7 +96,8 @@ func RenderAgentsMD(ctx RuntimeContext, harnessID string) string {
 
 	content.WriteString("\n# Image / Repo Paths\n")
 	content.WriteString("- Agent entrypoint script: /opt/agentsandbox/agent-go/docker/start.sh\n")
-	content.WriteString("- Agent upgrade helper: /opt/agentsandbox/agent-go/docker/upgrade.sh\n")
+	content.WriteString("- Agent setup helper: /opt/agentsandbox/agent-go/docker/setup.sh\n")
+	content.WriteString("- Supervisor config: /opt/agentsandbox/agent-go/docker/supervisord.conf\n")
 	content.WriteString("- Docker CLI wrapper: /usr/local/bin/docker (source: /opt/agentsandbox/agent-go/docker/docker-wrapper.sh)\n")
 	content.WriteString("- OpenVSCode Server binary: /usr/local/bin/openvscode-server\n")
 	content.WriteString("- noVNC HTML: /usr/share/novnc/index.html (also vnc.html, vnc_lite.html)\n")

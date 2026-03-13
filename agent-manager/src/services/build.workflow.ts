@@ -10,7 +10,6 @@ import {
   getImageSharedMount,
   normalizeNullableText,
   safeTerminateSandbox,
-  SANDBOX_START_SCRIPT,
   snapshotSandboxFilesystem,
   BuildChunk,
 } from "./sandbox-core";
@@ -73,10 +72,9 @@ export async function runImageBuild(input: {
     appName: BUILD_APP_NAME,
     image,
     command: [
-      SANDBOX_START_SCRIPT,
       "bash",
       "-lc",
-      'mkdir -p "${WORKSPACES_DIR}" && cd "${WORKSPACES_DIR}" && sleep infinity',
+      'mkdir -p "${WORKSPACES_DIR:-/home/agent/workspaces}" && cd "${WORKSPACES_DIR:-/home/agent/workspaces}" && sleep infinity',
     ],
     secrets,
     volumes: await getImageSharedMount({ imageId: input.imageId, readOnly: true }),
@@ -95,16 +93,20 @@ export async function runImageBuild(input: {
       "unknown\n",
     );
 
-    logStep("Running build sandbox convergence...");
+    logStep("Running build sandbox refresh...");
     const setupStdout = createLineBuffer((line) =>
-      emit({ source: "stderr", text: `[setup:build-sh][stdout] ${line}\n` }),
+      emit({ source: "stderr", text: `[build:refresh][stdout] ${line}\n` }),
     );
     const setupStderr = createLineBuffer((line) =>
-      emit({ source: "stderr", text: `[setup:build-sh][stderr] ${line}\n` }),
+      emit({ source: "stderr", text: `[build:refresh][stderr] ${line}\n` }),
     );
     const { exitCode, stderr } = await execSandboxTextCommand(
       handle.sandbox,
-      ["/opt/agentsandbox/agent-go/docker/build.sh"],
+      [
+        "bash",
+        "-lc",
+        'set -euo pipefail; cd /opt/agentsandbox/agent-go; git pull --ff-only; ./docker/setup.sh; if [[ -r /shared/image/hooks/build.sh ]]; then bash /shared/image/hooks/build.sh; fi',
+      ],
       {
         timeoutMs: BUILD_SANDBOX_TIMEOUT_MS,
         onStdoutChunk: (chunk) => setupStdout.push(chunk),
@@ -115,7 +117,7 @@ export async function runImageBuild(input: {
     setupStderr.flush();
     if (exitCode !== 0) {
       throw new Error(
-        `build sandbox convergence failed (exit ${exitCode}).${
+        `build sandbox refresh failed (exit ${exitCode}).${
           stderr.trim().length > 0 ? `\n--- stderr ---\n${stderr}` : ""
         }`,
       );

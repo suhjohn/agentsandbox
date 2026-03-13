@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AGENT_GO_REPO_DIR="${AGENT_GO_REPO_DIR:-/opt/agentsandbox/agent-go}"
-AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server-linux-amd64}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../env.sh"
 
-if [[ ! -x "${AGENT_SERVER_BIN}" ]]; then
-  echo "${AGENT_SERVER_BIN} not found for OpenVSCode proxy" >&2
-  exit 1
+if [[ "${AGENT_RUNTIME_MODE:-all}" != "all" ]] || [[ "${OPENVSCODE_PROXY_ENABLED:-1}" != "1" ]]; then
+  exit 0
 fi
 
-export OPENVSCODE_PROXY_HOST="${OPENVSCODE_PROXY_HOST:-0.0.0.0}"
-export OPENVSCODE_PROXY_PORT="${OPENVSCODE_PROXY_PORT:-39393}"
-export OPENVSCODE_UPSTREAM_HOST="${OPENVSCODE_UPSTREAM_HOST:-127.0.0.1}"
-export OPENVSCODE_UPSTREAM_PORT="${OPENVSCODE_UPSTREAM_PORT:-39395}"
+if [[ ! -x "${AGENT_SERVER_BIN}" ]]; then
+  exit 0
+fi
+
 
 exec "${AGENT_SERVER_BIN}" openvscode-proxy

@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="${ROOT_DIR:-}"
-if [[ -z "${ROOT_DIR}" ]]; then
-  echo "ROOT_DIR is required for dockerd service" >&2
-  exit 1
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../env.sh"
+
+if [[ "${DOCKERD_ENABLED:-0}" != "1" ]]; then
+  exit 0
 fi
-DOCKERD_DATA_ROOT="${DOCKERD_DATA_ROOT:-${ROOT_DIR}/docker}"
-DOCKERD_LOG_FILE="${DOCKERD_LOG_FILE:-${ROOT_DIR}/logs/dockerd.log}"
-DOCKERD_BRIDGE="${DOCKERD_BRIDGE:-none}"
-DOCKERD_STORAGE_DRIVER="${DOCKERD_STORAGE_DRIVER:-vfs}"
 
 if ! command -v dockerd >/dev/null 2>&1; then
-  echo "[dockerd] dockerd binary not found" >&2
-  exit 1
+  exit 0
 fi
 
 mkdir -p "/var/run" "${DOCKERD_DATA_ROOT}" "$(dirname "${DOCKERD_LOG_FILE}")" 2>/dev/null || true

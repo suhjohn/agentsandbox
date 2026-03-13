@@ -304,6 +304,7 @@ Behavior:
 - Returns the unified runtime access payload used by both setup and agent workflows.
 - Folds terminal access into the runtime access object instead of treating terminal access as a separate service API.
 - Uses one runtime auth token for both runtime API and terminal access.
+- Mints a sandbox-agent JWT; default TTL is 24 hours (see `DEFAULT_SANDBOX_AUTH_TTL_SECONDS`), overridable via `authTtlSeconds` (min 30s).
 - Adds OpenVSCode/noVNC URLs only when those base URLs are available.
 
 ### `createModalSandbox(input)`
@@ -347,7 +348,7 @@ Behavior:
 
 - Creates a one-shot build sandbox.
 - Injects startup env through an inline Modal secret and attaches named/environment secrets by name.
-- Always runs `agent-go/docker/build.sh` inside the sandbox before snapshotting.
+- Refreshes the repo checkout with `git pull --ff-only`, reruns `agent-go/docker/setup.sh`, then runs `/shared/image/hooks/build.sh` before snapshotting.
 - Snapshots the filesystem and terminates the sandbox on completion.
 
 ## setup.workflow.ts

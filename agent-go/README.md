@@ -101,25 +101,26 @@ Pull, rebuild, stop the existing standalone binary process, and start the new on
 ./agent-go/scripts/dev.sh restart-server
 ```
 
-In the container runtime, `start.sh` now runs the main agent API under `runit`,
-so this helper will restart that `agent-server` service in place when available.
+In the container runtime, `start.sh` now runs the main agent API under `supervisord`,
+so this helper will restart that managed process in place when available.
 
-Refresh a live sandbox from the repo checkout without replacing the runtime directory:
+Install or refresh a live sandbox from the repo checkout:
 
 ```bash
-/opt/agentsandbox/agent-go/docker/upgrade.sh
+/path/to/repo/agent-go/docker/setup.sh
 ```
 
 This flow will:
 
-- sync the repo checkout to the current branch, configured pull ref, or explicit target ref
+- install the full system/runtime dependency set into the container
 - refresh installed helper files derived from the repo checkout
-- recreate runtime paths and runit service definitions
-- restart installed runit services in place
+- recreate runtime paths and runtime-owned directories
+- write source/install markers for the current checkout
 
 ## Docker image (source-driven server launcher)
 
-The image installs both CLI harness binaries during build: `codex` and `pi`.
+The image now copies the repo and runs `agent-go/docker/setup.sh` during build.
+That setup installs the CLI/runtime dependencies, including `codex` and `pi`.
 The container runtime also exports harness-specific config roots:
 
 - `CODEX_HOME`
@@ -191,51 +192,49 @@ Use a different env file (for example test config):
 ./agent-go/scripts/dev.sh docker-run --env-file .env.test
 ```
 
-Runtime behavior intentionally keeps the same runit-based stack used by `agent`:
+Runtime behavior uses a minimal `supervisord` launcher:
 
 - `agent-go/docker/start.sh`
 - browser/Xvfb/openbox/x11vnc/websockify startup
 - OpenVSCode service startup
 - optional dockerd service
-- workspace tools sync + harness runtime setup on `agent-server serve` startup (`AGENTS.md`, Codex auth seeding)
+- tooling/runtime bootstrap prepared by `agent-go/docker/setup.sh`
 
-The image runtime resolves the API server binary through `AGENT_SERVER_BIN`
+The runtime resolves the API server binary through `AGENT_SERVER_BIN`
 and points it at an architecture-qualified artifact inside
 `/opt/agentsandbox/agent-go/build-artifacts/`. The tracked linux/amd64 source
 revision is recorded in `agent-go/build-artifacts/agent-server-linux-amd64.rev`.
 OpenVSCode proxying uses that same `AGENT_SERVER_BIN` path with the
 `openvscode-proxy` subcommand.
 
-### `start.sh` + `AGENT_RUNTIME_MODE`
+### `setup.sh` + `start.sh`
 
-OpenVSCode/noVNC are **not** started by `agent-server serve` itself. They come up via runit services that
-are installed/launched by `start.sh` (`/opt/agentsandbox/agent-go/docker/start.sh`).
+OpenVSCode/noVNC are **not** started by `agent-server serve` itself. They are launched by
+`start.sh` (`/opt/agentsandbox/agent-go/docker/start.sh`) under `supervisord`.
 
-- Docker `ENTRYPOINT` is `/opt/agentsandbox/agent-go/docker/start.sh` (`agent-go/Dockerfile`).
-- `start.sh` always refreshes runtime-owned directories/symlinks and installed helper files before launching the requested command.
-- That bootstrap always installs the main `agent-server` service when the container command resolves to
-  `${AGENT_SERVER_BIN} ...`. In `AGENT_RUNTIME_MODE=all` (default), it also installs the UI/OpenVSCode services.
-- When the container command resolves to `${AGENT_SERVER_BIN} ...`, `start.sh` installs that command
-  as the `agent-server` runit service and keeps `runsvdir` as the foreground process.
-- In `all` mode, relevant runit services include:
-  - `agent-server` (main API service, installed dynamically from the container command)
+- `agent-go/Dockerfile` copies the repo and runs `agent-go/docker/setup.sh` during image build.
+- `agent-go/docker/setup.sh` is the single bootstrap/install script for container dependencies and repo-derived helper files.
+- `start.sh` resolves per-start env/secrets, exports the current launch env, and execs `supervisord` with `agent-go/docker/supervisord.conf`.
+- In `all` mode, relevant supervised programs include:
+  - `main` (typically `${AGENT_SERVER_BIN} serve`)
   - `openvscode-server` (`agent-go/docker/runit/openvscode-server.sh`)
   - `openvscode-proxy` (`agent-go/docker/runit/openvscode-proxy.sh`, runs `${AGENT_SERVER_BIN} openvscode-proxy`)
   - `ui-stack` (Xvfb/VNC/noVNC/Chromium) (`agent-go/docker/runit/ui-stack.sh`)
+  - `dockerd` (`agent-go/docker/runit/dockerd.sh`) when enabled
 
 Service control:
 
-- Restart all installed runit services inside the container:
+- Restart the main supervised program inside the container:
 
   ```bash
-  sv restart /home/agent/runtime/runit/services/*
+  ROOT_DIR=/home/agent/runtime supervisorctl -c /opt/agentsandbox/agent-go/docker/supervisord.conf restart main
   ```
 
 Operational implications:
 
-- If your runtime bypasses Docker `ENTRYPOINT` (for example some Modal execution paths), OpenVSCode/noVNC
-  will not start unless you explicitly run `/opt/agentsandbox/agent-go/docker/start.sh`.
-- Build sandboxes start through `start.sh` with a long-lived sleep command and then run `/opt/agentsandbox/agent-go/docker/build.sh` before snapshotting.
+- Build sandboxes should refresh the repo and rerun `setup.sh`, then run `/shared/image/hooks/build.sh`, before snapshotting.
+- If your runtime bypasses `start.sh`, OpenVSCode/noVNC will not start unless you explicitly run
+  `/path/to/repo/agent-go/docker/start.sh`.
 - Setup sandboxes intentionally run with `AGENT_RUNTIME_MODE=server` (API-only), so OpenVSCode/noVNC
   will be skipped even when `start.sh` runs.
 

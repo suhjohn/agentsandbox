@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if ! command -v openvscode-server >/dev/null 2>&1; then
-  echo "openvscode-server not found" >&2
-  exit 1
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../env.sh"
+
+if [[ "${AGENT_RUNTIME_MODE:-all}" != "all" ]]; then
+  exit 0
 fi
 
-OPENVSCODE_SERVER_HOST="${OPENVSCODE_SERVER_HOST:-0.0.0.0}"
-OPENVSCODE_SERVER_PORT="${OPENVSCODE_SERVER_PORT:-39393}"
-OPENVSCODE_SERVER_WORKSPACE_DIR="${OPENVSCODE_SERVER_WORKSPACE_DIR:-/home/agent/workspaces}"
+if ! command -v openvscode-server >/dev/null 2>&1; then
+  exit 0
+fi
+
 OPENVSCODE_CONNECTION_TOKEN="${OPENVSCODE_CONNECTION_TOKEN:-}"
-OPENVSCODE_PROXY_ENABLED="${OPENVSCODE_PROXY_ENABLED:-1}"
-OPENVSCODE_UPSTREAM_HOST="${OPENVSCODE_UPSTREAM_HOST:-127.0.0.1}"
-OPENVSCODE_UPSTREAM_PORT="${OPENVSCODE_UPSTREAM_PORT:-39395}"
-AGENT_GO_REPO_DIR="${AGENT_GO_REPO_DIR:-/opt/agentsandbox/agent-go}"
-AGENT_SERVER_BIN="${AGENT_SERVER_BIN:-${AGENT_GO_REPO_DIR}/build-artifacts/agent-server-linux-amd64}"
 
 app_dir="${AGENT_GO_REPO_DIR}"
 cd "${app_dir}"
@@ -29,8 +27,7 @@ if [[ "${OPENVSCODE_PROXY_ENABLED}" == "1" ]] \
 fi
 
 if [[ -z "${OPENVSCODE_CONNECTION_TOKEN}" ]]; then
-  echo "OPENVSCODE_CONNECTION_TOKEN is required" >&2
-  exit 1
+  exit 0
 fi
 
 exec openvscode-server \

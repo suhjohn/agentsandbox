@@ -194,7 +194,7 @@ cmd_restart_server() {
   local stop_timeout_sec=20
   local force_kill=0
   local do_pull=1
-  local service_dir=""
+  local supervisor_config=""
   local start_args=()
   local log_file=""
 
@@ -209,7 +209,7 @@ cmd_restart_server() {
         shift 2
         ;;
       --service-dir)
-        service_dir="$2"
+        supervisor_config="$2"
         shift 2
         ;;
       --timeout)
@@ -248,14 +248,10 @@ cmd_restart_server() {
   if [[ -z "${match_substring}" ]]; then
     match_substring="${output_path}"
   fi
-  if [[ -z "${service_dir}" ]]; then
-    if [[ -n "${RUNITSV_SERVICE_DIR:-}" ]]; then
-      service_dir="${RUNITSV_SERVICE_DIR}/agent-server"
-    else
-      service_dir="${ROOT_DIR:-/home/agent/runtime}/runit/services/agent-server"
-    fi
+  if [[ -z "${supervisor_config}" ]]; then
+    supervisor_config="${REPO_ROOT}/agent-go/docker/supervisord.conf"
   else
-    service_dir="$(abs_path "${service_dir}")"
+    supervisor_config="$(abs_path "${supervisor_config}")"
   fi
   if [[ ${#start_args[@]} -eq 0 ]]; then
     start_args=("serve")
@@ -267,9 +263,9 @@ cmd_restart_server() {
 
   build_server_binary "${output_path}" "${goos_value}" "${goarch_value}" "${CGO_ENABLED:-0}" "${LDFLAGS:--s -w}"
 
-  if [[ -d "${service_dir}" ]] && command -v sv >/dev/null 2>&1; then
-    echo "restarting runit service ${service_dir}"
-    sv restart "${service_dir}"
+  if [[ -f "${supervisor_config}" ]] && command -v supervisorctl >/dev/null 2>&1; then
+    echo "restarting supervisor program main"
+    supervisorctl -c "${supervisor_config}" restart main
     echo "service restarted"
     return 0
   fi

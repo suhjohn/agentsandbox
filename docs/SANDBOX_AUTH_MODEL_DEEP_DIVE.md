@@ -188,10 +188,10 @@ Manager returns OpenVSCode/noVNC URLs with query credentials:
 
 ### 5.2 Sandbox-agent JWT minting
 
-`getSandboxAgentToken` mints short-lived runtime JWT with:
+`mintSandboxAuthToken` mints runtime JWT with:
 
 - claims: `sub`, `agentId`, `sid`, `typ=sandbox-agent`, `iat`, `exp`, `jti`
-- default TTL: 5 minutes (`DEFAULT_SANDBOX_AGENT_TOKEN_TTL_SECONDS`)
+- default TTL: 24 hours (`DEFAULT_SANDBOX_AUTH_TTL_SECONDS`)
 - minimum clamp: 30 seconds
 
 No Redis cache is used for sandbox-agent JWTs in current code. A fresh token is minted on each call.

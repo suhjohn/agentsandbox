@@ -4,24 +4,22 @@ Status: implemented
 
 ## Goal
 
-Clean up sandbox boot, build, and in-place upgrade so the shell side owns sandbox reconciliation and the TypeScript side only orchestrates sandbox lifecycle.
+Clean up sandbox boot and build so the shell side owns sandbox reconciliation and the TypeScript side only orchestrates sandbox lifecycle.
 
 This spec assumes:
 
 - no migration compatibility work
 - no preserving the current script layout
-- no creating new sandboxes for upgrade
-- a running sandbox can be upgraded in place to a target commit or ref
+- no creating extra shell entrypoints when two are enough
 
 ## Desired Shape
 
-There are three shell entrypoints:
+There are two shell entrypoints:
 
+- `agent-go/docker/setup.sh`
 - `agent-go/docker/start.sh`
-- `agent-go/docker/build.sh`
-- `agent-go/docker/upgrade.sh`
 
-There is no `entrypoint.sh`, no `update-agent-go-source.sh`, and no separate runtime reconcile script.
+There is no `entrypoint.sh`, no `update-agent-go-source.sh`, and no separate build or upgrade helper.
 
 ## File Changes
 
@@ -34,8 +32,7 @@ There is no `entrypoint.sh`, no `update-agent-go-source.sh`, and no separate run
 ### Create
 
 - `agent-go/docker/start.sh`
-- `agent-go/docker/build.sh`
-- `agent-go/docker/upgrade.sh`
+- `agent-go/docker/setup.sh`
 
 ### Keep
 
@@ -55,7 +52,7 @@ TypeScript decides:
 - which image to use
 - which env vars, secrets, and volumes to mount
 - when to snapshot
-- which commit or ref to upgrade to
+- when to run setup
 
 TypeScript does not own sandbox reconciliation details.
 
@@ -63,20 +60,30 @@ TypeScript does not own sandbox reconciliation details.
 
 Shell scripts decide how a sandbox becomes correct for a given version:
 
-- source checkout sync
 - installed runtime file sync
 - runtime directory creation
 - tool linking
 - baseline seeding
 - auth/token setup
-- runit service generation
-- service restart during upgrade
+- supervisor program generation
+- runtime launch through `start.sh`
 
 ## Script Responsibilities
 
+### `setup.sh`
+
+`setup.sh` is the single install/bootstrap entrypoint.
+
+It owns:
+
+- installing system dependencies into the container
+- syncing installed runtime files into their final locations
+- preparing runtime directories and linked tools
+- writing commit and version markers
+
 ### `start.sh`
 
-`start.sh` is the only container entrypoint.
+`start.sh` is the runtime launcher.
 
 It is used by:
 
@@ -87,12 +94,8 @@ It is used by:
 It owns:
 
 - env and derived path resolution
-- runtime directory creation
-- workspace tool linking
-- baseline runtime seeding
 - auth secret and token resolution
-- syncing installed runtime files into their final locations
-- generating runit services
+- exporting the current launch env for `agent-go/docker/supervisord.conf`
 - starting the correct runtime mode
 
 Runtime mode is controlled by env such as:
@@ -100,50 +103,26 @@ Runtime mode is controlled by env such as:
 - `AGENT_RUNTIME_MODE=all`
 - `AGENT_RUNTIME_MODE=server`
 
-### `build.sh`
+### Build sandbox refresh
 
-`build.sh` is the only in-sandbox build/setup convergence script.
+The manager build flow runs:
 
-It is invoked by the manager build flow inside a running build sandbox.
-
-It owns:
-
-- syncing source checkout to a target commit or ref when needed
-- creating the same runtime directories and tool links as agent sandboxes
-- syncing installed runtime files into their final locations
-- running shared build hooks
+- `git pull --ff-only`
+- `agent-go/docker/setup.sh`
+- `/shared/image/hooks/build.sh`
 - verifying required binaries and files before snapshot
 
-The purpose of `build.sh` is to ensure build sandboxes get the same baseline layout as agent sandboxes before the filesystem is snapshotted.
+The purpose of `setup.sh` is to ensure build sandboxes get the same baseline layout as agent sandboxes before the filesystem is snapshotted.
 
-### `upgrade.sh`
-
-`upgrade.sh` is the only in-place updater for a running sandbox.
-
-It is invoked directly inside the sandbox, for example:
-
-```bash
-/opt/agentsandbox/agent-go/docker/upgrade.sh <commit-or-ref>
-```
-
-It owns:
-
-- syncing the repo checkout to the target commit or ref
-- syncing installed runtime files into their final locations
-- rerunning runtime preparation
-- regenerating runit service definitions
-- restarting affected services
-- writing commit and version markers
+`start.sh` runs `setup.sh` first, then launches the requested runtime command and foreground services.
 
 ## Dockerfile
 
 `agent-go/Dockerfile` should:
 
-- point `ENTRYPOINT` directly at `/opt/agentsandbox/agent-go/docker/start.sh`
-- keep scripts in the repo checkout and call them directly
-- `chmod +x` the shell scripts after `COPY`
-- stop referencing `entrypoint.sh`
-- stop referencing `update-agent-go-source.sh`
+- stay minimal
+- avoid preinstalling runtime dependencies
+- avoid hard-wiring an entrypoint
 
 ## Manager Changes
 
@@ -167,11 +146,11 @@ It should:
 
 - create the build sandbox
 - stream logs
-- invoke `agent-go/docker/build.sh` inside the sandbox
+- invoke `agent-go/docker/setup.sh` inside the sandbox
 - snapshot the filesystem
 - return the built image id
 
-It should stop assembling shell setup logic inline when that logic belongs in `build.sh`.
+It should stop assembling shell setup logic inline when that logic belongs in `setup.sh`.
 
 ## State Model
 
@@ -181,7 +160,7 @@ Separate the sandbox into three kinds of state.
 
 - repo checkout under `/opt/agentsandbox`
 - copied runtime files in final installed locations
-- generated service definitions
+- generated supervisor launch files
 
 ### Runtime state
 
@@ -189,7 +168,7 @@ Separate the sandbox into three kinds of state.
 - pid files
 - logs
 - browser state scaffolding
-- runit service tree
+- supervisor config and wrapper scripts
 - commit and version markers
 
 ### User state
@@ -202,7 +181,7 @@ User state must stay outside the install tree.
 
 ## Version Tracking
 
-Upgrade state should be recorded with marker files in runtime state.
+Setup/runtime state should be recorded with marker files in runtime state.
 
 Track at least:
 
@@ -212,37 +191,16 @@ Track at least:
 
 The target model is:
 
-- `upgrade.sh` moves the source checkout to a target commit or ref
-- `upgrade.sh` reconciles the sandbox to that version
-- `upgrade.sh` records the successful applied version
-
-## Upgrade Semantics
-
-The meaning of upgrade is:
-
-> Bring this running sandbox into conformance with target commit or ref `X`.
-
-Upgrade does not:
-
-- create a new sandbox
-- preserve old script structure
-- rely on scattered TypeScript shell snippets
-
-Upgrade does:
-
-- sync the repo checkout
-- sync runtime-installed files
-- rerun filesystem and runtime reconciliation
-- restart the affected services
-- write success markers
+- `setup.sh` installs and reconciles the container to the current checkout
+- `start.sh` records the running version after services are launched
 
 ## Service Model
 
-Runit remains the service supervisor.
+`supervisord` is the runtime supervisor.
 
-`start.sh` generates the service tree.
+`agent-go/docker/supervisord.conf` is the checked-in static supervisor config.
 
-`upgrade.sh` regenerates the service tree and restarts affected services.
+`start.sh` regenerates the service tree each launch after `setup.sh` completes.
 
 The expected service set remains:
 
@@ -256,9 +214,8 @@ depending on runtime mode and env.
 
 ## Design Rules
 
-- `start.sh` is the only container entrypoint.
-- `build.sh` is the only build sandbox convergence script.
-- `upgrade.sh` is the only in-place sandbox updater.
+- `setup.sh` is the only install/setup script.
+- `start.sh` is the only runtime launcher.
 - TypeScript selects lifecycle and version targets.
 - Shell scripts own sandbox reconciliation.
 - Build sandboxes and setup sandboxes must get the same baseline runtime layout as agent sandboxes.
@@ -267,9 +224,8 @@ depending on runtime mode and env.
 ## Follow-Up Work
 
 - Update `agent-go/Dockerfile`
+- Implement `agent-go/docker/setup.sh`
 - Implement `agent-go/docker/start.sh`
-- Implement `agent-go/docker/build.sh`
-- Implement `agent-go/docker/upgrade.sh`
 - Remove deleted scripts
 - Update `agent-manager/src/services/sandbox.service.ts`
 - Update `agent-manager/src/services/build.ts`

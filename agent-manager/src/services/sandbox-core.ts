@@ -166,7 +166,7 @@ export const SANDBOX_TUNNELS_RETRY_INTERVAL_MS = envInt(
     : "SESSION_SANDBOX_TUNNELS_RETRY_INTERVAL_MS",
   400,
 );
-export const DEFAULT_SANDBOX_AUTH_TTL_SECONDS = 5 * 60;
+export const DEFAULT_SANDBOX_AUTH_TTL_SECONDS = 24 * 60 * 60;
 export const STANDARD_RUNTIME_COMMAND = parseSandboxStartCommand();
 
 function parseSandboxStartCommand(): readonly string[] {
@@ -262,6 +262,7 @@ function isTransientSandboxLookupError(err: unknown): boolean {
   const normalized = message.toLowerCase();
   return (
     normalized.includes("loading sandbox") ||
+    normalized.includes("expected tunnel for port") ||
     normalized.includes("file does not exist") ||
     normalized.includes("sandbox not found")
   );
