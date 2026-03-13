@@ -10,4 +10,4 @@ export {
   workspaceSessionsPanelOpenAction,
   workspaceSessionsPanelSetFiltersAction,
   workspaceSessionsPanelSetGroupByAction,
-} from "@/ui-actions/actions/workspace-semantic";
+} from "./workspace-semantic";

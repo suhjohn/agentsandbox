@@ -37,9 +37,9 @@ import {
 import { DEFAULT_LEADER_SEQUENCE } from '@/workspace/keybindings/defaults'
 
 type RecordingTarget = {
-  readonly commandId: WorkspaceCommandId
+  readonly actionId: WorkspaceCommandId
   readonly context: KeybindingContext
-  readonly args?: unknown
+  readonly params?: unknown
   readonly replaceBindingId?: string
 }
 
@@ -81,9 +81,9 @@ function commandMatchesQuery (
 
 function getBindingsForCommand (
   bindings: readonly WorkspaceKeybinding[],
-  commandId: WorkspaceCommandId
+  actionId: WorkspaceCommandId
 ): readonly WorkspaceKeybinding[] {
-  return bindings.filter(binding => binding.commandId === commandId)
+  return bindings.filter(binding => binding.actionId === actionId)
 }
 
 export function SettingsKeybindingsPage () {
@@ -152,9 +152,9 @@ function SettingsKeybindingsEditor (props: {
       const candidate: WorkspaceKeybinding = {
         id: recording.replaceBindingId ?? 'recording-candidate',
         context: recording.context,
-        commandId: recording.commandId,
+        actionId: recording.actionId,
         sequence,
-        args: recording.args
+        params: recording.params
       }
       const conflicts = keybindings.getConflictsForBinding(candidate)
       const hasReservedConflict = conflicts.some(
@@ -167,7 +167,7 @@ function SettingsKeybindingsEditor (props: {
       const hasCommandConflict = conflicts.some(
         conflict =>
           conflict.kind === 'binding' &&
-          conflict.commandIds.some(commandId => commandId !== recording.commandId)
+          conflict.actionIds.some(actionId => actionId !== recording.actionId)
       )
       if (hasCommandConflict) {
         toast.error('That shortcut is already bound in this context.')
@@ -177,15 +177,15 @@ function SettingsKeybindingsEditor (props: {
       if (recording.replaceBindingId) {
         keybindings.removeBinding(recording.replaceBindingId)
       }
-      keybindings.rebindCommand({
-        commandId: recording.commandId,
+      keybindings.rebindAction({
+        actionId: recording.actionId,
         context: recording.context,
         sequence,
-        args: recording.args,
+        params: recording.params,
         replaceExisting: false
       })
       toast.success(
-        `Bound ${recording.commandId} to ${formatKeySequence(sequence)}`
+        `Bound ${recording.actionId} to ${formatKeySequence(sequence)}`
       )
       setRecording(null)
     }
@@ -426,7 +426,7 @@ function SettingsKeybindingsEditor (props: {
                                 variant='secondary'
                                 onClick={() => {
                                   if (
-                                    recording?.commandId === command.id &&
+                                    recording?.actionId === command.id &&
                                     recording?.context === context &&
                                     !recording?.replaceBindingId
                                   ) {
@@ -434,12 +434,12 @@ function SettingsKeybindingsEditor (props: {
                                     return
                                   }
                                   setRecording({
-                                    commandId: command.id,
+                                    actionId: command.id,
                                     context
                                   })
                                 }}
                               >
-                                {recording?.commandId === command.id &&
+                                {recording?.actionId === command.id &&
                                 recording?.context === context
                                   ? 'Recording… (Ctrl+Esc to cancel)'
                                   : 'Add binding'}
@@ -475,9 +475,9 @@ function SettingsKeybindingsEditor (props: {
                                             return
                                           }
                                           setRecording({
-                                            commandId: command.id,
+                                            actionId: command.id,
                                             context: binding.context,
-                                            args: binding.args,
+                                            params: binding.params,
                                             replaceBindingId: binding.id
                                           })
                                         }}
@@ -532,7 +532,7 @@ function SettingsKeybindingsEditor (props: {
                     <p className='text-xs text-text-secondary mt-0.5'>
                       {conflict.kind === 'reserved'
                         ? `Reserved chord (${conflict.reservedChordId ?? 'reserved'}).`
-                        : `Bound to multiple commands: ${conflict.commandIds.join(', ')}.`}
+                        : `Bound to multiple actions: ${conflict.actionIds.join(', ')}.`}
                     </p>
                   </div>
                 ))}

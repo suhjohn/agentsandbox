@@ -12,7 +12,7 @@ export interface KeybindingConflict {
   readonly sequence: WorkspaceKeySequence;
   readonly sequenceDisplay: string;
   readonly bindingIds: readonly string[];
-  readonly commandIds: readonly string[];
+  readonly actionIds: readonly string[];
   readonly reservedChordId?: string;
 }
 
@@ -51,7 +51,7 @@ function contextsUseReservedShortcut(context: KeybindingContext): boolean {
 export function findBindingConflicts(bindings: readonly WorkspaceKeybinding[]): KeybindingConflict[] {
   const conflicts: KeybindingConflict[] = [];
   for (const group of groupByContextAndSequence(bindings)) {
-    const uniqueCommandIds = new Set(group.bindings.map((binding) => binding.commandId));
+    const uniqueCommandIds = new Set(group.bindings.map((binding) => binding.actionId));
     if (uniqueCommandIds.size <= 1) continue;
     conflicts.push({
       kind: "binding",
@@ -59,7 +59,7 @@ export function findBindingConflicts(bindings: readonly WorkspaceKeybinding[]): 
       sequence: group.sequence,
       sequenceDisplay: formatKeySequence(group.sequence),
       bindingIds: group.bindings.map((binding) => binding.id),
-      commandIds: [...uniqueCommandIds],
+      actionIds: [...uniqueCommandIds],
     });
   }
   return conflicts;
@@ -80,7 +80,7 @@ export function findReservedChordConflicts(
         sequence: binding.sequence,
         sequenceDisplay: formatKeySequence(binding.sequence),
         bindingIds: [binding.id],
-        commandIds: [binding.commandId],
+        actionIds: [binding.actionId],
         reservedChordId: reservedChord.id,
       });
     }

@@ -8,12 +8,12 @@ import {
   type WorkspaceKeybindingOverrides,
 } from "./types";
 
-export const WORKSPACE_KEYBINDINGS_OVERRIDES_VERSION = 2;
+export const WORKSPACE_KEYBINDINGS_OVERRIDES_VERSION = 3;
 
 const STORAGE_KEY_PREFIX = "agent-manager-web.workspace.keybindings";
 
-interface SerializedOverridesV2 {
-  readonly version: 2;
+interface SerializedOverridesV3 {
+  readonly version: 3;
   readonly leaderSequence?: unknown;
   readonly disabledDefaultBindingIds: readonly string[];
   readonly customBindings: readonly SerializedCustomBinding[];
@@ -23,7 +23,9 @@ interface SerializedCustomBinding {
   readonly id: string;
   readonly context: string;
   readonly sequence: unknown;
-  readonly commandId: string;
+  readonly actionId?: string;
+  readonly commandId?: string;
+  readonly params?: unknown;
   readonly args?: unknown;
 }
 
@@ -45,15 +47,21 @@ function parseCustomBinding(value: unknown): WorkspaceCustomKeybinding | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== "string" || value.id.trim().length === 0) return null;
   if (!isKeybindingContext(value.context)) return null;
-  if (!isWorkspaceCommandId(value.commandId)) return null;
+  const actionId =
+    typeof value.actionId === "string"
+      ? value.actionId
+      : typeof value.commandId === "string"
+        ? value.commandId
+        : null;
+  if (!isWorkspaceCommandId(actionId)) return null;
   if (!isKeySequence(value.sequence)) return null;
 
   return {
     id: value.id,
     context: value.context,
-    commandId: value.commandId,
+    actionId,
     sequence: value.sequence.map((entry) => createKeyChord(entry)),
-    args: value.args,
+    params: "params" in value ? value.params : value.args,
   };
 }
 
@@ -61,11 +69,12 @@ export function sanitizeWorkspaceKeybindingOverrides(
   value: unknown,
 ): WorkspaceKeybindingOverrides {
   if (!isRecord(value)) return createEmptyKeybindingOverrides();
-  if (value.version !== 1 && value.version !== 2) {
+  if (value.version !== 1 && value.version !== 2 && value.version !== 3) {
     return createEmptyKeybindingOverrides();
   }
 
-  const rawLeaderSequence = value.version === 2 ? value.leaderSequence : undefined;
+  const rawLeaderSequence =
+    value.version === 2 || value.version === 3 ? value.leaderSequence : undefined;
   const rawDisabledDefaultBindingIds = value.disabledDefaultBindingIds;
   const rawCustomBindings = value.customBindings;
 
@@ -92,9 +101,9 @@ export function sanitizeWorkspaceKeybindingOverrides(
 
 export function serializeWorkspaceKeybindingOverrides(
   overrides: WorkspaceKeybindingOverrides,
-): SerializedOverridesV2 {
+): SerializedOverridesV3 {
   return {
-    version: 2,
+    version: 3,
     ...(overrides.leaderSequence
       ? { leaderSequence: overrides.leaderSequence.map((entry) => createKeyChord(entry)) }
       : {}),
@@ -102,9 +111,9 @@ export function serializeWorkspaceKeybindingOverrides(
     customBindings: overrides.customBindings.map((binding) => ({
       id: binding.id,
       context: binding.context,
-      commandId: binding.commandId,
+      actionId: binding.actionId,
       sequence: binding.sequence,
-      args: binding.args,
+      params: binding.params,
     })),
   };
 }
@@ -131,9 +140,9 @@ export function toPersistedWorkspaceKeybindingPayload(
     customBindings: serialized.customBindings.map((binding) => ({
       id: binding.id,
       context: binding.context,
-      commandId: binding.commandId,
+      actionId: binding.actionId,
       sequence: binding.sequence,
-      args: binding.args,
+      params: binding.params,
     })),
   };
   return payload;

@@ -134,10 +134,14 @@ export function VariantCombobox({
                 )}
                 <span className='truncate'>{selectedVariant.name}</span>
                 {selectedVariant.isUserDefault && (
-                  <Star className='h-3 w-3 shrink-0 text-blue-500 fill-blue-500' title='My default' />
+                  <span title='My default'>
+                    <Star className='h-3 w-3 shrink-0 text-blue-500 fill-blue-500' />
+                  </span>
                 )}
                 {selectedVariant.isDefault && (
-                  <Star className='h-3 w-3 shrink-0 text-yellow-500 fill-yellow-500' title='Image default' />
+                  <span title='Image default'>
+                    <Star className='h-3 w-3 shrink-0 text-yellow-500 fill-yellow-500' />
+                  </span>
                 )}
               </>
             ) : (
@@ -202,12 +206,16 @@ export function VariantCombobox({
                                 <span className='text-xs text-text-tertiary shrink-0'>
                                   (yours)
                                 </span>
-                              )}
+                            )}
                             {variant.isUserDefault && (
-                              <Star className='h-3 w-3 shrink-0 text-blue-500 fill-blue-500' title='My default' />
+                              <span title='My default'>
+                                <Star className='h-3 w-3 shrink-0 text-blue-500 fill-blue-500' />
+                              </span>
                             )}
                             {variant.isDefault && (
-                              <Star className='h-3 w-3 shrink-0 text-yellow-500 fill-yellow-500' title='Image default' />
+                              <span title='Image default'>
+                                <Star className='h-3 w-3 shrink-0 text-yellow-500 fill-yellow-500' />
+                              </span>
                             )}
                           </span>
                           <Check

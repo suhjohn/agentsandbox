@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/lib/auth'
+import { buildUiExecutionContext } from '@/ui-actions/context'
+import { executeUiAction } from '@/ui-actions/execute'
+import { registerWorkspaceKeyboardRuntimeController } from '@/coordinator-actions/runtime-bridge'
+import { listUiActionsForSurface } from '@/ui-actions/registry'
 import {
   Dialog,
   DialogContent,
@@ -12,8 +18,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { findLeafNode, listLeafIds } from '../layout'
-import { listPanelDefinitions } from '../panels/registry'
-import { listAgentDetailTabs, type AgentDetailPanelConfig } from '../panels/agent-detail'
 import { useWorkspaceSelector, useWorkspaceStore } from '../store'
 import { useWorkspaceKeybindings } from '../keybindings/use-workspace-keybindings'
 import {
@@ -32,9 +36,7 @@ import {
   WORKSPACE_CANCEL_STREAM_EVENT,
   WORKSPACE_OPEN_COORDINATOR_EVENT,
   WORKSPACE_PANE_ZOOM_TOGGLE_EVENT,
-  WORKSPACE_RUN_COMMAND_EVENT,
   type WorkspaceCancelStreamEventDetail,
-  type WorkspaceRunCommandEventDetail,
   WORKSPACE_TOGGLE_ALL_COLLAPSIBLES_EVENT,
   type WorkspaceToggleAllCollapsiblesEventDetail
 } from '../keybindings/events'
@@ -52,12 +54,12 @@ interface WorkspaceHotkeysLayerProps {
   readonly onFocusSessionsFilter: () => void
 }
 
-function getWindowIndexArg (args: unknown): number | null {
-  if (typeof args === 'number' && Number.isFinite(args)) {
-    return Math.trunc(args)
+function getWindowIndexArg (params: unknown): number | null {
+  if (typeof params === 'number' && Number.isFinite(params)) {
+    return Math.trunc(params)
   }
-  if (typeof args !== 'object' || args === null) return null
-  const index = (args as { index?: unknown }).index
+  if (typeof params !== 'object' || params === null) return null
+  const index = (params as { index?: unknown }).index
   if (typeof index !== 'number' || !Number.isFinite(index)) return null
   return Math.trunc(index)
 }
@@ -97,23 +99,20 @@ function dispatchCancelStream (leafId: string | null): void {
   )
 }
 
+function dispatchPaneZoomToggle (leafId: string | null): void {
+  if (!leafId) return
+  window.dispatchEvent(
+    new CustomEvent(WORKSPACE_PANE_ZOOM_TOGGLE_EVENT, {
+      detail: { leafId }
+    })
+  )
+}
+
 function isEventTargetInsideCoordinatorDialog (
   target: EventTarget | null
 ): boolean {
   if (!(target instanceof Element)) return false
   return target.closest('[data-coordinator-dialog="true"]') !== null
-}
-
-function cycleIndex (
-  currentIndex: number,
-  length: number,
-  delta: -1 | 1
-): number {
-  if (length <= 0) return -1
-  if (currentIndex < 0 || currentIndex >= length) {
-    return delta > 0 ? 0 : length - 1
-  }
-  return (currentIndex + delta + length) % length
 }
 
 function WorkspaceHotkeysLayerImpl (
@@ -122,6 +121,8 @@ function WorkspaceHotkeysLayerImpl (
   }
 ) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const auth = useAuth()
   const store = useWorkspaceStore()
 
   const activeWindow = useWorkspaceSelector(
@@ -172,262 +173,19 @@ function WorkspaceHotkeysLayerImpl (
     }
   }, [renameDialogState])
 
-  const runCommand = useCallback(
-    async (commandId: WorkspaceCommandId, args?: unknown): Promise<void> => {
-      const state = store.getState()
-      const activeWindowState = state.windowsById[state.activeWindowId] ?? null
-      const focusedLeafId = activeWindowState?.focusedLeafId ?? null
-      const focusedLeaf =
-        focusedLeafId && activeWindowState
-          ? findLeafNode(activeWindowState.root, focusedLeafId)
-          : null
-      const focusedPanel =
-        focusedLeaf && activeWindowState
-          ? activeWindowState.panelsById[focusedLeaf.panelInstanceId] ?? null
-          : null
-
-      switch (commandId) {
-        case 'keyboard.help.open': {
-          setHelpOpen(true)
-          return
-        }
-        case 'keyboard.palette.open': {
-          setCommandPaletteOpen(true)
-          return
-        }
-        case 'keyboard.mode.cancel': {
-          setHelpOpen(false)
-          setCommandPaletteOpen(false)
-          setWindowSwitcherOpen(false)
-          setRenameDialogState(null)
-          dispatchCancelStream(focusedLeafId)
-          return
-        }
-        case 'keyboard.leader.send': {
-          toast.message('Leader pass-through is handled by focused terminal input.')
-          return
-        }
-        case 'pane.split.down': {
-          if (!focusedLeafId) return
-          store.dispatch({ type: 'leaf/split', leafId: focusedLeafId, dir: 'col' })
-          return
-        }
-        case 'pane.split.right': {
-          if (!focusedLeafId) return
-          store.dispatch({ type: 'leaf/split', leafId: focusedLeafId, dir: 'row' })
-          return
-        }
-        case 'pane.split.down.full': {
-          store.dispatch({ type: 'window/split-full', dir: 'col' })
-          return
-        }
-        case 'pane.split.right.full': {
-          store.dispatch({ type: 'window/split-full', dir: 'row' })
-          return
-        }
-        case 'pane.close': {
-          if (!focusedLeafId) return
-          store.dispatch({ type: 'leaf/close', leafId: focusedLeafId })
-          return
-        }
-        case 'pane.zoom.toggle': {
-          if (!focusedLeafId) return
-          window.dispatchEvent(
-            new CustomEvent(WORKSPACE_PANE_ZOOM_TOGGLE_EVENT, {
-              detail: { leafId: focusedLeafId }
-            })
-          )
-          return
-        }
-        case 'pane.focus.next': {
-          store.dispatch({ type: 'pane/focus-next' })
-          return
-        }
-        case 'pane.focus.last': {
-          store.dispatch({ type: 'pane/focus-prev' })
-          return
-        }
-        case 'pane.focus.left':
-        case 'pane.focus.right':
-        case 'pane.focus.up':
-        case 'pane.focus.down': {
-          const direction =
-            commandId === 'pane.focus.left'
-              ? 'left'
-              : commandId === 'pane.focus.right'
-                ? 'right'
-                : commandId === 'pane.focus.up'
-                  ? 'up'
-                  : 'down'
-          store.dispatch({ type: 'pane/focus-direction', direction })
-          return
-        }
-        case 'pane.number_mode.open': {
-          return
-        }
-        case 'pane.swap.prev': {
-          store.dispatch({ type: 'pane/swap-prev' })
-          return
-        }
-        case 'pane.swap.next': {
-          store.dispatch({ type: 'pane/swap-next' })
-          return
-        }
-        case 'pane.rotate': {
-          store.dispatch({ type: 'pane/rotate' })
-          return
-        }
-        case 'pane.break_to_window': {
-          store.dispatch({ type: 'pane/break-to-window' })
-          return
-        }
-        case 'pane.resize.left':
-        case 'pane.resize.right':
-        case 'pane.resize.up':
-        case 'pane.resize.down': {
-          const direction =
-            commandId === 'pane.resize.left'
-              ? 'left'
-              : commandId === 'pane.resize.right'
-                ? 'right'
-                : commandId === 'pane.resize.up'
-                  ? 'up'
-                  : 'down'
-          store.dispatch({
-            type: 'split/resize-direction',
-            direction,
-            amount: 0.02
-          })
-          return
-        }
-        case 'pane.type.prev':
-        case 'pane.type.next': {
-          if (!focusedPanel) return
-          const panelTypes = listPanelDefinitions().map(def => def.type)
-          if (panelTypes.length === 0) return
-          const currentIndex = panelTypes.indexOf(focusedPanel.type)
-          const nextIndex = cycleIndex(
-            currentIndex,
-            panelTypes.length,
-            commandId === 'pane.type.prev' ? -1 : 1
-          )
-          const nextType = panelTypes[nextIndex]
-          if (!nextType || nextType === focusedPanel.type) return
-          store.dispatch({
-            type: 'panel/type',
-            panelInstanceId: focusedPanel.id,
-            panelType: nextType
-          })
-          return
-        }
-        case 'pane.agent_view.prev':
-        case 'pane.agent_view.next': {
-          if (!focusedPanel || focusedPanel.type !== 'agent_detail') return
-          const config = focusedPanel.config as AgentDetailPanelConfig
-          const tabs = listAgentDetailTabs()
-          const currentIndex = tabs.indexOf(config.activeTab)
-          const nextIndex = cycleIndex(
-            currentIndex,
-            tabs.length,
-            commandId === 'pane.agent_view.prev' ? -1 : 1
-          )
-          const nextTab = tabs[nextIndex]
-          if (!nextTab || nextTab === config.activeTab) return
-          store.dispatch({
-            type: 'panel/config',
-            panelInstanceId: focusedPanel.id,
-            updater: prev => ({
-              ...(prev as AgentDetailPanelConfig),
-              activeTab: nextTab
-            })
-          })
-          return
-        }
-        case 'window.create': {
-          store.dispatch({ type: 'window/create' })
-          return
-        }
-        case 'window.close': {
-          if (!activeWindowState) return
-          store.dispatch({ type: 'window/close', windowId: activeWindowState.id })
-          return
-        }
-        case 'window.rename': {
-          if (!activeWindowState) return
-          setRenameDialogState({
-            windowId: activeWindowState.id,
-            initialName: activeWindowState.name
-          })
-          return
-        }
-        case 'window.next': {
-          store.dispatch({ type: 'window/activate-next' })
-          return
-        }
-        case 'window.prev': {
-          store.dispatch({ type: 'window/activate-prev' })
-          return
-        }
-        case 'window.last': {
-          store.dispatch({ type: 'window/activate-last' })
-          return
-        }
-        case 'window.switcher.open': {
-          setWindowSwitcherOpen(true)
-          return
-        }
-        case 'window.select_index': {
-          const index = getWindowIndexArg(args)
-          if (index === null) return
-          store.dispatch({ type: 'window/activate-index', index })
-          return
-        }
-        case 'layout.cycle': {
-          store.dispatch({ type: 'layout/cycle' })
-          return
-        }
-        case 'layout.equalize': {
-          store.dispatch({ type: 'layout/equalize' })
-          return
-        }
-        case 'workspace.sessions_panel.toggle': {
-          props.onSetSessionsPanelOpen(!props.sessionsPanelOpen)
-          return
-        }
-        case 'workspace.sessions_panel.focus_filter': {
-          props.onFocusSessionsFilter()
-          return
-        }
-        case 'workspace.collapsibles.toggle_all': {
-          toggleAllCollapsibles(focusedLeafId)
-          return
-        }
-        case 'workspace.coordinator.open': {
-          window.dispatchEvent(new Event(WORKSPACE_OPEN_COORDINATOR_EVENT))
-          return
-        }
-        case 'workspace.stream.cancel': {
-          dispatchCancelStream(focusedLeafId)
-          return
-        }
-        case 'settings.open.general': {
-          await navigate({ to: '/settings/general' })
-          return
-        }
-        case 'settings.open.images': {
-          await navigate({ to: '/settings/images' })
-          return
-        }
-        case 'settings.open.keybindings': {
-          await navigate({ to: '/settings/keybindings' })
-          return
-        }
-        default: {
-          return
-        }
-      }
+  const runAction = useCallback(
+    async (actionId: WorkspaceCommandId, params?: unknown): Promise<void> => {
+      await executeUiAction({
+        actionId,
+        params,
+        context: buildUiExecutionContext({
+          auth,
+          navigate: navigate as any,
+          queryClient
+        })
+      })
     },
-    [props, store]
+    [auth, navigate, queryClient]
   )
 
   const keybindings = useWorkspaceKeybindings({
@@ -448,41 +206,95 @@ function WorkspaceHotkeysLayerImpl (
     onUnknownPrefix: sequence => {
       toast.message(`Unbound: ${formatKeySequence(sequence)}`)
     },
-    onCommand: async request => {
-      await runCommand(request.commandId, request.args ?? request.binding?.args)
+    onAction: async request => {
+      await runAction(request.actionId, request.params ?? request.binding?.params)
     }
   })
+
+  useEffect(() => {
+    return registerWorkspaceKeyboardRuntimeController({
+      openHelp: async () => {
+        setHelpOpen(true)
+        return { open: true as const }
+      },
+      openPalette: async () => {
+        setCommandPaletteOpen(true)
+        return { open: true as const }
+      },
+      sendLeaderSequence: async () => {
+        return { handled: true as const }
+      },
+      closeTransientUi: async () => {
+        setHelpOpen(false)
+        setCommandPaletteOpen(false)
+        setWindowSwitcherOpen(false)
+        setRenameDialogState(null)
+        return { closed: true as const }
+      },
+      enterPaneNumberMode: async () => {
+        keybindings.enterPaneNumberMode()
+        return { open: true as const }
+      },
+      toggleFocusedPaneZoom: async () => {
+        const state = store.getState()
+        const activeWindowState = state.windowsById[state.activeWindowId] ?? null
+        dispatchPaneZoomToggle(activeWindowState?.focusedLeafId ?? null)
+        return { toggled: true as const }
+      },
+      openWindowSwitcher: async () => {
+        setWindowSwitcherOpen(true)
+        return { open: true as const }
+      },
+      openRenameWindowDialog: async () => {
+        const state = store.getState()
+        const activeWindowState = state.windowsById[state.activeWindowId] ?? null
+        if (!activeWindowState) {
+          throw new Error('Active workspace window unavailable')
+        }
+        setRenameDialogState({
+          windowId: activeWindowState.id,
+          initialName: activeWindowState.name
+        })
+        return { open: true as const }
+      },
+      toggleSessionsPanel: async () => {
+        const open = !props.sessionsPanelOpen
+        props.onSetSessionsPanelOpen(open)
+        return { open }
+      },
+      focusSessionsPanelFilter: async () => {
+        props.onFocusSessionsFilter()
+        return { focused: true as const }
+      },
+      toggleAllCollapsibles: async () => {
+        const state = store.getState()
+        const activeWindowState = state.windowsById[state.activeWindowId] ?? null
+        toggleAllCollapsibles(activeWindowState?.focusedLeafId ?? null)
+        return { toggled: true as const }
+      },
+      openCoordinator: async () => {
+        window.dispatchEvent(new Event(WORKSPACE_OPEN_COORDINATOR_EVENT))
+        return { open: true as const }
+      },
+      cancelFocusedStream: async () => {
+        const state = store.getState()
+        const activeWindowState = state.windowsById[state.activeWindowId] ?? null
+        dispatchCancelStream(activeWindowState?.focusedLeafId ?? null)
+        return { cancelled: true as const }
+      }
+    })
+  }, [keybindings, props, store])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEventTargetInsideCoordinatorDialog(event.target)) return
       keybindings.handleKeyDown(event)
     }
-    const onRunWorkspaceCommand = (event: Event) => {
-      const detail = (event as CustomEvent<WorkspaceRunCommandEventDetail>).detail
-      if (!detail || typeof detail !== 'object') return
-      const commandId = detail.commandId
-      if (typeof commandId !== 'string') return
-      if (typeof detail.respond !== 'function' || typeof detail.reject !== 'function') {
-        return
-      }
-
-      void (async () => {
-        try {
-          await runCommand(commandId as WorkspaceCommandId, detail.args)
-          detail.respond({ handled: true })
-        } catch (error) {
-          detail.reject(error)
-        }
-      })()
-    }
     window.addEventListener('keydown', onKeyDown, true)
-    window.addEventListener(WORKSPACE_RUN_COMMAND_EVENT, onRunWorkspaceCommand)
     return () => {
       window.removeEventListener('keydown', onKeyDown, true)
-      window.removeEventListener(WORKSPACE_RUN_COMMAND_EVENT, onRunWorkspaceCommand)
     }
-  }, [keybindings.handleKeyDown, runCommand])
+  }, [keybindings.handleKeyDown, runAction])
 
   const shortcutsByCommandId = useMemo(() => {
     const map = new Map<string, string>()
@@ -495,15 +307,15 @@ function WorkspaceHotkeysLayerImpl (
       return sequenceDisplay
     }
     for (const binding of keybindings.bindings) {
-      if (map.has(binding.commandId)) continue
-      map.set(binding.commandId, formatBindingDisplay(binding))
+      if (map.has(binding.actionId)) continue
+      map.set(binding.actionId, formatBindingDisplay(binding))
     }
     return map
   }, [keybindings.bindings, keybindings.leaderSequence])
 
   const commandPaletteItems = useMemo<WorkspaceCommandPaletteItem[]>(
     () =>
-      [...keybindings.commands]
+      [...listUiActionsForSurface('palette')]
         .sort((a, b) => {
           if (a.category !== b.category) {
             return a.category.localeCompare(b.category)
@@ -517,7 +329,7 @@ function WorkspaceHotkeysLayerImpl (
           detail: shortcutsByCommandId.get(command.id) ?? '',
           keywords: [command.id, command.category]
         })),
-    [keybindings.commands, shortcutsByCommandId]
+    [shortcutsByCommandId]
   )
 
   const windowPaletteItems = useMemo<WorkspaceCommandPaletteItem[]>(
@@ -538,8 +350,8 @@ function WorkspaceHotkeysLayerImpl (
     for (const window of windows) {
       const binding = keybindings.bindings.find(
         candidate =>
-          candidate.commandId === 'window.select_index' &&
-          getWindowIndexArg(candidate.args) === window.index
+          candidate.actionId === 'window.select_index' &&
+          getWindowIndexArg(candidate.params) === window.index
       )
       if (!binding) continue
       const sequenceDisplay = formatKeySequence(binding.sequence)
@@ -573,9 +385,9 @@ function WorkspaceHotkeysLayerImpl (
         placeholder='Type to search key bindings…'
         items={commandPaletteItems}
         onSelectItem={item => {
-          const commandId = item.id as WorkspaceCommandId
+          const actionId = item.id as WorkspaceCommandId
           void (async () => {
-            const handled = await keybindings.runCommand(commandId)
+            const handled = await keybindings.runAction(actionId)
             if (!handled) {
               toast.error(`Failed to run command: ${item.title}`)
             }

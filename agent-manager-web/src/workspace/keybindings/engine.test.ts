@@ -41,7 +41,7 @@ function testEvent(input: {
 function binding(input: {
   readonly id: string;
   readonly context: WorkspaceKeybinding["context"];
-  readonly commandId: WorkspaceKeybinding["commandId"];
+  readonly actionId: WorkspaceKeybinding["actionId"];
   readonly code: string;
   readonly ctrl?: boolean;
   readonly meta?: boolean;
@@ -51,7 +51,7 @@ function binding(input: {
   return {
     id: input.id,
     context: input.context,
-    commandId: input.commandId,
+    actionId: input.actionId,
     sequence: createKeySequence(
       createKeyChord({
         code: input.code,
@@ -70,14 +70,14 @@ describe("workspace/keybindings/engine", () => {
       binding({
         id: "prefix-pane-close",
         context: "workspace.prefix",
-        commandId: "pane.close",
+        actionId: "pane.close",
         code: "KeyX",
       }),
     ];
     const matched: string[] = [];
     const engine = createWorkspaceKeybindingEngine({
       getBindings: () => bindings,
-      onBindingMatched: ({ binding: matchedBinding }) => matched.push(matchedBinding.commandId),
+      onBindingMatched: ({ binding: matchedBinding }) => matched.push(matchedBinding.actionId),
     });
 
     const leaderEvent = testEvent({ code: "KeyB", ctrl: true });
@@ -91,7 +91,7 @@ describe("workspace/keybindings/engine", () => {
     const paneCloseResult = engine.handleKeyDown(paneCloseEvent);
     expect(paneCloseResult.handled).toBe(true);
     expect(paneCloseResult.reason).toBe("binding");
-    expect(paneCloseResult.binding?.commandId).toBe("pane.close");
+    expect(paneCloseResult.binding?.actionId).toBe("pane.close");
     expect(matched).toEqual(["pane.close"]);
     expect(engine.getState().mode).toBe("idle");
   });
@@ -120,7 +120,7 @@ describe("workspace/keybindings/engine", () => {
       binding({
         id: "prefix-split-right",
         context: "workspace.prefix",
-        commandId: "pane.split.right",
+        actionId: "pane.split.right",
         code: "Digit5",
         shift: true,
       }),
@@ -128,7 +128,7 @@ describe("workspace/keybindings/engine", () => {
     const engine = createWorkspaceKeybindingEngine({
       getBindings: () => bindings,
       onBindingMatched: ({ binding: matchedBinding }) =>
-        matched.push(matchedBinding.commandId),
+        matched.push(matchedBinding.actionId),
       onUnknownPrefix: (sequence) => {
         unknownSequences.push(sequence.map((entry) => entry.code).join(" "));
       },
@@ -150,7 +150,7 @@ describe("workspace/keybindings/engine", () => {
     );
     expect(splitRightResult.handled).toBe(true);
     expect(splitRightResult.reason).toBe("binding");
-    expect(splitRightResult.binding?.commandId).toBe("pane.split.right");
+    expect(splitRightResult.binding?.actionId).toBe("pane.split.right");
     expect(matched).toEqual(["pane.split.right"]);
     expect(engine.getState().mode).toBe("idle");
   });
@@ -182,13 +182,13 @@ describe("workspace/keybindings/engine", () => {
       binding({
         id: "workspace-pane-close",
         context: "workspace",
-        commandId: "pane.close",
+        actionId: "pane.close",
         code: "KeyX",
       }),
       binding({
         id: "workspace-mode-cancel",
         context: "workspace",
-        commandId: "keyboard.mode.cancel",
+        actionId: "keyboard.mode.cancel",
         code: "Escape",
       }),
     ];
@@ -220,13 +220,13 @@ describe("workspace/keybindings/engine", () => {
       binding({
         id: "prefix-pane-close",
         context: "workspace.prefix",
-        commandId: "pane.close",
+        actionId: "pane.close",
         code: "KeyX",
       }),
     ];
     const engine = createWorkspaceKeybindingEngine({
       getBindings: () => bindings,
-      onBindingMatched: ({ binding: matchedBinding }) => matched.push(matchedBinding.commandId),
+      onBindingMatched: ({ binding: matchedBinding }) => matched.push(matchedBinding.actionId),
     });
 
     const inputTarget = { tagName: "TEXTAREA" };
@@ -247,7 +247,7 @@ describe("workspace/keybindings/engine", () => {
     const closeResult = engine.handleKeyDown(closeEvent);
     expect(closeResult.handled).toBe(true);
     expect(closeResult.reason).toBe("binding");
-    expect(closeResult.binding?.commandId).toBe("pane.close");
+    expect(closeResult.binding?.actionId).toBe("pane.close");
     expect(matched).toEqual(["pane.close"]);
     expect(engine.getState().mode).toBe("idle");
   });
@@ -258,14 +258,14 @@ describe("workspace/keybindings/engine", () => {
       binding({
         id: "workspace-palette-open",
         context: "workspace",
-        commandId: "keyboard.palette.open",
+        actionId: "keyboard.palette.open",
         code: "KeyK",
         meta: true,
       }),
     ];
     const engine = createWorkspaceKeybindingEngine({
       getBindings: () => bindings,
-      onBindingMatched: ({ binding: matchedBinding }) => matched.push(matchedBinding.commandId),
+      onBindingMatched: ({ binding: matchedBinding }) => matched.push(matchedBinding.actionId),
     });
 
     const inputTarget = { tagName: "TEXTAREA" };
@@ -277,7 +277,7 @@ describe("workspace/keybindings/engine", () => {
     const paletteResult = engine.handleKeyDown(paletteEvent);
     expect(paletteResult.handled).toBe(true);
     expect(paletteResult.reason).toBe("binding");
-    expect(paletteResult.binding?.commandId).toBe("keyboard.palette.open");
+    expect(paletteResult.binding?.actionId).toBe("keyboard.palette.open");
     expect(matched).toEqual(["keyboard.palette.open"]);
   });
 
@@ -302,7 +302,7 @@ describe("workspace/keybindings/engine", () => {
       binding({
         id: "global-conflicting",
         context: "global",
-        commandId: "keyboard.help.open",
+        actionId: "keyboard.help.open",
         code: "Space",
         alt: true,
       }),
@@ -321,7 +321,7 @@ describe("workspace/keybindings/engine", () => {
           ),
         },
       ],
-      onBindingMatched: ({ binding: matchedBinding }) => matched.push(matchedBinding.commandId),
+      onBindingMatched: ({ binding: matchedBinding }) => matched.push(matchedBinding.actionId),
     });
 
     engine.handleKeyDown(testEvent({ code: "KeyB", ctrl: true }));

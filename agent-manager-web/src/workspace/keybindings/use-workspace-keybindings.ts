@@ -35,20 +35,20 @@ import {
   type WorkspaceReservedChord,
 } from "./types";
 
-export interface WorkspaceCommandRunRequest {
-  readonly commandId: WorkspaceCommandId;
+export interface WorkspaceActionRunRequest {
+  readonly actionId: WorkspaceCommandId;
   readonly command: WorkspaceCommandDefinition;
-  readonly args?: unknown;
+  readonly params?: unknown;
   readonly source: "keyboard" | "api";
   readonly event?: KeyboardEventLike;
   readonly binding?: WorkspaceKeybinding;
 }
 
-export interface RebindWorkspaceCommandInput {
-  readonly commandId: WorkspaceCommandId;
+export interface RebindWorkspaceActionInput {
+  readonly actionId: WorkspaceCommandId;
   readonly context: KeybindingContext;
   readonly sequence: WorkspaceKeySequence;
-  readonly args?: unknown;
+  readonly params?: unknown;
   readonly replaceExisting?: boolean;
 }
 
@@ -70,7 +70,7 @@ export interface UseWorkspaceKeybindingsOptions {
   readonly defaultBindings?: readonly WorkspaceKeybinding[];
   readonly reservedChords?: readonly WorkspaceReservedChord[];
   readonly commands?: readonly WorkspaceCommandDefinition[];
-  readonly onCommand?: (request: WorkspaceCommandRunRequest) => void | Promise<void>;
+  readonly onAction?: (request: WorkspaceActionRunRequest) => void | Promise<void>;
   readonly onPaneNumberSelect?: (index: number) => void | Promise<void>;
   readonly onUnknownPrefix?: (sequence: WorkspaceKeySequence) => void;
 }
@@ -85,10 +85,10 @@ export interface UseWorkspaceKeybindingsResult {
   >;
   readonly reservedChords: readonly WorkspaceReservedChord[];
   readonly leaderSequence: WorkspaceKeySequence;
-  readonly runCommand: (commandId: WorkspaceCommandId, args?: unknown) => Promise<boolean>;
+  readonly runAction: (actionId: WorkspaceCommandId, params?: unknown) => Promise<boolean>;
   readonly setLeaderSequence: (sequence: WorkspaceKeySequence) => void;
   readonly resetLeaderSequence: () => void;
-  readonly rebindCommand: (input: RebindWorkspaceCommandInput) => void;
+  readonly rebindAction: (input: RebindWorkspaceActionInput) => void;
   readonly removeBinding: (bindingId: string) => void;
   readonly resetBindings: () => void;
   readonly exportBindings: () => string;
@@ -99,11 +99,11 @@ export interface UseWorkspaceKeybindingsResult {
   readonly getConflictsForBinding: (binding: WorkspaceKeybinding) => KeybindingConflict[];
 }
 
-function createUserBindingId(commandId: WorkspaceCommandId, context: KeybindingContext): string {
+function createUserBindingId(actionId: WorkspaceCommandId, context: KeybindingContext): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `user.${commandId}.${context}.${crypto.randomUUID()}`;
+    return `user.${actionId}.${context}.${crypto.randomUUID()}`;
   }
-  return `user.${commandId}.${context}.${Date.now().toString(36)}.${Math.random()
+  return `user.${actionId}.${context}.${Date.now().toString(36)}.${Math.random()
     .toString(36)
     .slice(2, 8)}`;
 }
@@ -170,7 +170,7 @@ export function useWorkspaceKeybindings(
     options.activePanelType ? `panel:${options.activePanelType}` : null,
   );
   const commandsByIdRef = useRef(commandsById);
-  const onCommandRef = useRef(options.onCommand);
+  const onActionRef = useRef(options.onAction);
   const onPaneNumberSelectRef = useRef(options.onPaneNumberSelect);
   const onUnknownPrefixRef = useRef(options.onUnknownPrefix);
 
@@ -183,18 +183,18 @@ export function useWorkspaceKeybindings(
     ? `panel:${options.activePanelType}`
     : null;
   commandsByIdRef.current = commandsById;
-  onCommandRef.current = options.onCommand;
+  onActionRef.current = options.onAction;
   onPaneNumberSelectRef.current = options.onPaneNumberSelect;
   onUnknownPrefixRef.current = options.onUnknownPrefix;
 
   const engineRef = useRef<ReturnType<typeof createWorkspaceKeybindingEngine> | null>(null);
 
-  const runCommandRef = useRef(
-    async (_request: WorkspaceCommandRunRequest): Promise<boolean> => false,
+  const runActionRef = useRef(
+    async (_request: WorkspaceActionRunRequest): Promise<boolean> => false,
   );
 
-  const runCommandInternal = useCallback(async (request: WorkspaceCommandRunRequest): Promise<boolean> => {
-    const command = commandsByIdRef.current.get(request.commandId) ?? getWorkspaceCommand(request.commandId);
+  const runActionInternal = useCallback(async (request: WorkspaceActionRunRequest): Promise<boolean> => {
+    const command = commandsByIdRef.current.get(request.actionId) ?? getWorkspaceCommand(request.actionId);
     if (!command) return false;
 
     if (request.source === "keyboard" && request.event?.repeat && !command.repeatable) {
@@ -208,13 +208,13 @@ export function useWorkspaceKeybindings(
       engineRef.current?.enterPaneNumberMode();
     }
 
-    await onCommandRef.current?.({
+    await onActionRef.current?.({
       ...request,
       command,
     });
     return true;
   }, []);
-  runCommandRef.current = runCommandInternal;
+  runActionRef.current = runActionInternal;
 
   const engine = useMemo(() => {
     return createWorkspaceKeybindingEngine({
@@ -226,13 +226,13 @@ export function useWorkspaceKeybindings(
       getActivePanelContext: () => activePanelContextRef.current,
       captureInInput: options.captureInInput,
       onBindingMatched: ({ binding, event }) => {
-        void runCommandRef.current({
-          commandId: binding.commandId,
-          args: binding.args,
+        void runActionRef.current({
+          actionId: binding.actionId,
+          params: binding.params,
           source: "keyboard",
           event,
           binding,
-          command: getWorkspaceCommand(binding.commandId),
+          command: getWorkspaceCommand(binding.actionId),
         });
       },
       onPaneNumberInput: ({ index }) => {
@@ -255,19 +255,19 @@ export function useWorkspaceKeybindings(
     };
   }, [engine]);
 
-  const runCommand = useCallback(async (commandId: WorkspaceCommandId, args?: unknown) => {
-    const command = commandsByIdRef.current.get(commandId) ?? getWorkspaceCommand(commandId);
+  const runAction = useCallback(async (actionId: WorkspaceCommandId, params?: unknown) => {
+    const command = commandsByIdRef.current.get(actionId) ?? getWorkspaceCommand(actionId);
     if (!command) return false;
-    return runCommandRef.current({
-      commandId,
+    return runActionRef.current({
+      actionId,
       command,
-      args,
+      params,
       source: "api",
     });
   }, []);
 
-  const rebindCommand = useCallback(
-    (input: RebindWorkspaceCommandInput) => {
+  const rebindAction = useCallback(
+    (input: RebindWorkspaceActionInput) => {
       setOverrides((previous) => {
         const disabledDefaultBindingIds = new Set(previous.disabledDefaultBindingIds);
         let customBindings = [...previous.customBindings];
@@ -276,7 +276,7 @@ export function useWorkspaceKeybindings(
         if (shouldReplace) {
           for (const defaultBinding of defaultBindings) {
             if (
-              defaultBinding.commandId === input.commandId &&
+              defaultBinding.actionId === input.actionId &&
               defaultBinding.context === input.context
             ) {
               disabledDefaultBindingIds.add(defaultBinding.id);
@@ -284,16 +284,16 @@ export function useWorkspaceKeybindings(
           }
           customBindings = customBindings.filter(
             (binding) =>
-              !(binding.commandId === input.commandId && binding.context === input.context),
+              !(binding.actionId === input.actionId && binding.context === input.context),
           );
         }
 
         const nextBinding: WorkspaceCustomKeybinding = {
-          id: createUserBindingId(input.commandId, input.context),
-          commandId: input.commandId,
+          id: createUserBindingId(input.actionId, input.context),
+          actionId: input.actionId,
           context: input.context,
           sequence: cloneSequence(input.sequence),
-          args: input.args,
+          params: input.params,
         };
         customBindings.push(nextBinding);
 
@@ -408,10 +408,10 @@ export function useWorkspaceKeybindings(
     engineState,
     reservedChords,
     leaderSequence,
-    runCommand,
+    runAction,
     setLeaderSequence,
     resetLeaderSequence,
-    rebindCommand,
+    rebindAction,
     removeBinding,
     resetBindings,
     exportBindings,

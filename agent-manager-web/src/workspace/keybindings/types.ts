@@ -1,3 +1,5 @@
+import type { UiActionId } from "../../../../shared/ui-actions-contract";
+
 export type KeybindingContext =
   | "global"
   | "workspace"
@@ -12,54 +14,8 @@ export type WorkspaceCommandCategory =
   | "Layout"
   | "Workspace";
 
-export type WorkspaceCommandId =
-  | "keyboard.help.open"
-  | "keyboard.palette.open"
-  | "keyboard.leader.send"
-  | "keyboard.mode.cancel"
-  | "pane.split.down"
-  | "pane.split.right"
-  | "pane.split.down.full"
-  | "pane.split.right.full"
-  | "pane.close"
-  | "pane.zoom.toggle"
-  | "pane.focus.next"
-  | "pane.focus.last"
-  | "pane.focus.left"
-  | "pane.focus.right"
-  | "pane.focus.up"
-  | "pane.focus.down"
-  | "pane.number_mode.open"
-  | "pane.swap.prev"
-  | "pane.swap.next"
-  | "pane.rotate"
-  | "pane.break_to_window"
-  | "pane.resize.left"
-  | "pane.resize.right"
-  | "pane.resize.up"
-  | "pane.resize.down"
-  | "pane.type.prev"
-  | "pane.type.next"
-  | "pane.agent_view.prev"
-  | "pane.agent_view.next"
-  | "window.create"
-  | "window.close"
-  | "window.rename"
-  | "window.next"
-  | "window.prev"
-  | "window.last"
-  | "window.switcher.open"
-  | "window.select_index"
-  | "layout.cycle"
-  | "layout.equalize"
-  | "workspace.sessions_panel.toggle"
-  | "workspace.sessions_panel.focus_filter"
-  | "workspace.collapsibles.toggle_all"
-  | "workspace.coordinator.open"
-  | "workspace.stream.cancel"
-  | "settings.open.general"
-  | "settings.open.images"
-  | "settings.open.keybindings";
+export type WorkspaceCommandId = UiActionId;
+export type WorkspaceUiActionId = UiActionId;
 
 export interface WorkspaceKeyChord {
   readonly ctrl: boolean;
@@ -75,8 +31,8 @@ export interface WorkspaceKeybinding {
   readonly id: string;
   readonly context: KeybindingContext;
   readonly sequence: WorkspaceKeySequence;
-  readonly commandId: WorkspaceCommandId;
-  readonly args?: unknown;
+  readonly actionId: WorkspaceUiActionId;
+  readonly params?: unknown;
   readonly source?: "default" | "user";
 }
 
@@ -84,8 +40,8 @@ export interface WorkspaceCustomKeybinding {
   readonly id: string;
   readonly context: KeybindingContext;
   readonly sequence: WorkspaceKeySequence;
-  readonly commandId: WorkspaceCommandId;
-  readonly args?: unknown;
+  readonly actionId: WorkspaceUiActionId;
+  readonly params?: unknown;
 }
 
 export interface WorkspaceKeybindingOverrides {
@@ -101,7 +57,7 @@ export interface WorkspaceReservedChord {
 }
 
 export interface WorkspaceCommandDefinition {
-  readonly id: WorkspaceCommandId;
+  readonly id: WorkspaceUiActionId;
   readonly title: string;
   readonly description: string;
   readonly category: WorkspaceCommandCategory;

@@ -1,8 +1,13 @@
 import { z } from "zod";
 import type { QueryClient } from "@tanstack/react-query";
 import type { AuthContextValue } from "@/lib/auth";
-import { buildUiExecutionContext, getUiStateSnapshot } from "./context";
-import { getSemanticActionDefinition, listSemanticActions } from "./registry";
+import { buildUiExecutionContext, getUiStateSnapshot } from "@/ui-actions/context";
+import {
+  executeUiAction,
+  listAvailableUiActionsForContext,
+  toUiActionError,
+  type UiActionExecutionError,
+} from "@/ui-actions/execute";
 import { executeBrowserClientToolRequest } from "./browser-tools";
 import type {
   ActionErrorCode,
@@ -81,25 +86,14 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
-function listAvailableActionsForContext(input: {
-  readonly auth: AuthContextValue;
-  readonly navigate: UiExecutionContext["navigate"];
-  readonly queryClient: QueryClient;
-}) {
-  const ctx = buildUiExecutionContext(input);
-  return {
-    actions: listSemanticActions().map((action) => {
-      const available = action.canRun(ctx.snapshot);
-      return {
-        id: action.id,
-        version: action.version,
-        available: available.ok,
-        reason: available.ok ? undefined : available.reason,
-        description: action.description,
-        paramsJsonSchema: action.paramsJsonSchema,
-      };
-    }),
-  };
+function isUiActionExecutionError(error: unknown): error is UiActionExecutionError {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as Record<string, unknown>;
+  return (
+    typeof candidate.code === "string" &&
+    typeof candidate.message === "string" &&
+    typeof candidate.retryable === "boolean"
+  );
 }
 
 export async function executeCoordinatorClientToolRequest(input: {
@@ -132,13 +126,20 @@ export async function executeCoordinatorClientToolRequest(input: {
     uiStateAfter: getUiStateSnapshot(input.auth),
   });
 
+  const context = buildUiExecutionContext({
+    auth: input.auth,
+    navigate: input.navigate,
+    queryClient: input.queryClient,
+  });
+
   if (input.toolName === "ui_list_available_actions") {
-    const data = listAvailableActionsForContext({
-      auth: input.auth,
-      navigate: input.navigate,
-      queryClient: input.queryClient,
+    return finish({
+      ok: true,
+      data: listAvailableUiActionsForContext({
+        context,
+        surface: "coordinator",
+      }),
     });
-    return finish({ ok: true, data });
   }
 
   if (input.toolName === "ui_get_state") {
@@ -224,68 +225,16 @@ export async function executeCoordinatorClientToolRequest(input: {
     });
   }
 
-  const actionVersion =
-    typeof parsedArgs.data.actionVersion === "number"
-      ? parsedArgs.data.actionVersion
-      : 1;
-  if (actionVersion !== 1) {
-    return finish({
-      ok: false,
-      error: toActionError({
-        code: "ACTION_INVALID_PARAMS",
-        message: `Unsupported actionVersion: ${actionVersion}`,
-        retryable: false,
-      }).error,
-    });
-  }
-
-  const action = getSemanticActionDefinition(parsedArgs.data.actionId);
-  if (!action) {
-    return finish({
-      ok: false,
-      error: toActionError({
-        code: "ACTION_UNKNOWN",
-        message: `Unknown action: ${parsedArgs.data.actionId}`,
-        retryable: false,
-      }).error,
-    });
-  }
-
-  const paramsResult = action.paramsSchema.safeParse(parsedArgs.data.params ?? {});
-  if (!paramsResult.success) {
-    return finish({
-      ok: false,
-      error: toActionError({
-        code: "ACTION_INVALID_PARAMS",
-        message: paramsResult.error.issues[0]?.message ?? "Invalid action params",
-        retryable: false,
-      }).error,
-    });
-  }
-
-  const ctx = buildUiExecutionContext({
-    auth: input.auth,
-    navigate: input.navigate,
-    queryClient: input.queryClient,
-  });
-  const available = action.canRun(ctx.snapshot);
-  if (!available.ok) {
-    return finish({
-      ok: false,
-      error: toActionError({
-        code: "ACTION_UNAVAILABLE",
-        message:
-          available.details ??
-          `Action unavailable: ${available.reason.toLowerCase()}`,
-        retryable: true,
-        reason: available.reason,
-      }).error,
-    });
-  }
-
   try {
     const data = await withTimeout(
-      Promise.resolve(action.run(ctx, paramsResult.data)),
+      Promise.resolve(
+        executeUiAction({
+          actionId: parsedArgs.data.actionId,
+          actionVersion: parsedArgs.data.actionVersion,
+          params: parsedArgs.data.params,
+          context,
+        }),
+      ),
       clampTimeout(input.timeoutMs),
     );
     return finish({ ok: true, data });
@@ -300,12 +249,28 @@ export async function executeCoordinatorClientToolRequest(input: {
         }).error,
       });
     }
-    if (error instanceof Error) {
+    if (error instanceof z.ZodError) {
+      return finish({
+        ok: false,
+        error: toActionError({
+          code: "ACTION_INVALID_PARAMS",
+          message: error.issues[0]?.message ?? "Invalid ui_run_action args",
+          retryable: false,
+        }).error,
+      });
+    }
+    if (isUiActionExecutionError(error)) {
+      return finish({
+        ok: false,
+        error,
+      });
+    }
+    if (typeof error === "object" && error !== null && "message" in error) {
       return finish({
         ok: false,
         error: toActionError({
           code: "ACTION_EXECUTION_FAILED",
-          message: error.message,
+          message: String((error as { readonly message?: unknown }).message ?? "Action failed"),
           retryable: true,
         }).error,
       });

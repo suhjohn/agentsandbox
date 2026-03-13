@@ -15,7 +15,7 @@ import {
 function binding(input: {
   readonly id: string;
   readonly context: WorkspaceKeybinding["context"];
-  readonly commandId: WorkspaceKeybinding["commandId"];
+  readonly actionId: WorkspaceKeybinding["actionId"];
   readonly code: string;
   readonly ctrl?: boolean;
   readonly meta?: boolean;
@@ -25,7 +25,7 @@ function binding(input: {
   return {
     id: input.id,
     context: input.context,
-    commandId: input.commandId,
+    actionId: input.actionId,
     sequence: createKeySequence(
       createKeyChord({
         code: input.code,
@@ -44,13 +44,13 @@ describe("workspace/keybindings/conflicts", () => {
       binding({
         id: "first",
         context: "workspace.prefix",
-        commandId: "pane.close",
+        actionId: "pane.close",
         code: "KeyX",
       }),
       binding({
         id: "second",
         context: "workspace.prefix",
-        commandId: "pane.zoom.toggle",
+        actionId: "pane.zoom.toggle",
         code: "KeyX",
       }),
     ];
@@ -59,7 +59,7 @@ describe("workspace/keybindings/conflicts", () => {
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0]?.kind).toBe("binding");
     expect(conflicts[0]?.context).toBe("workspace.prefix");
-    expect(conflicts[0]?.commandIds.sort()).toEqual(["pane.close", "pane.zoom.toggle"]);
+    expect(conflicts[0]?.actionIds.sort()).toEqual(["pane.close", "pane.zoom.toggle"]);
   });
 
   it("does not conflict when sequence matches in different contexts", () => {
@@ -67,13 +67,13 @@ describe("workspace/keybindings/conflicts", () => {
       binding({
         id: "workspace-binding",
         context: "workspace",
-        commandId: "pane.close",
+        actionId: "pane.close",
         code: "KeyX",
       }),
       binding({
         id: "prefix-binding",
         context: "workspace.prefix",
-        commandId: "pane.zoom.toggle",
+        actionId: "pane.zoom.toggle",
         code: "KeyX",
       }),
     ];
@@ -87,7 +87,7 @@ describe("workspace/keybindings/conflicts", () => {
       binding({
         id: "global-toggle",
         context: "global",
-        commandId: "keyboard.palette.open",
+        actionId: "keyboard.palette.open",
         code: "KeyP",
         ctrl: true,
         shift: true,
@@ -118,14 +118,14 @@ describe("workspace/keybindings/conflicts", () => {
       binding({
         id: "existing-prefix",
         context: "workspace.prefix",
-        commandId: "pane.close",
+        actionId: "pane.close",
         code: "KeyX",
       }),
     ];
     const candidate = binding({
       id: "candidate",
       context: "workspace.prefix",
-      commandId: "pane.zoom.toggle",
+      actionId: "pane.zoom.toggle",
       code: "KeyX",
     });
     const reserved: WorkspaceReservedChord[] = [

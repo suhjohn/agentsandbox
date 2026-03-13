@@ -1,362 +1,142 @@
-import type { WorkspaceCommandDefinition, WorkspaceCommandId } from "./types";
+import { getUiActionDefinition, listUiActions } from "@/ui-actions/registry";
+import type {
+  KeybindingContext,
+  WorkspaceCommandCategory,
+  WorkspaceCommandDefinition,
+  WorkspaceCommandId,
+} from "./types";
 
-const COMMANDS: readonly WorkspaceCommandDefinition[] = [
-  {
-    id: "keyboard.help.open",
-    title: "Open Keyboard Shortcuts",
-    description: "Open the keyboard shortcuts overlay.",
-    category: "Keyboard",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "keyboard.palette.open",
-    title: "Open Key Bindings",
-    description: "Open the workspace key bindings command list.",
+type WorkspaceCommandProjection = {
+  readonly category: WorkspaceCommandCategory;
+  readonly contexts: readonly KeybindingContext[];
+  readonly repeatable?: boolean;
+};
+
+const WORKSPACE_COMMAND_PROJECTIONS: Readonly<
+  Partial<Record<WorkspaceCommandId, WorkspaceCommandProjection>>
+> = {
+  "keyboard.help.open": { category: "Keyboard", contexts: ["workspace.prefix"] },
+  "keyboard.palette.open": {
     category: "Keyboard",
     contexts: ["workspace", "workspace.prefix"],
   },
-  {
-    id: "keyboard.leader.send",
-    title: "Send Leader",
-    description: "Send a literal Ctrl+b sequence to the focused panel.",
-    category: "Keyboard",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "keyboard.mode.cancel",
-    title: "Cancel Keyboard Mode",
-    description: "Cancel prefix mode, pane-number mode, or lightweight overlays.",
+  "keyboard.leader.send": { category: "Keyboard", contexts: ["workspace.prefix"] },
+  "keyboard.mode.cancel": {
     category: "Keyboard",
     contexts: ["workspace", "workspace.prefix", "workspace.pane_number"],
   },
-  {
-    id: "pane.split.down",
-    title: "Split Pane Down",
-    description: "Split the focused pane into top and bottom panes.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.split.right",
-    title: "Split Pane Right",
-    description: "Split the focused pane into left and right panes.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.split.down.full",
-    title: "Split Window Down",
-    description: "Split the full window into top and bottom regions.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.split.right.full",
-    title: "Split Window Right",
-    description: "Split the full window into left and right regions.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.close",
-    title: "Close Pane",
-    description: "Close the focused pane.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.zoom.toggle",
-    title: "Toggle Expand",
-    description: "Toggle expand for the focused pane.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.focus.next",
-    title: "Focus Next Pane",
-    description: "Move focus to the next pane.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.focus.last",
-    title: "Focus Last Pane",
-    description: "Move focus to the previously focused pane.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.focus.left",
-    title: "Focus Pane Left",
-    description: "Move focus to the pane on the left.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.focus.right",
-    title: "Focus Pane Right",
-    description: "Move focus to the pane on the right.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.focus.up",
-    title: "Focus Pane Up",
-    description: "Move focus to the pane above.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.focus.down",
-    title: "Focus Pane Down",
-    description: "Move focus to the pane below.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.number_mode.open",
-    title: "Open Pane Number Mode",
-    description: "Open pane-number chooser mode.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.swap.prev",
-    title: "Swap With Previous Pane",
-    description: "Swap focused pane with the previous pane in traversal order.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.swap.next",
-    title: "Swap With Next Pane",
-    description: "Swap focused pane with the next pane in traversal order.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.rotate",
-    title: "Rotate Panes",
-    description: "Rotate panes in traversal order.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.break_to_window",
-    title: "Break Pane To Window",
-    description: "Move focused pane into a new workspace window.",
-    category: "Panes",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "pane.resize.left",
-    title: "Resize Pane Left",
-    description: "Resize focused pane toward the left.",
+  "pane.split.down": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.split.right": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.split.down.full": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.split.right.full": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.close": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.zoom.toggle": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.focus.next": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.focus.last": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.focus.left": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.focus.right": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.focus.up": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.focus.down": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.number_mode.open": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.swap.prev": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.swap.next": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.rotate": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.break_to_window": { category: "Panes", contexts: ["workspace.prefix"] },
+  "pane.resize.left": {
     category: "Panes",
     contexts: ["workspace.prefix"],
     repeatable: true,
   },
-  {
-    id: "pane.resize.right",
-    title: "Resize Pane Right",
-    description: "Resize focused pane toward the right.",
+  "pane.resize.right": {
     category: "Panes",
     contexts: ["workspace.prefix"],
     repeatable: true,
   },
-  {
-    id: "pane.resize.up",
-    title: "Resize Pane Up",
-    description: "Resize focused pane toward the top.",
+  "pane.resize.up": {
     category: "Panes",
     contexts: ["workspace.prefix"],
     repeatable: true,
   },
-  {
-    id: "pane.resize.down",
-    title: "Resize Pane Down",
-    description: "Resize focused pane toward the bottom.",
+  "pane.resize.down": {
     category: "Panes",
     contexts: ["workspace.prefix"],
     repeatable: true,
   },
-  {
-    id: "pane.type.prev",
-    title: "Previous Panel Type",
-    description: "Switch the focused pane to the previous panel type.",
+  "pane.type.prev": {
     category: "Panes",
     contexts: ["workspace.prefix"],
     repeatable: true,
   },
-  {
-    id: "pane.type.next",
-    title: "Next Panel Type",
-    description: "Switch the focused pane to the next panel type.",
+  "pane.type.next": {
     category: "Panes",
     contexts: ["workspace.prefix"],
     repeatable: true,
   },
-  {
-    id: "pane.agent_view.prev",
-    title: "Previous Agent View",
-    description: "Switch the focused agent-detail pane to the previous view tab.",
+  "pane.agent_view.prev": {
     category: "Panes",
     contexts: ["workspace.prefix"],
     repeatable: true,
   },
-  {
-    id: "pane.agent_view.next",
-    title: "Next Agent View",
-    description: "Switch the focused agent-detail pane to the next view tab.",
+  "pane.agent_view.next": {
     category: "Panes",
     contexts: ["workspace.prefix"],
     repeatable: true,
   },
-  {
-    id: "window.create",
-    title: "Create Window",
-    description: "Create and switch to a new workspace window.",
-    category: "Windows",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "window.close",
-    title: "Close Window",
-    description: "Close the active workspace window.",
-    category: "Windows",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "window.rename",
-    title: "Rename Window",
-    description: "Rename the active workspace window.",
-    category: "Windows",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "window.next",
-    title: "Next Window",
-    description: "Switch to the next workspace window.",
-    category: "Windows",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "window.prev",
-    title: "Previous Window",
-    description: "Switch to the previous workspace window.",
-    category: "Windows",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "window.last",
-    title: "Last Window",
-    description: "Switch to the last active workspace window.",
-    category: "Windows",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "window.switcher.open",
-    title: "Open Window Switcher",
-    description: "Open the window switcher.",
-    category: "Windows",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "window.select_index",
-    title: "Select Window By Index",
-    description: "Switch to a workspace window by index.",
-    category: "Windows",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "layout.cycle",
-    title: "Cycle Layout",
-    description: "Cycle practical workspace layouts.",
-    category: "Layout",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "layout.equalize",
-    title: "Equalize Layout",
-    description: "Equalize split ratios.",
-    category: "Layout",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "workspace.sessions_panel.toggle",
-    title: "Toggle Sessions Panel",
-    description: "Toggle the sessions side panel.",
+  "window.create": { category: "Windows", contexts: ["workspace.prefix"] },
+  "window.close": { category: "Windows", contexts: ["workspace.prefix"] },
+  "window.rename": { category: "Windows", contexts: ["workspace.prefix"] },
+  "window.next": { category: "Windows", contexts: ["workspace.prefix"] },
+  "window.prev": { category: "Windows", contexts: ["workspace.prefix"] },
+  "window.last": { category: "Windows", contexts: ["workspace.prefix"] },
+  "window.switcher.open": { category: "Windows", contexts: ["workspace.prefix"] },
+  "window.select_index": { category: "Windows", contexts: ["workspace.prefix"] },
+  "layout.cycle": { category: "Layout", contexts: ["workspace.prefix"] },
+  "layout.equalize": { category: "Layout", contexts: ["workspace.prefix"] },
+  "workspace.sessions_panel.toggle": { category: "Workspace", contexts: ["workspace.prefix"] },
+  "workspace.sessions_panel.focus_filter": {
     category: "Workspace",
     contexts: ["workspace.prefix"],
   },
-  {
-    id: "workspace.sessions_panel.focus_filter",
-    title: "Focus Sessions Filter",
-    description: "Focus sessions filter input when panel is open.",
-    category: "Workspace",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "workspace.collapsibles.toggle_all",
-    title: "Toggle All Collapsibles",
-    description: "Expand or collapse all tool-call sections in the focused workspace panel.",
-    category: "Workspace",
-    contexts: ["workspace"],
-  },
-  {
-    id: "workspace.coordinator.open",
-    title: "Open Coordinator",
-    description: "Open the coordinator dialog.",
-    category: "Workspace",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "workspace.stream.cancel",
-    title: "Cancel Stream",
-    description: "Cancel the active stream in the focused panel.",
-    category: "Workspace",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "settings.open.general",
-    title: "Open Settings: General",
-    description: "Navigate to the general settings page.",
-    category: "Workspace",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "settings.open.images",
-    title: "Open Settings: Images",
-    description: "Navigate to the images settings page.",
-    category: "Workspace",
-    contexts: ["workspace.prefix"],
-  },
-  {
-    id: "settings.open.keybindings",
-    title: "Open Settings: Keybindings",
-    description: "Navigate to the keybindings settings page.",
-    category: "Workspace",
-    contexts: ["workspace.prefix"],
-  },
-] as const;
+  "workspace.collapsibles.toggle_all": { category: "Workspace", contexts: ["workspace"] },
+  "workspace.coordinator.open": { category: "Workspace", contexts: ["workspace.prefix"] },
+  "workspace.stream.cancel": { category: "Workspace", contexts: ["workspace.prefix"] },
+  "settings.open.general": { category: "Workspace", contexts: ["workspace.prefix"] },
+  "settings.open.images": { category: "Workspace", contexts: ["workspace.prefix"] },
+  "settings.open.keybindings": { category: "Workspace", contexts: ["workspace.prefix"] },
+};
+
+const COMMANDS = listUiActions()
+  .filter((action) => action.surfaces.keyboard || action.surfaces.palette)
+  .map((action): WorkspaceCommandDefinition | null => {
+    const projection = WORKSPACE_COMMAND_PROJECTIONS[action.id as WorkspaceCommandId];
+    if (!projection) return null;
+    return {
+      id: action.id as WorkspaceCommandId,
+      title: action.title,
+      description: action.description,
+      category: projection.category,
+      contexts: projection.contexts,
+      ...(projection.repeatable ? { repeatable: true } : {}),
+    };
+  })
+  .filter((command): command is WorkspaceCommandDefinition => command !== null);
 
 export const WORKSPACE_KEYBINDING_COMMANDS = COMMANDS;
 
 export const WORKSPACE_COMMAND_IDS = COMMANDS.map((command) => command.id);
 
-const COMMANDS_BY_ID: Readonly<Record<WorkspaceCommandId, WorkspaceCommandDefinition>> = COMMANDS
-  .reduce(
-    (accumulator, command) => ({
-      ...accumulator,
-      [command.id]: command,
-    }),
-    {} as Record<WorkspaceCommandId, WorkspaceCommandDefinition>,
-  );
+const COMMANDS_BY_ID = new Map<WorkspaceCommandId, WorkspaceCommandDefinition>(
+  COMMANDS.map((command) => [command.id, command]),
+);
 
 export function getWorkspaceCommand(commandId: WorkspaceCommandId): WorkspaceCommandDefinition {
-  return COMMANDS_BY_ID[commandId];
+  return COMMANDS_BY_ID.get(commandId)!;
 }
 
 export function isWorkspaceCommandId(value: unknown): value is WorkspaceCommandId {
-  return typeof value === "string" && value in COMMANDS_BY_ID;
+  return (
+    typeof value === "string" &&
+    getUiActionDefinition(value) !== null &&
+    COMMANDS_BY_ID.has(value as WorkspaceCommandId)
+  );
 }

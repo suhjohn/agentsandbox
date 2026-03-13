@@ -3,6 +3,11 @@
 ## 1. Purpose
 Define the next coordinator architecture as a thin product concept on top of the existing agent system.
 
+Status update:
+- Coordinator-style frontend UI actions are now implemented separately from this migration spec.
+- The canonical action contract lives in `shared/ui-actions-contract.ts`.
+- Runtime semantics and client tool behavior are documented in `docs/COORDINATOR_SEMANTIC_ACTIONS.md`.
+
 The main idea is:
 - a coordinator is a real agent row
 - coordinator conversations are normal agent sessions

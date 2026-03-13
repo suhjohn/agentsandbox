@@ -7,9 +7,12 @@ import {
   type ReactNode
 } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { buildUiExecutionContext } from '@/ui-actions/context'
+import { executeUiAction } from '@/ui-actions/execute'
 import {
   Tooltip,
   TooltipContent,
@@ -69,8 +72,7 @@ import {
   resolveWorkspaceKeybindings
 } from '../keybindings/defaults'
 import {
-  WORKSPACE_OPEN_COORDINATOR_EVENT,
-  WORKSPACE_RUN_COMMAND_EVENT
+  WORKSPACE_OPEN_COORDINATOR_EVENT
 } from '../keybindings/events'
 import {
   hasWorkspaceKeybindingOverrides,
@@ -106,12 +108,12 @@ const SESSIONS_PANEL_WIDTH_MIN_PX = 240
 const SESSIONS_PANEL_WIDTH_MAX_PX = 640
 const SESSION_DETAIL_HIDE_DELAY_MS = 100
 
-function getWindowIndexArg (args: unknown): number | null {
-  if (typeof args === 'number' && Number.isFinite(args)) {
-    return Math.trunc(args)
+function getWindowIndexArg (params: unknown): number | null {
+  if (typeof params === 'number' && Number.isFinite(params)) {
+    return Math.trunc(params)
   }
-  if (typeof args !== 'object' || args === null) return null
-  const index = (args as { index?: unknown }).index
+  if (typeof params !== 'object' || params === null) return null
+  const index = (params as { index?: unknown }).index
   if (typeof index !== 'number' || !Number.isFinite(index)) return null
   return Math.trunc(index)
 }
@@ -667,6 +669,7 @@ function areWorkspaceWindowTabsEqual (
 
 export function WorkspaceView () {
   const auth = useAuth()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const store = useWorkspaceStore()
 
@@ -701,25 +704,25 @@ export function WorkspaceView () {
 
   const getCommandShortcut = useCallback(
     (
-      commandId: WorkspaceCommandId,
+      actionId: WorkspaceCommandId,
       options?: {
         readonly contexts?: readonly WorkspaceKeybinding['context'][]
-        readonly args?: unknown
+        readonly params?: unknown
       }
     ): string | null => {
       const contexts = options?.contexts ?? ['workspace.prefix']
       for (const context of contexts) {
         const candidates = resolvedWorkspaceKeybindings.filter(candidate => {
           if (candidate.context !== context) return false
-          if (candidate.commandId !== commandId) return false
-          if (options?.args === undefined) return true
-          if (commandId === 'window.select_index') {
+          if (candidate.actionId !== actionId) return false
+          if (options?.params === undefined) return true
+          if (actionId === 'window.select_index') {
             return (
-              getWindowIndexArg(candidate.args) ===
-              getWindowIndexArg(options.args)
+              getWindowIndexArg(candidate.params) ===
+              getWindowIndexArg(options.params)
             )
           }
-          return JSON.stringify(candidate.args) === JSON.stringify(options.args)
+          return JSON.stringify(candidate.params) === JSON.stringify(options.params)
         })
         const binding =
           candidates.find(candidate => candidate.source === 'user') ??
@@ -735,31 +738,29 @@ export function WorkspaceView () {
 
   const getPrefixShortcut = useCallback(
     (
-      commandId: WorkspaceCommandId,
+      actionId: WorkspaceCommandId,
       options?: {
-        readonly args?: unknown
+        readonly params?: unknown
       }
     ): string | null =>
-      getCommandShortcut(commandId, {
+      getCommandShortcut(actionId, {
         contexts: ['workspace.prefix'],
-        args: options?.args
+        params: options?.params
       }),
     [getCommandShortcut]
   )
 
   const openKeyBindings = useCallback(() => {
-    const respond = (): void => {}
-    const reject = (): void => {}
-    globalThis.window.dispatchEvent(
-      new CustomEvent(WORKSPACE_RUN_COMMAND_EVENT, {
-        detail: {
-          commandId: 'keyboard.palette.open',
-          respond,
-          reject
-        }
+    void executeUiAction({
+      actionId: 'keyboard.palette.open',
+      params: {},
+      context: buildUiExecutionContext({
+        auth,
+        navigate: navigate as any,
+        queryClient
       })
-    )
-  }, [])
+    })
+  }, [auth, navigate, queryClient])
 
   const openCoordinator = useCallback(() => {
     globalThis.window.dispatchEvent(new Event(WORKSPACE_OPEN_COORDINATOR_EVENT))
@@ -2058,7 +2059,7 @@ export function WorkspaceView () {
                       <TopBarTooltip
                         label={`Switch to window ${window.index}: ${window.name}`}
                         shortcut={getPrefixShortcut('window.select_index', {
-                          args: { index: window.index }
+                          params: { index: window.index }
                         })}
                       >
                         <Button

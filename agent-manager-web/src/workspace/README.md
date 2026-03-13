@@ -115,12 +115,22 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
 
 - Workspace keyboard handling is centralized in `WorkspaceHotkeysLayer`, which mounts `useWorkspaceKeybindings` and captures `keydown` at capture phase.
 - Leader mode is `Ctrl+b` with a short timeout. Prefix/chooser state comes from `workspace/keybindings/engine.ts`.
-- The same command registry drives:
+- Canonical action metadata and execution live in:
+  - `shared/ui-actions-contract.ts`
+  - `agent-manager-web/src/ui-actions/registry.ts`
+  - `agent-manager-web/src/ui-actions/execute.ts`
+- Workspace-facing keybinding/help/settings surfaces consume a derived projection from `workspace/keybindings/commands.ts`.
+- `workspace-hotkeys-layer.tsx` no longer owns a command switch; it resolves matched bindings to `actionId` + `params` and executes canonical actions through `executeUiAction(...)`.
+- The same action/projection layer drives:
   - keyboard execution (`workspace-hotkeys-layer.tsx`)
-  - key bindings list (`workspace-command-palette.tsx`)
-  - shortcuts/help overlay (`workspace-keybindings-dialog.tsx`)
+  - key bindings list (`workspace-keybindings-dialog.tsx`)
+  - workspace palette items (`workspace-command-palette.tsx`)
   - settings editor (`/settings/keybindings`, `routes/settings-keybindings.tsx`)
+  - coordinator execution (`agent-manager-web/src/coordinator-actions/executor.ts`)
 - Effective overrides are selected as: non-empty account `workspaceKeybindings` (when present), otherwise localStorage overrides for that user.
+- Keybinding overrides are action-oriented: bindings store `actionId` + optional `params` instead of `commandId` + `args`.
+- `window.select_index` remains the canonical example of a pre-bound parameterized workspace action.
+- Persistence reads older `commandId` / `args` payloads and normalizes them into the current `actionId` / `params` shape before saving version `3`.
 - Keybinding overrides are saved to user settings via `PATCH /users/me` (`workspaceKeybindings`) and hydrated from `/users/me`; empty overrides are persisted as `null` (defaults), and localStorage remains a cache/fallback.
 - Reserved global chords are not intercepted by workspace keymaps:
   - `Option/Alt+Space` (coordinator dialog)
@@ -131,6 +141,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
 - `Cmd/Ctrl+O` is leaf-scoped: the hotkey layer inspects collapsibles inside the focused leaf only and dispatches the target `leafId`, so other workspace panes do not expand/collapse in sync.
 - Stream-cancel commands dispatch the focused `leafId`, so `Escape` / `Prefix Escape` only interrupt the active run in the currently focused pane instead of every open streaming panel.
 - Pane expand hotkey (`pane.zoom.toggle`) dispatches `agent-manager-web:workspace-pane-zoom-toggle`; `LeafView` listens and toggles fullscreen for the targeted/focused leaf.
+- The old workspace run-command event bridge has been removed; top-bar buttons and keyboard bindings execute canonical actions directly.
 - Prefix `Left` / `Right` cycle the focused pane through registered panel types; Prefix `[` / `]` cycle `agent_detail` through its internal views (`session_list`, `session_detail`, `terminal`, `vscode`, `browser`, `diff`) when that panel is focused. Prefix pane-focus left/right remains available on `h` / `l`.
 
 ## Pane and Panel Details

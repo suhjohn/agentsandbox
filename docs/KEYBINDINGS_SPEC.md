@@ -1,12 +1,12 @@
-# Unified UI Commands + Keybindings Spec
+# Unified UI Actions + Keybindings Spec
 
-This spec describes a unified command system that:
+This spec describes a unified action system that:
 
-1) Defines a single **UI Commands** layer encompassing *everything the UI can do* (workspace + dialog + chat + navigation + settings flows).
-2) Lets humans consume those commands through **tmux-style keybindings** and a **command palette**.
-3) Lets the **Coordinator** consume the *exact same* command surface through `ui_list_available_actions` + `ui_run_action`.
+1) Defines a single canonical **UI Actions** layer encompassing *everything the UI can do* (workspace + dialog + chat + navigation + settings flows).
+2) Lets humans consume those actions through **tmux-style keybindings** and a **command palette**.
+3) Lets the **Coordinator** consume the *exact same* action surface through `ui_list_available_actions` + `ui_run_action`.
 4) Enforces a shared, versioned contract in `shared/` that both frontend and backend can import.
-5) Treats commands that “don’t apply right now” as **unavailable** (not no-op, not “try and toast”).
+5) Treats actions that “don’t apply right now” as **unavailable** (not no-op, not “try and toast”).
 
 This is intentionally written as a system design + contract spec, not an implementation diff.
 
@@ -14,11 +14,11 @@ This is intentionally written as a system design + contract spec, not an impleme
 
 ## End-State Compatibility Requirements (Non-Negotiable)
 
-The refactor to a unified UI Commands layer must be an **internal architecture change**. The user-facing behavior should remain the same unless explicitly called out.
+The refactor to a unified UI Actions layer must be an **internal architecture change**. The user-facing behavior should remain the same unless explicitly called out.
 
 - **Command palette UX stays the same**
   - Same look/feel, search behavior, sorting, and “select runs command + closes palette” flow as today.
-  - Commands shown in the palette remain the “tmux-style” set (human-friendly), even though the underlying command surface is unified and parameterized.
+  - Actions shown in the palette remain the current workspace-facing “tmux-style” subset, even though the underlying action surface is unified and parameterized.
 - **Keybindings persistence stays the same**
   - User overrides continue to be saved to the backend via `PATCH /users/me` (`workspaceKeybindings`) and hydrated from `/users/me`.
   - Local persistence remains a cache/fallback (current behavior).
@@ -31,45 +31,49 @@ The refactor to a unified UI Commands layer must be an **internal architecture c
 
 ## Background / Current State
 
-Today there are effectively two command systems:
+Today there is one canonical action system with two projections:
 
-- **Workspace tmux-like keybindings + command palette**
-  - Command catalog: `agent-manager-web/src/workspace/keybindings/commands.ts`
-  - Execution switch (dispatches store actions, opens UI): `agent-manager-web/src/workspace/ui/workspace-hotkeys-layer.tsx`
+- **Canonical UI actions**
+  - Shared action descriptor contract: `shared/ui-actions-contract.ts`
+  - Frontend executable registry: `agent-manager-web/src/ui-actions/registry.ts`
+  - Frontend executor: `agent-manager-web/src/ui-actions/execute.ts`
+- **Workspace keybindings + palette projection**
+  - Workspace-facing metadata projection: `agent-manager-web/src/workspace/keybindings/commands.ts`
+  - Keyboard capture + overlay UI: `agent-manager-web/src/workspace/ui/workspace-hotkeys-layer.tsx`
   - Palette UI: `agent-manager-web/src/workspace/ui/workspace-command-palette.tsx`
-- **Coordinator semantic UI actions**
-  - Action registry: `agent-manager-web/src/coordinator-actions/registry.ts`
-  - Action executor + tool wiring: `agent-manager-web/src/coordinator-actions/executor.ts`
-  - Shared action ID contract: `shared/coordinator-actions-contract.ts`
+- **Coordinator adapter**
+  - Coordinator surface filter: `agent-manager-web/src/coordinator-actions/registry.ts`
+  - Coordinator tool executor: `agent-manager-web/src/coordinator-actions/executor.ts`
+  - Shared coordinator subset contract: `shared/coordinator-actions-contract.ts`
 
-This split creates drift risk, duplicated metadata, and makes it hard to ensure “Coordinator can do what humans can do”.
+The key requirement is that keyboard, palette, and coordinator all resolve to the same canonical action definitions.
 
 ---
 
 ## Goals
 
-- **Single command surface**: one canonical list of UI commands for the whole app.
-- **Parameterization**: commands accept structured params (with JSON schema) and return structured results.
+- **Single action surface**: one canonical list of UI actions for the whole app.
+- **Parameterization**: actions accept structured params (with JSON schema) and return structured results.
 - **Tmux-style consumption**:
   - Keybindings remain tmux-like (leader/prefix, repeatable actions, etc.).
   - Command palette stays “direct” (search + run), not a heavy multi-form UI by default.
-- **Coordinator parity**: Coordinator sees the same command IDs that appear in the command palette.
-- **Hard availability contract**: if a command can’t apply given current UI state, it must be `unavailable`.
-- **Shared contract in `shared/`**: both `agent-manager` (backend coordinator) and `agent-manager-web` (frontend) import the same list of command IDs + versions.
+- **Coordinator parity**: Coordinator sees the same action IDs that appear in the command palette.
+- **Hard availability contract**: if an action can’t apply given current UI state, it must be `unavailable`.
+- **Shared contract in `shared/`**: both `agent-manager` (backend coordinator) and `agent-manager-web` (frontend) import the same list of action IDs + versions.
 
 ## Non-goals
 
 - Recreating tmux server/client semantics (detach/attach, multi-client sync, etc.).
 - Giving the Coordinator access to raw browser automation as a primary strategy (that remains a fallback).
-- Making every command runnable without parameters (some commands inherently require params; the palette can prompt).
+- Making every action runnable without parameters (some actions inherently require params; the palette can prompt).
 
 ---
 
 ## Terminology
 
-- **UI Command**: a versioned, parameterized operation representing a UI capability.
-- **Invocation**: a UI Command + concrete params (possibly empty) that is executed.
-- **Availability**: whether a command is runnable *right now* based on the current UI snapshot.
+- **UI Action**: a versioned, parameterized operation representing a UI capability.
+- **Invocation**: a UI Action + concrete params (possibly empty) that is executed.
+- **Availability**: whether an action is runnable *right now* based on the current UI snapshot.
 - **Keybinding context**: keyboard routing state (global/workspace/prefix/etc.). This is **not** availability.
 
 ---
@@ -81,15 +85,15 @@ We keep two separate concepts:
 1) **Keybinding contexts** decide when a *chord* triggers an invocation (ex: only in prefix mode).
 2) **Availability** decides whether an invocation can succeed given UI state (route, auth, focus, etc.).
 
-Coordinator parity depends on (2): Coordinator does not participate in prefix mode, but can run any available command via tools.
+Coordinator parity depends on (2): Coordinator does not participate in prefix mode, but can run any available action via tools.
 
 ---
 
-## UI Commands Model
+## UI Actions Model
 
-### Command Descriptor (canonical contract)
+### Action Descriptor (canonical contract)
 
-Each UI command is a stable ID + version with:
+Each UI action is a stable ID + version with:
 
 - `id: string` (stable)
 - `version: number` (bump on breaking change)
@@ -98,12 +102,12 @@ Each UI command is a stable ID + version with:
 - `category: string` (palette grouping/search keywords)
 - `paramsJsonSchema: JSONSchema` (used by `ui_list_available_actions`)
 
-This “descriptor” is what lives in `shared/` for contract stability and prompt guidance.
+This descriptor lives in `shared/ui-actions-contract.ts` for contract stability and prompt guidance. `shared/coordinator-actions-contract.ts` is a filtered coordinator subset of that source.
 
 Proposed shape (illustrative):
 
 ```ts
-export type UiCommandDescriptor = {
+export type UiActionDescriptor = {
   readonly id: string
   readonly version: number
   readonly title: string
@@ -113,7 +117,7 @@ export type UiCommandDescriptor = {
 }
 ```
 
-### Command Definition (frontend implementation)
+### Action Definition (frontend implementation)
 
 Frontend binds the descriptor to runtime behavior:
 
@@ -125,7 +129,7 @@ Frontend binds the descriptor to runtime behavior:
 Proposed shape (illustrative):
 
 ```ts
-export type UiCommandAvailability =
+export type UiActionAvailability =
   | { readonly ok: true }
   | {
       readonly ok: false
@@ -140,9 +144,9 @@ export type UiCommandAvailability =
       readonly details?: string
     }
 
-export type UiCommandDefinition<Params, Result> = UiCommandDescriptor & {
+export type UiActionDefinition<Params, Result> = UiActionDescriptor & {
   readonly paramsSchema: unknown // zod schema in implementation
-  readonly canRun: (snapshot: unknown) => UiCommandAvailability
+  readonly canRun: (snapshot: unknown) => UiActionAvailability
   readonly run: (ctx: unknown, params: Params) => Promise<Result> | Result
   readonly surfaces?: {
     readonly palette?: boolean
@@ -154,9 +158,9 @@ export type UiCommandDefinition<Params, Result> = UiCommandDescriptor & {
 
 ### Versioning Rules
 
-- If the command’s params schema changes in a breaking way, bump `version`.
+- If the action’s params schema changes in a breaking way, bump `version`.
 - If result shape changes in a breaking way, bump `version`.
-- If a command ID is renamed/removed, treat it as a breaking change and update contract + docs together.
+- If an action ID is renamed/removed, treat it as a breaking change and update contract + docs together.
 
 ---
 
@@ -185,7 +189,7 @@ Minimum required fields (illustrative; keep aligned with actual snapshot shape):
   - `activeImageId: string | null`
   - `hasDirtyImageDraft: boolean`
 
-Commands should not “probe the DOM” to decide availability; they should use snapshot + runtime controllers.
+Actions should not “probe the DOM” to decide availability; they should use snapshot + runtime controllers.
 
 ---
 
@@ -193,7 +197,7 @@ Commands should not “probe the DOM” to decide availability; they should use 
 
 ### Hard rule
 
-If a command “doesn’t apply right now”, it must be **unavailable**.
+If an action “doesn’t apply right now”, it must be **unavailable**.
 
 Examples:
 
@@ -227,13 +231,13 @@ Use a shared set of reason codes so Coordinator + palette can interpret uniforml
 
 ### 1) Command Palette
 
-The command palette is a UI for selecting and running commands.
+The command palette is a UI for selecting and running actions.
 
 Requirements:
 
-- Lists the unified command catalog (searchable).
-- Shows disabled commands when `canRun` is false (optional tooltip with `details`).
-- If a command has required params:
+- Lists the canonical action catalog filtered to `surfaces.palette`.
+- Shows disabled actions when `canRun` is false (optional tooltip with `details`).
+- If an action has required params:
   - Palette provides a minimal “tmux-like prompt” flow:
     - either a tiny parameter prompt UI (form generated from schema)
     - or a structured text prompt (like `: command key=value ...`) that parses into params
@@ -242,7 +246,7 @@ Key point: the palette is allowed to be “tmux-like” (minimal chrome), but st
 
 ### 2) Keybindings (tmux-style)
 
-Keybindings remain a mapping from key sequences → invocations (command + optional params).
+Keybindings remain a mapping from key sequences → invocations (`actionId` + optional `params`).
 
 Keybinding contexts (`global`, `workspace`, `workspace.prefix`, etc.) remain as keyboard routing state.
 
@@ -250,20 +254,20 @@ Rules:
 
 - A keybinding can only trigger an invocation if:
   1) the chord matches in the current keybinding context, and
-  2) the invocation’s command is available (`canRun` ok)
+  2) the invocation’s action is available (`canRun` ok)
 - If (2) fails, we should show a lightweight message (toast) with the availability `details`.
 
 ### 3) Coordinator
 
-Coordinator consumes the same command catalog via client UI tools:
+Coordinator consumes the same canonical action catalog via client UI tools:
 
 - `ui_list_available_actions` must list:
-  - the unified commands (id/version/description/params schema)
+  - the unified actions (id/version/description/params schema)
   - whether each is currently available, with reason/details
 - `ui_run_action` must:
   - validate `params` against the JSON schema
   - enforce availability (`ACTION_UNAVAILABLE` if `canRun` is false)
-  - run the command and return a structured result envelope
+  - run the action and return a structured result envelope
 
 Coordinator should not rely on keyboard contexts; it should run invocations directly.
 
@@ -276,7 +280,7 @@ The shared contract remains in `shared/` and is imported by both:
 - backend coordinator prompt + validation (agent-manager)
 - frontend UI command registry + validation (agent-manager-web)
 
-This implies a shared “UI Command IDs + versions” list lives in `shared/` (existing `shared/coordinator-actions-contract.ts` can evolve into a UI command contract, or a new `shared/ui-commands-contract.ts` can be introduced with a controlled migration).
+This implies a shared “UI Action IDs + versions” list lives in `shared/ui-actions-contract.ts`, with `shared/coordinator-actions-contract.ts` maintained as the coordinator-visible subset.
 
 Contract enforcement:
 
@@ -285,31 +289,23 @@ Contract enforcement:
 
 ---
 
-## Mapping Existing Systems Into This Model (migration strategy)
+## Current Architecture
 
-This describes how we would evolve without breaking everything at once:
+The current implementation already uses the unified model:
 
-1) **Define unified command types + shared contract**
-   - Keep tool names (`ui_get_state`, `ui_list_available_actions`, `ui_run_action`) stable initially.
-2) **Re-home coordinator semantic actions as UI commands**
-   - Move/alias `agent-manager-web/src/coordinator-actions/actions/*` into the unified registry.
-3) **Lift workspace commands into the same unified registry**
-   - Wrap existing `workspace-hotkeys-layer.tsx` `runCommand(...)` switch as the `run(...)` impl for those commands.
-   - Add `canRun(...)` checks per command (derived from snapshot + store/controller availability).
-4) **Make command palette list the unified registry**
-   - Stop maintaining a separate workspace-only catalog.
-5) **Make keybindings invoke unified commands**
-   - Keep tmux leader engine; change the “what happens on match” path to run a unified invocation.
-
-At the end, “semantic actions” cease to exist as a separate concept: they’re just UI commands, visible in the palette and callable by the coordinator.
+1) `shared/ui-actions-contract.ts` is the canonical descriptor contract.
+2) `agent-manager-web/src/ui-actions/registry.ts` owns executable frontend action definitions.
+3) `agent-manager-web/src/workspace/keybindings/commands.ts` is a derived workspace projection for help/settings/editor surfaces.
+4) `agent-manager-web/src/workspace/keybindings/types.ts` stores bindings as `actionId` + `params`.
+5) `agent-manager-web/src/workspace/ui/workspace-hotkeys-layer.tsx` executes canonical actions through `executeUiAction(...)`.
+6) `agent-manager-web/src/coordinator-actions/registry.ts` and `executor.ts` are thin adapters over canonical actions filtered to `surfaces.coordinator`.
 
 ---
 
 ## Open Questions / Decisions (explicit)
 
 - **Palette params UX**: generated form vs tmux-like `:` prompt parsing vs both.
-- **Command discoverability**: do we list truly everything by default, or require `surfaces.palette = true`?
-- **Dangerous commands**: do we encode “dangerous” metadata (and require confirmation in palette/coordinator)?
+- **Action discoverability**: do we list truly everything by default, or require `surfaces.palette = true`?
 - **Result shapes**: do we standardize a small set of result envelopes (ex: `{ performed: true, ... }`)?
 
 ---

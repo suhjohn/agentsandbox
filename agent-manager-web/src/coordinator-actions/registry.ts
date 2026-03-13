@@ -1,78 +1,27 @@
-import type { SemanticActionDefinition } from "./types";
+import type { UiActionId } from "../../../shared/ui-actions-contract";
 import { assertCoordinatorSemanticActionIdsMatch } from "../../../shared/coordinator-actions-contract";
-import {
-  coordinatorCloseDialogAction,
-  coordinatorOpenDialogAction,
-  navGoAction,
-} from "./actions/navigation";
-import {
-  chatClearDialogConversationAction,
-  chatSendMessageAction,
-  chatStopStreamAction,
-} from "./actions/chat";
-import {
-  coordinatorDialogCreateSessionAction,
-  coordinatorDialogListSessionsAction,
-  coordinatorDialogOpenSessionsListAction,
-  coordinatorDialogSelectSessionAction,
-} from "./actions/dialog";
-import {
-  workspacePaneCloseAction,
-  workspacePaneFocusAction,
-  workspacePaneMoveAction,
-  workspacePanelListAction,
-  workspacePanelOpenAction,
-  workspacePanelResizeAction,
-  workspaceSessionsPanelCloseAction,
-  workspaceSessionsPanelOpenAction,
-  workspaceSessionsPanelSetFiltersAction,
-  workspaceSessionsPanelSetGroupByAction,
-  workspacePanelSetConfigAction,
-} from "./actions/workspace";
-import { workspaceKeybindingCommandActions } from "./actions/workspace-keybindings";
-import { settingsActions } from "./actions/settings";
+import { getUiActionDefinition, listUiActionDefinitions } from "@/ui-actions/registry";
+import type { SemanticActionDefinition } from "./types";
 
-const actions = [
-  navGoAction,
-  workspacePanelListAction,
-  workspacePaneFocusAction,
-  workspacePaneMoveAction,
-  workspacePaneCloseAction,
-  workspacePanelOpenAction,
-  workspacePanelSetConfigAction,
-  workspacePanelResizeAction,
-  workspaceSessionsPanelOpenAction,
-  workspaceSessionsPanelCloseAction,
-  workspaceSessionsPanelSetFiltersAction,
-  workspaceSessionsPanelSetGroupByAction,
-  coordinatorOpenDialogAction,
-  coordinatorCloseDialogAction,
-  coordinatorDialogOpenSessionsListAction,
-  coordinatorDialogListSessionsAction,
-  coordinatorDialogSelectSessionAction,
-  coordinatorDialogCreateSessionAction,
-  chatSendMessageAction,
-  chatStopStreamAction,
-  chatClearDialogConversationAction,
-  ...settingsActions,
-  ...workspaceKeybindingCommandActions,
-] as const satisfies readonly SemanticActionDefinition<any, any>[];
+const coordinatorActions = listUiActionDefinitions().filter(
+  (actionDefinition) => actionDefinition.surfaces.coordinator,
+) as readonly SemanticActionDefinition<any, any>[];
 
 assertCoordinatorSemanticActionIdsMatch({
-  implementedActionIds: actions.map((action) => action.id),
+  implementedActionIds: coordinatorActions.map((actionDefinition) => actionDefinition.id),
   source: "agent-manager-web coordinator-actions registry",
 });
 
-const actionsById = new Map<string, SemanticActionDefinition<any, any>>(
-  actions.map((action) => [action.id, action]),
-);
-
 export function listSemanticActions(): readonly SemanticActionDefinition<any, any>[] {
-  return actions;
+  return coordinatorActions;
 }
 
 export function getSemanticActionDefinition(
-  actionId: string,
+  actionId: UiActionId,
 ): SemanticActionDefinition<any, any> | null {
-  return actionsById.get(actionId) ?? null;
+  const actionDefinition = getUiActionDefinition(actionId);
+  if (!actionDefinition?.surfaces.coordinator) {
+    return null;
+  }
+  return actionDefinition;
 }

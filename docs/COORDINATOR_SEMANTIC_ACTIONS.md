@@ -9,8 +9,10 @@ Goals:
 3. Provide deterministic execution contracts and structured error handling.
 
 ### 1.1 Canonical Action ID Contract
-- Canonical action ID/version source of truth is `shared/coordinator-actions-contract.ts`.
-- Frontend runtime registry (`agent-manager-web/src/coordinator-actions/registry.ts`) must match this contract exactly.
+- Canonical action ID/version source of truth is `shared/ui-actions-contract.ts`.
+- Coordinator-visible subset source of truth is `shared/coordinator-actions-contract.ts`.
+- Frontend canonical runtime registry is `agent-manager-web/src/ui-actions/registry.ts`.
+- Frontend coordinator adapter registry (`agent-manager-web/src/coordinator-actions/registry.ts`) must match the shared coordinator subset exactly.
 - Backend planner prompt (`agent-manager/src/coordinator/index.ts`) should render action IDs from this contract, not from a hard-coded list.
 - Canonical client-tool name/version source of truth is `shared/coordinator-client-tools-contract.ts` (semantic and fallback transport tools).
 
@@ -909,9 +911,17 @@ Params:
 
 ## 5.4 Workspace Command-Palette Actions
 
-Coordinator action IDs also include the workspace command-palette command IDs so the same command IDs are shared between keybindings/palette and coordinator execution.
+Coordinator action IDs also include the workspace command-palette action IDs so the same action IDs are shared between keybindings, palette execution, and coordinator execution.
 
-These command IDs are:
+These workspace-facing action definitions are implemented in:
+- `agent-manager-web/src/ui-actions/actions/keyboard-ui.ts`
+- `agent-manager-web/src/ui-actions/actions/workspace-layout.ts`
+- `agent-manager-web/src/ui-actions/actions/workspace-panels.ts`
+- `agent-manager-web/src/ui-actions/actions/workspace-ui.ts`
+
+The workspace palette/help/settings surfaces remain intentionally filtered to the workspace-facing subset (`surfaces.keyboard || surfaces.palette`) even though coordinator can execute the same underlying actions through `ui_run_action`.
+
+These action IDs are:
 
 - `keyboard.help.open`
 - `keyboard.palette.open`
@@ -1015,20 +1025,23 @@ All actions must be idempotent where practical, or report non-idempotent behavio
 - No implicit UI retries inside executor except for short locator stabilization polling.
 - Agent decides whether to retry via another action call.
 
-## 9. Initial Implementation File Layout
-- `agent-manager-web/src/coordinator-actions/types.ts`
-- `agent-manager-web/src/coordinator-actions/context.ts`
+## 9. Runtime File Layout
+- `shared/ui-actions-contract.ts`
+- `shared/coordinator-actions-contract.ts`
+- `agent-manager-web/src/ui-actions/types.ts`
+- `agent-manager-web/src/ui-actions/context.ts`
+- `agent-manager-web/src/ui-actions/registry.ts`
+- `agent-manager-web/src/ui-actions/execute.ts`
+- `agent-manager-web/src/ui-actions/actions/*.ts`
 - `agent-manager-web/src/coordinator-actions/registry.ts`
-- `agent-manager-web/src/coordinator-actions/actions/navigation.ts`
-- `agent-manager-web/src/coordinator-actions/actions/dialog.ts`
-- `agent-manager-web/src/coordinator-actions/actions/chat.ts`
-- `agent-manager-web/src/coordinator-actions/actions/settings.ts`
-- `agent-manager-web/src/coordinator-actions/actions/workspace.ts`
-- `agent-manager-web/src/coordinator-actions/actions/workspace-keybindings.ts`
+- `agent-manager-web/src/coordinator-actions/executor.ts`
 
-## 10. Unified Command State
-Current command IDs are managed in `shared/coordinator-actions-contract.ts` and include:
-1. Base navigation/dialog/chat/settings/workspace semantic actions.
-2. Workspace command-palette command IDs mirrored into coordinator actions.
+## 10. Unified Action State
+Current action IDs are managed in `shared/ui-actions-contract.ts`.
 
-Runtime registry must match the shared contract exactly.
+Coordinator discovery and execution are filtered to actions where `surfaces.coordinator === true`, via:
+1. `shared/coordinator-actions-contract.ts`
+2. `agent-manager-web/src/coordinator-actions/registry.ts`
+3. `agent-manager-web/src/coordinator-actions/executor.ts`
+
+Runtime registry and coordinator subset must match the shared contracts exactly.

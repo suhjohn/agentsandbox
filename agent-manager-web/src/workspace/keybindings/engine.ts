@@ -223,7 +223,7 @@ export function createWorkspaceKeybindingEngine(
       getNormalContexts(),
       chord,
     );
-    return !!binding && EDITABLE_TARGET_ALLOWED_COMMAND_IDS.has(binding.commandId);
+    return !!binding && EDITABLE_TARGET_ALLOWED_COMMAND_IDS.has(binding.actionId);
   }
 
   function executeBinding(

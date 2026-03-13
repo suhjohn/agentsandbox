@@ -44,9 +44,9 @@ export function WorkspaceKeybindingsDialog (
   const shortcutsByCommandId = useMemo(() => {
     const map = new Map<string, string[]>()
     for (const binding of props.bindings) {
-      const existing = map.get(binding.commandId) ?? []
+      const existing = map.get(binding.actionId) ?? []
       existing.push(formatKeySequence(binding.sequence))
-      map.set(binding.commandId, existing)
+      map.set(binding.actionId, existing)
     }
     return map
   }, [props.bindings])

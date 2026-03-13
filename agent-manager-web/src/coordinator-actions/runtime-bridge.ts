@@ -5,6 +5,7 @@ import type {
   SettingsImageDetailRuntimeController,
   SettingsImagesRuntimeController,
   SessionsSidePanelRuntimeController,
+  WorkspaceKeybindingRuntimeController,
   WorkspaceRuntimeController,
 } from "./types";
 
@@ -20,6 +21,10 @@ let workspaceController: {
 let sessionsSidePanelController: {
   readonly id: number;
   readonly value: SessionsSidePanelRuntimeController;
+} | null = null;
+let workspaceKeyboardController: {
+  readonly id: number;
+  readonly value: WorkspaceKeybindingRuntimeController;
 } | null = null;
 let settingsGeneralController: {
   readonly id: number;
@@ -84,6 +89,16 @@ export function registerSessionsSidePanelRuntimeController(
   };
 }
 
+export function registerWorkspaceKeyboardRuntimeController(
+  controller: WorkspaceKeybindingRuntimeController,
+): () => void {
+  const id = nextId();
+  workspaceKeyboardController = { id, value: controller };
+  return () => {
+    if (workspaceKeyboardController?.id === id) workspaceKeyboardController = null;
+  };
+}
+
 export function registerChatRuntimeController(
   kind: ChatControllerKind,
   controller: ChatRuntimeController,
@@ -136,6 +151,10 @@ export function getWorkspaceRuntimeController(): WorkspaceRuntimeController | nu
 
 export function getSessionsSidePanelRuntimeController(): SessionsSidePanelRuntimeController | null {
   return sessionsSidePanelController?.value ?? null;
+}
+
+export function getWorkspaceKeyboardRuntimeController(): WorkspaceKeybindingRuntimeController | null {
+  return workspaceKeyboardController?.value ?? null;
 }
 
 export function getSettingsGeneralRuntimeController(): SettingsGeneralRuntimeController | null {

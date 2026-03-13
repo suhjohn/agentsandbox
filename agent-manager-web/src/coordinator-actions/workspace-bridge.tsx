@@ -5,6 +5,8 @@ import type {
   WorkspacePanelStateSnapshot,
   WorkspaceStateSnapshot,
 } from "./types";
+import { listAgentDetailTabs, type AgentDetailPanelConfig } from "@/workspace/panels/agent-detail";
+import { listPanelDefinitions } from "@/workspace/panels/registry";
 import { useWorkspaceStore } from "@/workspace/store";
 import { clampRatio, findLeafNode, listLeafIds } from "@/workspace/layout";
 import type { LayoutNode, SplitNode, WindowState } from "@/workspace/types";
@@ -38,6 +40,18 @@ function assertNonEmptyAgentDetailAgentId(value: unknown): void {
 
 function asStringOrEmpty(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function cycleIndex(
+  currentIndex: number,
+  length: number,
+  delta: -1 | 1,
+): number {
+  if (length <= 0) return -1;
+  if (currentIndex < 0 || currentIndex >= length) {
+    return delta > 0 ? 0 : length - 1;
+  }
+  return (currentIndex + delta + length) % length;
 }
 
 function agentIdToAgentSessionId(agentId: string): string {
@@ -679,6 +693,176 @@ export function CoordinatorWorkspaceBridge() {
           ratio: clampedNextRatio,
           dimension: input.dimension,
         };
+      },
+      splitFocusedPane: async (direction: "row" | "col") => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        const focusedLeafId = activeWindow?.focusedLeafId ?? null;
+        if (!activeWindow || !focusedLeafId) {
+          throw new Error("Workspace is not ready");
+        }
+        store.dispatch({ type: "leaf/split", leafId: focusedLeafId, dir: direction });
+        return { split: true as const };
+      },
+      splitWindowFull: async (direction: "row" | "col") => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        if (!activeWindow) throw new Error("Workspace is not ready");
+        store.dispatch({ type: "window/split-full", dir: direction });
+        return { split: true as const };
+      },
+      focusTraversal: async (direction: "next" | "prev") => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        if (!activeWindow) throw new Error("Workspace is not ready");
+        store.dispatch({ type: direction === "next" ? "pane/focus-next" : "pane/focus-prev" });
+        return { focused: true as const };
+      },
+      focusDirection: async (direction: "left" | "right" | "up" | "down") => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        if (!activeWindow) throw new Error("Workspace is not ready");
+        store.dispatch({ type: "pane/focus-direction", direction });
+        return { focused: true as const };
+      },
+      focusPaneByIndex: async (index) => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        if (!activeWindow) throw new Error("Workspace is not ready");
+        const paneLeafIds = listLeafIds(activeWindow.root);
+        const targetLeafId = paneLeafIds[index];
+        if (!targetLeafId) throw new Error(`Pane index out of range: ${index}`);
+        store.dispatch({ type: "leaf/focus", leafId: targetLeafId });
+        return { focused: true as const };
+      },
+      swapTraversal: async (direction: "next" | "prev") => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        if (!activeWindow) throw new Error("Workspace is not ready");
+        store.dispatch({ type: direction === "next" ? "pane/swap-next" : "pane/swap-prev" });
+        return { swapped: true as const };
+      },
+      rotatePanes: async () => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        if (!activeWindow) throw new Error("Workspace is not ready");
+        store.dispatch({ type: "pane/rotate" });
+        return { rotated: true as const };
+      },
+      breakFocusedPaneToWindow: async () => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        const focusedLeafId = activeWindow?.focusedLeafId ?? null;
+        if (!activeWindow || !focusedLeafId) {
+          throw new Error("Workspace is not ready");
+        }
+        store.dispatch({ type: "pane/break-to-window" });
+        return { broken: true as const };
+      },
+      resizeDirection: async (direction: "left" | "right" | "up" | "down", amount: number) => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        const focusedLeafId = activeWindow?.focusedLeafId ?? null;
+        if (!activeWindow || !focusedLeafId) {
+          throw new Error("Workspace is not ready");
+        }
+        store.dispatch({ type: "split/resize-direction", direction, amount });
+        return { resized: true as const };
+      },
+      cycleFocusedPaneType: async (delta: -1 | 1) => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        const focusedLeafId = activeWindow?.focusedLeafId ?? null;
+        if (!activeWindow || !focusedLeafId) {
+          throw new Error("Workspace is not ready");
+        }
+        const focusedLeaf = findLeafNode(activeWindow.root, focusedLeafId);
+        const focusedPanel = focusedLeaf
+          ? activeWindow.panelsById[focusedLeaf.panelInstanceId] ?? null
+          : null;
+        if (!focusedPanel) throw new Error("Focused workspace pane is unavailable");
+
+        const panelTypes = listPanelDefinitions().map((definition) => definition.type);
+        const currentIndex = panelTypes.indexOf(focusedPanel.type);
+        const nextIndex = cycleIndex(currentIndex, panelTypes.length, delta);
+        const nextType = panelTypes[nextIndex];
+        if (!nextType || nextType === focusedPanel.type) {
+          return { changed: false as const };
+        }
+        store.dispatch({
+          type: "panel/type",
+          panelInstanceId: focusedPanel.id,
+          panelType: nextType,
+        });
+        return { changed: true as const };
+      },
+      cycleFocusedAgentView: async (delta: -1 | 1) => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        const focusedLeafId = activeWindow?.focusedLeafId ?? null;
+        if (!activeWindow || !focusedLeafId) {
+          throw new Error("Workspace is not ready");
+        }
+        const focusedLeaf = findLeafNode(activeWindow.root, focusedLeafId);
+        const focusedPanel = focusedLeaf
+          ? activeWindow.panelsById[focusedLeaf.panelInstanceId] ?? null
+          : null;
+        if (!focusedPanel || focusedPanel.type !== "agent_detail") {
+          return { changed: false as const };
+        }
+        const config = focusedPanel.config as AgentDetailPanelConfig;
+        const tabs = listAgentDetailTabs();
+        const currentIndex = tabs.indexOf(config.activeTab);
+        const nextIndex = cycleIndex(currentIndex, tabs.length, delta);
+        const nextTab = tabs[nextIndex];
+        if (!nextTab || nextTab === config.activeTab) {
+          return { changed: false as const };
+        }
+        store.dispatch({
+          type: "panel/config",
+          panelInstanceId: focusedPanel.id,
+          updater: (prev) => ({
+            ...(prev as AgentDetailPanelConfig),
+            activeTab: nextTab,
+          }),
+        });
+        return { changed: true as const };
+      },
+      createWindow: async () => {
+        store.dispatch({ type: "window/create" });
+        return { created: true as const };
+      },
+      closeActiveWindow: async () => {
+        const state = store.getState();
+        const activeWindow = state.windowsById[state.activeWindowId] ?? null;
+        if (!activeWindow) throw new Error("Workspace is not ready");
+        if (Object.keys(state.windowsById).length <= 1) {
+          throw new Error("Cannot close the last workspace window");
+        }
+        store.dispatch({ type: "window/close", windowId: activeWindow.id });
+        return { closed: true as const };
+      },
+      activateWindow: async (
+        target: "next" | "prev" | "last" | { readonly index: number },
+      ) => {
+        if (target === "next") {
+          store.dispatch({ type: "window/activate-next" });
+        } else if (target === "prev") {
+          store.dispatch({ type: "window/activate-prev" });
+        } else if (target === "last") {
+          store.dispatch({ type: "window/activate-last" });
+        } else {
+          store.dispatch({ type: "window/activate-index", index: target.index });
+        }
+        return { activated: true as const };
+      },
+      equalizeLayout: async () => {
+        store.dispatch({ type: "layout/equalize" });
+        return { equalized: true as const };
+      },
+      cycleLayout: async () => {
+        store.dispatch({ type: "layout/cycle" });
+        return { cycled: true as const };
       },
     });
   }, [store]);
