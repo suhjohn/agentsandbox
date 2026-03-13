@@ -85,6 +85,7 @@ func RenderAgentsMD(ctx RuntimeContext, harnessID string) string {
 	rootDir := strings.TrimSpace(ctx.RootDir)
 	if rootDir != "" {
 		content.WriteString("\n# Runtime Paths\n")
+		content.WriteString("- Agent database file (default): " + filepath.Join(rootDir, "agent.db") + "\n")
 		content.WriteString("- Logs directory: " + filepath.Join(rootDir, "logs") + " (chromium.log, openbox.log, xvfb.log, agent-server.log, dockerd.log)\n")
 		content.WriteString("- Runit services directory: " + filepath.Join(rootDir, "runit", "services") + " (agent-server, ui-stack, openvscode-server, openvscode-proxy, dockerd)\n")
 		content.WriteString("- Chromium PID file: " + filepath.Join(rootDir, "run", "chromium.pid") + "\n")

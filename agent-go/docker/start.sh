@@ -210,7 +210,8 @@ seed_workspace_baseline_runtime() {
   fi
 
   mkdir -p "${dst}"
-  cp -a "${src}/." "${dst}/" 2>/dev/null || true
+  # Don't overwrite user-modified baseline contents if they already exist.
+  cp -a -n "${src}/." "${dst}/" 2>/dev/null || true
   if [[ -n "${seed_marker}" ]]; then
     rm -f "${dst}"/.seed-*.ready 2>/dev/null || true
     printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ) ${AGENT_IMAGE_VERSION:-}" >"${seed_marker}" 2>/dev/null || true

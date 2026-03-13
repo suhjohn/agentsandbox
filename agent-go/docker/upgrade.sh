@@ -110,7 +110,8 @@ seed_workspace_baseline_runtime() {
 
   [[ -d "${src}" ]] || return 0
   mkdir -p "${dst}"
-  cp -a "${src}/." "${dst}/" 2>/dev/null || true
+  # Don't overwrite user-modified baseline contents if they already exist.
+  cp -a -n "${src}/." "${dst}/" 2>/dev/null || true
 }
 
 prepare_runtime_state() {
@@ -272,14 +273,14 @@ restart_services() {
     return 0
   fi
 
-  local service=""
-  for service in agent-server openvscode-server openvscode-proxy ui-stack dockerd; do
-    local dir="${RUNITSV_SERVICE_DIR}/${service}"
-    if [[ -d "${dir}" ]]; then
-      log "restarting ${dir}"
-      sv restart "${dir}" || true
-    fi
-  done
+  local dir=""
+  while IFS= read -r -d '' dir; do
+    log "restarting ${dir}"
+    sv restart "${dir}" || true
+  done < <(
+    find "${RUNITSV_SERVICE_DIR}" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null \
+      | sort -z
+  )
 }
 
 sync_source_checkout() {
