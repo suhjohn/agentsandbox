@@ -161,6 +161,25 @@ Notes:
 1. Discovery is advisory only.
 2. Executor still re-checks `canRun` at runtime.
 
+### 4.3 Actual Client Tool Flow
+For `ui_get_state`, `ui_list_available_actions`, and `ui_run_action`, the canonical execution path is the live frontend client-tool loop, not sandbox Python helpers.
+
+`ui_list_available_actions` flow:
+1. The coordinator backend registers `ui_list_available_actions` in `agent-manager/src/coordinator/index.ts`.
+2. When the model calls that tool, backend execution delegates to `clientTools.requestClientTool(...)` instead of computing the result locally.
+3. The run manager emits a `client_tool_request` event into the active run stream with `runId`, `toolCallId`, `toolName`, `args`, and `timeoutMs`.
+4. The live frontend receives that event in `agent-manager-web/src/routes/chat-conversation.tsx`.
+5. The frontend calls `executeCoordinatorClientToolRequest(...)` from `agent-manager-web/src/coordinator-actions/executor.ts`.
+6. For `ui_list_available_actions`, the executor builds the current frontend UI execution context and calls `listAvailableUiActionsForContext(...)` from `agent-manager-web/src/ui-actions/execute.ts`.
+7. `listAvailableUiActionsForContext(...)` evaluates registered frontend UI actions for the `coordinator` surface and computes `available`/`reason` from the current frontend snapshot.
+8. The frontend submits the structured result back to `POST /coordinator/runs/:runId/tool-result`.
+9. The backend resolves the pending client-tool request and returns that result to the coordinator run.
+
+Important implications:
+1. The value is derived from live frontend state, not from backend-only state.
+2. Canonical action IDs/versions still come from `shared/ui-actions-contract.ts`.
+3. Files under `agent-manager/seeds/coordinator/tools/ui-actions/*` are not the canonical implementation of these client tools.
+
 ## 5. V1 Action Catalog
 
 ## 5.1 Global and Navigation

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import sys
+import os
+from dataclasses import dataclass
 from typing import Any
 
 from _shared import (
     click_browser,
-    error_json,
     eval_browser,
     get_flag_value,
     get_ui_state,
@@ -15,8 +15,24 @@ from _shared import (
     parse_common_options,
     parse_params_json,
     print_json,
+    run_cli,
     type_browser,
 )
+
+
+@dataclass(frozen=True)
+class RunActionInput:
+    action_id: str
+    params: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class RunActionResult:
+    action_id: str
+    params: dict[str, Any]
+    result: Any
+    ui_state_before: dict[str, Any]
+    ui_state_after: dict[str, Any]
 
 
 def usage() -> None:
@@ -118,8 +134,22 @@ def run_action(
     raise RuntimeError(f"Unsupported actionId: {action_id}")
 
 
-def main() -> int:
-    argv = sys.argv[1:]
+def execute_action(input_data: RunActionInput, argv: list[str]) -> RunActionResult:
+    options = parse_common_options(argv)
+    before = get_ui_state(options)
+    result = run_action(input_data.action_id, input_data.params, options)
+    after = get_ui_state(options)
+    return RunActionResult(
+        action_id=input_data.action_id,
+        params=input_data.params,
+        result=result,
+        ui_state_before=before,
+        ui_state_after=after,
+    )
+
+
+def run_ui_action_cli() -> int:
+    argv = os.sys.argv[1:]
     if has_flag(argv, "--help") or has_flag(argv, "-h"):
         usage()
         return 0
@@ -129,21 +159,23 @@ def main() -> int:
         usage()
         raise RuntimeError("--action-id is required")
 
-    options = parse_common_options(argv)
-    params = parse_params_json(get_flag_value(argv, "--params"))
-    before = get_ui_state(options)
-    result = run_action(action_id.strip(), params, options)
-    after = get_ui_state(options)
+    result = execute_action(
+        RunActionInput(
+            action_id=action_id.strip(),
+            params=parse_params_json(get_flag_value(argv, "--params")),
+        ),
+        argv,
+    )
 
     print_json(
         {
             "ok": True,
             "data": {
-                "actionId": action_id.strip(),
-                "params": params,
-                "result": result,
-                "uiStateBefore": before,
-                "uiStateAfter": after,
+                "actionId": result.action_id,
+                "params": result.params,
+                "result": result.result,
+                "uiStateBefore": result.ui_state_before,
+                "uiStateAfter": result.ui_state_after,
             },
         }
     )
@@ -151,8 +183,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:  # noqa: BLE001
-        error_json(str(exc))
-        raise SystemExit(1)
+    run_cli(run_ui_action_cli)

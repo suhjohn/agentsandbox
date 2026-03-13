@@ -44,10 +44,12 @@ Common \`coordinator_api_request\` shapes:
 
 Important boundary:
 
-- \`tools/ui-actions/*\` is not the sandbox browser automation implementation.
-- It represents a frontend-consumed UI action surface and should not import or proxy \`agent-go/tools/browser-tools\`.
-- When sandbox-local browser automation is actually needed, use \`agent-go/tools/browser-tools/*\` directly.
-- Do not treat \`tools/ui-actions/*\` as the primary execution path for sandbox UI automation.
+- Canonical UI action IDs and versions live in \`shared/ui-actions-contract.ts\`.
+- Canonical execution of \`ui_get_state\`, \`ui_list_available_actions\`, and \`ui_run_action\` lives in the frontend runtime, not in sandbox Python files.
+- The frontend path is the coordinator client tool flow used by the live web app, including the coordinator dialog/runtime surface in \`agent-manager-web/src/components/coordinator-session-dialog.tsx\`.
+- Files under \`tools/ui-actions/*\` are sandbox-side helpers only. They are not the frontend implementation and must not redefine the canonical UI action contract.
+- \`tools/ui-actions/*\` is also not the generic sandbox browser automation implementation.
+- When sandbox-local browser automation is actually needed, use the repo-provided browser tools at \`/home/agent/workspaces/tools/default/browser-tools/*\`.
 
 ## UI Semantic Action Playbook (Browser-Attached Runs)
 
@@ -374,7 +376,9 @@ Core runtime facts inside the sandbox:
 - Agent SQLite DB defaults to \`/home/agent/runtime/agent.db\` (unless \`DATABASE_PATH\` is overridden).
 - Agent server stdout/stderr is typically captured to \`$AGENT_SERVER_LOG_FILE\` (default: \`$ROOT_DIR/logs/agent-server.log\`).
 - Agent image repo checkout is typically \`/opt/agentsandbox/agent-go\`; the runtime bootstrap scripts are \`/opt/agentsandbox/agent-go/docker/setup.sh\` and \`/opt/agentsandbox/agent-go/docker/start.sh\`.
-- Browser automation capabilities live in \`$AGENT_TOOLS_DIR/browser-tools\` (default: \`/opt/agentsandbox/agent-go/tools/browser-tools\`) and are usually exposed in the workspace at \`/home/agent/workspaces/tools/browser-tools\` (with fallbacks like \`/home/agent/\_agent_tools/browser-tools\` or \`/home/agent/runtime/tools/browser-tools\`).
+- Repo-provided agent-go tools live in \`$AGENT_TOOLS_DIR\` (default: \`/opt/agentsandbox/agent-go/tools\`) and are usually exposed in the workspace under \`/home/agent/workspaces/tools/default/*\`.
+- Image-provided tools live in \`$IMAGE_TOOLS_DIR\` (default: \`/shared/image/tools\`) and are usually exposed in the workspace under \`/home/agent/workspaces/tools/image/*\`.
+- Browser automation capabilities from agent-go therefore typically appear at \`/home/agent/workspaces/tools/default/browser-tools\`.
 
 When investigating:
 
