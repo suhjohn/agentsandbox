@@ -297,28 +297,19 @@ sync_repo_files() {
 ensure_workspace_tools_links() {
   local tools_path="${WORKSPACE_TOOLS_DIR}"
   local bundled_tools_path=""
-  local src_roots=()
+  local image_tools_path=""
   local src_root=""
 
-  if [[ -d "${AGENT_TOOLS_DIR}" ]]; then
-    src_roots+=("${AGENT_TOOLS_DIR}")
-  fi
-  if [[ -d "${IMAGE_TOOLS_DIR}" ]]; then
-    src_roots+=("${IMAGE_TOOLS_DIR}")
-  fi
-  if [[ "${#src_roots[@]}" -eq 0 ]]; then
+  if [[ ! -d "${AGENT_TOOLS_DIR}" ]] && [[ ! -d "${IMAGE_TOOLS_DIR}" ]]; then
     return 0
   fi
 
   if [[ -L "${tools_path}" ]]; then
     local resolved=""
     resolved="$(readlink -f "${tools_path}" 2>/dev/null || true)"
-    for src_root in "${src_roots[@]}"; do
-      if [[ "${resolved}" == "${src_root}" ]]; then
-        rm -f "${tools_path}" 2>/dev/null || true
-        break
-      fi
-    done
+    if [[ "${resolved}" == "${AGENT_TOOLS_DIR}" ]] || [[ "${resolved}" == "${IMAGE_TOOLS_DIR}" ]]; then
+      rm -f "${tools_path}" 2>/dev/null || true
+    fi
   fi
 
   if [[ -e "${tools_path}" ]] && [[ ! -d "${tools_path}" ]]; then
@@ -328,10 +319,12 @@ ensure_workspace_tools_links() {
   fi
 
   bundled_tools_path="${tools_path}/default"
-  mkdir -p "${tools_path}" "${bundled_tools_path}" 2>/dev/null || true
+  image_tools_path="${tools_path}/image"
+  mkdir -p "${tools_path}" "${bundled_tools_path}" "${image_tools_path}" 2>/dev/null || true
 
   local src_path=""
-  for src_root in "${src_roots[@]}"; do
+  if [[ -d "${AGENT_TOOLS_DIR}" ]]; then
+    src_root="${AGENT_TOOLS_DIR}"
     while IFS= read -r -d '' src_path; do
       local name=""
       local target_path=""
@@ -351,7 +344,30 @@ ensure_workspace_tools_links() {
       fi
       ln -s "${src_path}" "${target_path}"
     done < <(find "${src_root}" -mindepth 1 -maxdepth 1 -print0)
-  done
+  fi
+
+  if [[ -d "${IMAGE_TOOLS_DIR}" ]]; then
+    src_root="${IMAGE_TOOLS_DIR}"
+    while IFS= read -r -d '' src_path; do
+      local name=""
+      local target_path=""
+      local resolved_target=""
+      name="$(basename "${src_path}")"
+      target_path="${image_tools_path}/${name}"
+
+      if [[ -L "${target_path}" ]]; then
+        resolved_target="$(readlink -f "${target_path}" 2>/dev/null || true)"
+        if [[ "${resolved_target}" == "${src_path}" ]]; then
+          continue
+        fi
+        rm -f "${target_path}" 2>/dev/null || true
+      fi
+      if [[ -e "${target_path}" ]]; then
+        continue
+      fi
+      ln -s "${src_path}" "${target_path}"
+    done < <(find "${src_root}" -mindepth 1 -maxdepth 1 -print0)
+  fi
 }
 
 seed_workspace_baseline_runtime() {
