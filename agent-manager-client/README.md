@@ -22,9 +22,9 @@ That script:
 1. Regenerates `agent-manager/openapi.json`
 2. Copies the spec into this package
 3. Regenerates the Python client package with `openapi-python-client`
-4. Mirrors only the generated `agent_manager_client` package into `agent-go/tools/agent-manager-tools`
+4. Mirrors only the generated `agent_manager_client` package into `agent-manager/seeds/coordinator/tools/agent-manager-tools`
 
-The mirror step replaces `agent-go/tools/agent-manager-tools/agent_manager_client` only. It does not delete sibling files in `agent-go/tools/agent-manager-tools`, so files like `README.md` are preserved across rebuilds.
+The mirror step replaces `agent-manager/seeds/coordinator/tools/agent-manager-tools/agent_manager_client` only. It does not delete sibling files in that tool directory, so files like `README.md` are preserved across rebuilds.
 
 ## Auth Modes
 

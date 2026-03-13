@@ -107,7 +107,9 @@ Runtime mode is controlled by env such as:
 
 The manager build flow runs:
 
-- `git pull --ff-only`
+- `git fetch origin`
+- `git reset --hard origin/main`
+- `git clean -fd`
 - `agent-go/docker/setup.sh`
 - `/shared/image/hooks/build.sh`
 - verifying required binaries and files before snapshot

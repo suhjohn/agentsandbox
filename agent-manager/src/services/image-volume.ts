@@ -10,7 +10,10 @@ export const IMAGE_HOOKS_DIR = `${IMAGE_SHARED_MOUNT_PATH}/hooks`
 export const IMAGE_BUILD_HOOK_PATH = `${IMAGE_HOOKS_DIR}/build.sh`
 export const IMAGE_START_HOOK_PATH = `${IMAGE_HOOKS_DIR}/start.sh`
 
-const IMAGE_SHARED_REMOTE_FILES = ['/hooks/build.sh', '/hooks/start.sh'] as const
+const IMAGE_SHARED_REMOTE_FILES = [
+  '/hooks/build.sh',
+  '/hooks/start.sh'
+] as const
 
 export function getImageSharedVolumeName (imageId: string): string {
   const normalized = imageId.trim().replace(/-/g, '').toLowerCase()
@@ -26,7 +29,7 @@ export async function getImageSharedVolume (input: {
 }): Promise<Volume> {
   const volume = await modalClient.volumes.fromName(
     getImageSharedVolumeName(input.imageId),
-    { createIfMissing: true, version: 2 }
+    { createIfMissing: true }
   )
   return input.readOnly ? volume.readOnly() : volume
 }

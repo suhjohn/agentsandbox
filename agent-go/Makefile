@@ -2,7 +2,6 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 GO ?= go
-UV ?= uv
 
 DOCKER ?= docker
 DOCKER_IMAGE ?= agent-go:dev
@@ -14,7 +13,7 @@ LOCAL_BINARY_PATH ?= ./build-artifacts/agent-server-$(HOST_GOOS)-$(HOST_GOARCH)
 TRACKED_BINARY_PATH ?= ./build-artifacts/agent-server-linux-amd64
 ENV_FILE ?= .env
 
-.PHONY: help test build build-docker-binary docker-build docker-dev docker-push sync-agent-manager-tools
+.PHONY: help test build build-docker-binary docker-build docker-dev docker-push
 
 help:
 	@echo "agent-go make targets"
@@ -23,7 +22,6 @@ help:
 	@echo "  make build-docker-binary     # build the tracked linux/amd64 server binary at $(TRACKED_BINARY_PATH)"
 	@echo "  make docker-build            # build the Docker image tagged as $(DOCKER_IMAGE)"
 	@echo "  make docker-dev              # run the Docker image with env from $(ENV_FILE)"
-	@echo "  make sync-agent-manager-tools  # regenerate the root Python manager client and mirror agent_manager_client into tools/agent-manager-tools"
 	@echo "  make docker-push             # push $(PUSH_IMAGE) with tag from GHCR_TAG or current git sha"
 
 build:
@@ -41,8 +39,5 @@ docker-build:
 docker-dev:
 	DOCKER="$(DOCKER)" DOCKER_IMAGE="$(DOCKER_IMAGE)" ENV_FILE="$(ENV_FILE)" ./scripts/dev.sh docker-run --env-file "$(ENV_FILE)"
 
-sync-agent-manager-tools:
-	$(UV) run --project ../agent-manager-client ../agent-manager-client/scripts/generate.py
-
-docker-push: sync-agent-manager-tools build-docker-binary
+docker-push: build-docker-binary
 	DOCKER="$(DOCKER)" GHCR_IMAGE="$(PUSH_IMAGE)" GHCR_PUSH_LATEST="$(PUSH_LATEST)" GHCR_SKIP_BINARY_BUILD=1 PREBUILT_BINARY_PATH="$(TRACKED_BINARY_PATH)" ./scripts/dev.sh ghcr-push-amd64

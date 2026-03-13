@@ -18,7 +18,7 @@ def run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None
 
 def mirror_package_dir(source_dir: Path, target_dir: Path) -> None:
     # Only replace the mirrored Python package directory. Preserve sibling files
-    # in agent-go/tools/agent-manager-tools such as README.md or local notes.
+    # in the coordinator tool directory such as README.md or local notes.
     target_dir.parent.mkdir(parents=True, exist_ok=True)
     if target_dir.exists():
         shutil.rmtree(target_dir)
@@ -33,7 +33,13 @@ def main() -> int:
     package_dir = tools_dir / "src" / "agent_manager_client"
     generated_dir = package_dir / "generated_client"
     mirrored_package_dir = (
-        repo_root / "agent-go" / "tools" / "agent-manager-tools" / "agent_manager_client"
+        repo_root
+        / "agent-manager"
+        / "seeds"
+        / "coordinator"
+        / "tools"
+        / "agent-manager-tools"
+        / "agent_manager_client"
     )
     spec_source = manager_dir / "openapi.json"
     top_level_spec_dest = tools_dir / "openapi.json"

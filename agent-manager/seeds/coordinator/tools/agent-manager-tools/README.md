@@ -2,7 +2,7 @@
 
 `agent-manager` is the control plane for sandboxed agents. It owns manager-side records such as images, agents, sessions, access tokens, API keys, and sandbox provisioning. `agent-go` is the runtime inside the sandbox. The manager creates that sandbox, injects values like `AGENT_MANAGER_BASE_URL`, `AGENT_ID`, and `AGENT_MANAGER_API_KEY`, and then the runtime uses that API key for manager calls.
 
-This README is intentionally stored under the workspace tools tree because the bundled `agent-go/tools/*` directories are exposed inside the sandbox workspace, so Codex and PI can discover this file and use the generated client from the running agent environment.
+This README is intentionally stored under the coordinator tool tree because those bundled tools are exposed inside the sandbox workspace, so Codex and PI can discover this file and use the generated client from the running agent environment.
 
 Use this tool when you need to talk to manager-owned APIs such as:
 
@@ -21,7 +21,7 @@ import sys
 sys.path.append("tools/agent-manager-tools")
 ```
 
-From the `agent-go/` repo checkout directly, use `agent-go/tools/agent-manager-tools` instead.
+From the repo checkout directly, use `agent-manager/seeds/coordinator/tools/agent-manager-tools` instead.
 
 ## Python API
 

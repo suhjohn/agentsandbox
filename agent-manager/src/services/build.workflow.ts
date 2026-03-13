@@ -105,7 +105,7 @@ export async function runImageBuild(input: {
       [
         "bash",
         "-lc",
-        'set -euo pipefail; cd /opt/agentsandbox/agent-go; git pull --ff-only; ./docker/setup.sh; if [[ -r /shared/image/hooks/build.sh ]]; then bash /shared/image/hooks/build.sh; fi',
+        'set -euo pipefail; cd /opt/agentsandbox/agent-go; git fetch origin; git reset --hard origin/main; git clean -fd; ./docker/setup.sh; if [[ -r /shared/image/hooks/build.sh ]]; then bash /shared/image/hooks/build.sh; fi',
       ],
       {
         timeoutMs: BUILD_SANDBOX_TIMEOUT_MS,

@@ -1,13 +1,119 @@
+import { readdir, readFile } from "node:fs/promises";
+import { dirname, join, posix as pathPosix, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { and, eq, isNull } from "drizzle-orm";
 import { db, closeDb } from "../src/db";
 import { globalSettings, images, imageVariants } from "../src/db/schema";
 import { log } from "../src/log";
+import { ModalVolumeClient } from "../src/clients/modal";
 import { DEFAULT_VARIANT_IMAGE_REF } from "../src/services/image.service";
+import { getImageSharedVolumeName } from "../src/services/image-volume";
+import { formatCoordinatorSemanticActionIdBullets } from "../../shared/coordinator-actions-contract";
+import { formatCoordinatorClientToolNameBullets } from "../../shared/coordinator-client-tools-contract";
 
 const GLOBAL_SETTINGS_ID = "default";
 const IMAGE_NAME = "Default Coordinator";
 const IMAGE_DESCRIPTION =
   "Prebuilt default image for coordinator agents.";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const COORDINATOR_SEED_DIR = join(__dirname, "..", "seeds", "coordinator");
+const COORDINATOR_AGENTS_TEMPLATE_PATH = join(COORDINATOR_SEED_DIR, "AGENTS.md");
+const COORDINATOR_TOOLS_DIR = join(COORDINATOR_SEED_DIR, "tools");
+const COORDINATOR_CLIENT_TOOLS_START =
+  "<!-- GENERATED:COORDINATOR_CLIENT_TOOLS_START -->";
+const COORDINATOR_CLIENT_TOOLS_END =
+  "<!-- GENERATED:COORDINATOR_CLIENT_TOOLS_END -->";
+const COORDINATOR_ACTIONS_START =
+  "<!-- GENERATED:COORDINATOR_ACTIONS_START -->";
+const COORDINATOR_ACTIONS_END =
+  "<!-- GENERATED:COORDINATOR_ACTIONS_END -->";
+
+function replaceGeneratedSection(input: {
+  readonly content: string;
+  readonly startMarker: string;
+  readonly endMarker: string;
+  readonly replacement: string;
+}): string {
+  const startIndex = input.content.indexOf(input.startMarker);
+  const endIndex = input.content.indexOf(input.endMarker);
+  if (startIndex < 0 || endIndex < 0 || endIndex < startIndex) {
+    throw new Error(
+      `Missing generated section markers: ${input.startMarker} ... ${input.endMarker}`,
+    );
+  }
+
+  const before = input.content.slice(0, startIndex + input.startMarker.length);
+  const after = input.content.slice(endIndex);
+  return `${before}\n\n${input.replacement}\n\n${after}`;
+}
+
+async function renderCoordinatorAgentsMarkdown(): Promise<string> {
+  const template = await readFile(COORDINATOR_AGENTS_TEMPLATE_PATH, "utf8");
+  const withClientTools = replaceGeneratedSection({
+    content: template,
+    startMarker: COORDINATOR_CLIENT_TOOLS_START,
+    endMarker: COORDINATOR_CLIENT_TOOLS_END,
+    replacement: formatCoordinatorClientToolNameBullets(),
+  });
+  return replaceGeneratedSection({
+    content: withClientTools,
+    startMarker: COORDINATOR_ACTIONS_START,
+    endMarker: COORDINATOR_ACTIONS_END,
+    replacement: formatCoordinatorSemanticActionIdBullets(),
+  });
+}
+
+async function listFilesRecursive(rootDir: string): Promise<string[]> {
+  const entries = await readdir(rootDir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const fullPath = join(rootDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listFilesRecursive(fullPath)));
+      continue;
+    }
+    if (entry.isFile()) files.push(fullPath);
+  }
+  return files.sort();
+}
+
+async function syncCoordinatorSeedVolume(imageId: string): Promise<void> {
+  const volume = new ModalVolumeClient({
+    volumeName: getImageSharedVolumeName(imageId),
+  });
+
+  await volume.putText({
+    text: await renderCoordinatorAgentsMarkdown(),
+    remotePath: "/AGENTS.md",
+    overwrite: true,
+  });
+
+  const toolFiles = await listFilesRecursive(COORDINATOR_TOOLS_DIR).catch((error: unknown) => {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return [] as string[];
+    }
+    throw error;
+  });
+
+  for (const filePath of toolFiles) {
+    const relativePath = relative(COORDINATOR_TOOLS_DIR, filePath);
+    const remotePath = pathPosix.join(
+      "/tools",
+      relativePath.split("\\").join("/"),
+    );
+    await volume.putFile({
+      localPath: filePath,
+      remotePath,
+      overwrite: true,
+    });
+  }
+}
 
 async function ensureGlobalSettingsRow() {
   await db
@@ -129,23 +235,24 @@ async function ensureVariantActiveImageId(variantId: string) {
   return DEFAULT_VARIANT_IMAGE_REF;
 }
 
-async function main() {
-  await ensureGlobalSettingsRow();
-
+async function resolveDefaultCoordinatorImageTarget() {
   const current = await getCurrentDefaultImage();
   if (current && current.deletedAt == null && current.defaultVariantId) {
-    const activeImageId = await ensureVariantActiveImageId(current.defaultVariantId);
-    console.log(
-      `Default coordinator image already configured: ${current.id} (${activeImageId})`,
-    );
-    return;
+    return { imageId: current.id, variantId: current.defaultVariantId };
   }
 
   const reusable = await findReusableUnownedDefaultImage();
-  const target =
-    reusable?.defaultVariantId != null
-      ? { imageId: reusable.id, variantId: reusable.defaultVariantId }
-      : await createDefaultCoordinatorImageRecord();
+  if (reusable?.defaultVariantId != null) {
+    return { imageId: reusable.id, variantId: reusable.defaultVariantId };
+  }
+
+  return await createDefaultCoordinatorImageRecord();
+}
+
+async function main() {
+  await ensureGlobalSettingsRow();
+
+  const target = await resolveDefaultCoordinatorImageTarget();
 
   const activeImageId = await ensureVariantActiveImageId(target.variantId);
 
@@ -156,6 +263,8 @@ async function main() {
       updatedAt: new Date(),
     })
     .where(eq(globalSettings.id, GLOBAL_SETTINGS_ID));
+
+  await syncCoordinatorSeedVolume(target.imageId);
 
   log.info("default_coordinator_image.ready", {
     imageId: target.imageId,

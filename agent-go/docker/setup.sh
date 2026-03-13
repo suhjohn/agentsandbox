@@ -297,15 +297,25 @@ sync_repo_files() {
 ensure_workspace_tools_links() {
   local tools_path="${WORKSPACE_TOOLS_DIR}"
   local bundled_tools_path=""
+  local src_roots=()
+  local src_root=""
 
-  [[ -d "${AGENT_TOOLS_DIR}" ]] || return 0
+  if [[ -d "${AGENT_TOOLS_DIR}" ]]; then
+    src_roots+=("${AGENT_TOOLS_DIR}")
+  fi
+  if [[ "${#src_roots[@]}" -eq 0 ]]; then
+    return 0
+  fi
 
   if [[ -L "${tools_path}" ]]; then
     local resolved=""
     resolved="$(readlink -f "${tools_path}" 2>/dev/null || true)"
-    if [[ "${resolved}" == "${AGENT_TOOLS_DIR}" ]]; then
-      rm -f "${tools_path}" 2>/dev/null || true
-    fi
+    for src_root in "${src_roots[@]}"; do
+      if [[ "${resolved}" == "${src_root}" ]]; then
+        rm -f "${tools_path}" 2>/dev/null || true
+        break
+      fi
+    done
   fi
 
   if [[ -e "${tools_path}" ]] && [[ ! -d "${tools_path}" ]]; then
@@ -318,25 +328,27 @@ ensure_workspace_tools_links() {
   mkdir -p "${tools_path}" "${bundled_tools_path}" 2>/dev/null || true
 
   local src_path=""
-  while IFS= read -r -d '' src_path; do
-    local name=""
-    local target_path=""
-    local resolved_target=""
-    name="$(basename "${src_path}")"
-    target_path="${bundled_tools_path}/${name}"
+  for src_root in "${src_roots[@]}"; do
+    while IFS= read -r -d '' src_path; do
+      local name=""
+      local target_path=""
+      local resolved_target=""
+      name="$(basename "${src_path}")"
+      target_path="${bundled_tools_path}/${name}"
 
-    if [[ -L "${target_path}" ]]; then
-      resolved_target="$(readlink -f "${target_path}" 2>/dev/null || true)"
-      if [[ "${resolved_target}" == "${src_path}" ]]; then
+      if [[ -L "${target_path}" ]]; then
+        resolved_target="$(readlink -f "${target_path}" 2>/dev/null || true)"
+        if [[ "${resolved_target}" == "${src_path}" ]]; then
+          continue
+        fi
+        rm -f "${target_path}" 2>/dev/null || true
+      fi
+      if [[ -e "${target_path}" ]]; then
         continue
       fi
-      rm -f "${target_path}" 2>/dev/null || true
-    fi
-    if [[ -e "${target_path}" ]]; then
-      continue
-    fi
-    ln -s "${src_path}" "${target_path}"
-  done < <(find "${AGENT_TOOLS_DIR}" -mindepth 1 -maxdepth 1 -print0)
+      ln -s "${src_path}" "${target_path}"
+    done < <(find "${src_root}" -mindepth 1 -maxdepth 1 -print0)
+  done
 }
 
 seed_workspace_baseline_runtime() {

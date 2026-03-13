@@ -348,7 +348,7 @@ Behavior:
 
 - Creates a one-shot build sandbox.
 - Injects startup env through an inline Modal secret and attaches named/environment secrets by name.
-- Refreshes the repo checkout with `git pull --ff-only`, reruns `agent-go/docker/setup.sh`, then runs `/shared/image/hooks/build.sh` before snapshotting.
+- Refreshes the repo checkout with `git fetch origin`, `git reset --hard origin/main`, and `git clean -fd`, reruns `agent-go/docker/setup.sh`, then runs `/shared/image/hooks/build.sh` before snapshotting.
 - Snapshots the filesystem and terminates the sandbox on completion.
 
 ## setup.workflow.ts
