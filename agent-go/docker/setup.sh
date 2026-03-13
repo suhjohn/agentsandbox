@@ -303,6 +303,9 @@ ensure_workspace_tools_links() {
   if [[ -d "${AGENT_TOOLS_DIR}" ]]; then
     src_roots+=("${AGENT_TOOLS_DIR}")
   fi
+  if [[ -d "${IMAGE_TOOLS_DIR}" ]]; then
+    src_roots+=("${IMAGE_TOOLS_DIR}")
+  fi
   if [[ "${#src_roots[@]}" -eq 0 ]]; then
     return 0
   fi

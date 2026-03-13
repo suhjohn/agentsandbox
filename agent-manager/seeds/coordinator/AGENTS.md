@@ -40,7 +40,18 @@ Common \`coordinator_api_request\` shapes:
 - Call sandbox runtime API with header \`X-Agent-Auth: Bearer <agentAuthToken>\` (not \`Authorization\`).
 - OpenVSCode/noVNC links use \`sandboxAccessToken\` embedded as URL params (\`tkn\` / \`password\`); this token is not the same as \`agentAuthToken\`.
 
+## Sandbox UI Actions
+
+Important boundary:
+
+- \`tools/ui-actions/*\` is not the sandbox browser automation implementation.
+- It represents a frontend-consumed UI action surface and should not import or proxy \`agent-go/tools/browser-tools\`.
+- When sandbox-local browser automation is actually needed, use \`agent-go/tools/browser-tools/*\` directly.
+- Do not treat \`tools/ui-actions/*\` as the primary execution path for sandbox UI automation.
+
 ## UI Semantic Action Playbook (Browser-Attached Runs)
+
+This section describes the frontend/browser-attached client tool model.
 
 If client UI tools are available, prefer semantic UI actions first. Use generic browser fallback tools only when no semantic action can complete the task.
 

@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { dirname, join, posix as pathPosix, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, isNull } from "drizzle-orm";
@@ -64,20 +64,6 @@ async function renderCoordinatorAgentsMarkdown(): Promise<string> {
   });
 }
 
-async function listFilesRecursive(rootDir: string): Promise<string[]> {
-  const entries = await readdir(rootDir, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    const fullPath = join(rootDir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await listFilesRecursive(fullPath)));
-      continue;
-    }
-    if (entry.isFile()) files.push(fullPath);
-  }
-  return files.sort();
-}
-
 async function syncCoordinatorSeedVolume(imageId: string): Promise<void> {
   const volume = new ModalVolumeClient({
     volumeName: getImageSharedVolumeName(imageId),
@@ -89,30 +75,25 @@ async function syncCoordinatorSeedVolume(imageId: string): Promise<void> {
     overwrite: true,
   });
 
-  const toolFiles = await listFilesRecursive(COORDINATOR_TOOLS_DIR).catch((error: unknown) => {
+  try {
+    await access(COORDINATOR_TOOLS_DIR);
+  } catch (error: unknown) {
     if (
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
       error.code === "ENOENT"
     ) {
-      return [] as string[];
+      return;
     }
     throw error;
-  });
-
-  for (const filePath of toolFiles) {
-    const relativePath = relative(COORDINATOR_TOOLS_DIR, filePath);
-    const remotePath = pathPosix.join(
-      "/tools",
-      relativePath.split("\\").join("/"),
-    );
-    await volume.putFile({
-      localPath: filePath,
-      remotePath,
-      overwrite: true,
-    });
   }
+
+  await volume.putFile({
+    localPath: COORDINATOR_TOOLS_DIR,
+    remotePath: pathPosix.join("/", "tools"),
+    overwrite: true,
+  });
 }
 
 async function ensureGlobalSettingsRow() {
