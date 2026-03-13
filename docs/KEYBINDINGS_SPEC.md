@@ -42,9 +42,8 @@ Today there is one canonical action system with two projections:
   - Keyboard capture + overlay UI: `agent-manager-web/src/workspace/ui/workspace-hotkeys-layer.tsx`
   - Palette UI: `agent-manager-web/src/workspace/ui/workspace-command-palette.tsx`
 - **Coordinator adapter**
-  - Coordinator surface filter: `agent-manager-web/src/coordinator-actions/registry.ts`
-  - Coordinator tool executor: `agent-manager-web/src/coordinator-actions/executor.ts`
-  - Shared coordinator subset contract: `shared/coordinator-actions-contract.ts`
+  - Coordinator-visible actions are filtered from `shared/ui-actions-contract.ts` via the `surfaces.coordinator` flag
+  - Frontend execution uses `agent-manager-web/src/ui-actions/execute.ts`
 
 The key requirement is that keyboard, palette, and coordinator all resolve to the same canonical action definitions.
 
@@ -102,7 +101,7 @@ Each UI action is a stable ID + version with:
 - `category: string` (palette grouping/search keywords)
 - `paramsJsonSchema: JSONSchema` (used by `ui_list_available_actions`)
 
-This descriptor lives in `shared/ui-actions-contract.ts` for contract stability and prompt guidance. `shared/coordinator-actions-contract.ts` is a filtered coordinator subset of that source.
+This descriptor lives in `shared/ui-actions-contract.ts` for contract stability and prompt guidance. Coordinator-visible actions are filtered from that source via `surfaces.coordinator`.
 
 Proposed shape (illustrative):
 
@@ -280,7 +279,7 @@ The shared contract remains in `shared/` and is imported by both:
 - backend coordinator prompt + validation (agent-manager)
 - frontend UI command registry + validation (agent-manager-web)
 
-This implies a shared “UI Action IDs + versions” list lives in `shared/ui-actions-contract.ts`, with `shared/coordinator-actions-contract.ts` maintained as the coordinator-visible subset.
+This implies a shared “UI Action IDs + versions” list lives in `shared/ui-actions-contract.ts`, with coordinator visibility derived from `surfaces.coordinator`.
 
 Contract enforcement:
 

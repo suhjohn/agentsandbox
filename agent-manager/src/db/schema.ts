@@ -12,7 +12,6 @@ import { relations, sql } from "drizzle-orm";
 import type {
   Visibility,
   AgentStatus,
-  MessageRole,
 } from "./enums";
 
 export type AgentType = "worker" | "coordinator";
@@ -448,44 +447,6 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   }),
 }));
 
-// ── Coordinator Sessions ───────────────────────────────────────────────────
-
-export const coordinatorSessions = pgTable(
-  "coordinator_sessions",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    title: text("title"),
-    createdBy: uuid("created_by").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [index("coordinator_sessions_created_by_idx").on(table.createdBy)],
-);
-
-export const messages = pgTable(
-  "messages",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    coordinatorSessionId: uuid("coordinator_session_id")
-      .notNull()
-      .references(() => coordinatorSessions.id, { onDelete: "cascade" }),
-    role: text("role").$type<MessageRole>().notNull(),
-    content: text("content").notNull(),
-    toolCalls: jsonb("tool_calls").$type<unknown | null>(),
-    toolResults: jsonb("tool_results").$type<unknown | null>(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [index("messages_coordinator_session_idx").on(table.coordinatorSessionId)],
-);
-
 // ── Generated UI ───────────────────────────────────────────────────────────
 
 export const generatedUi = pgTable(
@@ -503,21 +464,3 @@ export const generatedUi = pgTable(
   },
   (table) => [uniqueIndex("generated_ui_key_idx").on(table.key)],
 );
-
-export const coordinatorSessionsRelations = relations(
-  coordinatorSessions,
-  ({ one, many }) => ({
-    createdByUser: one(users, {
-      fields: [coordinatorSessions.createdBy],
-      references: [users.id],
-    }),
-    messages: many(messages),
-  }),
-);
-
-export const messagesRelations = relations(messages, ({ one }) => ({
-  coordinatorSession: one(coordinatorSessions, {
-    fields: [messages.coordinatorSessionId],
-    references: [coordinatorSessions.id],
-  }),
-}));

@@ -59,12 +59,6 @@ const chatIndexRoute = createRoute({
   component: ChatIndexPage
 })
 
-const chatConversationRoute = createRoute({
-  getParentRoute: () => chatRoute,
-  path: '$coordinatorSessionId',
-  component: () => <Navigate to='/chat' />
-})
-
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'settings',
@@ -111,7 +105,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   registerRoute,
-  chatRoute.addChildren([chatIndexRoute, chatConversationRoute]),
+  chatRoute.addChildren([chatIndexRoute]),
   settingsRoute.addChildren([
     settingsIndexRoute,
     settingsGeneralRoute,

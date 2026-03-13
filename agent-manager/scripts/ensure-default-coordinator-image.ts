@@ -8,8 +8,6 @@ import { log } from "../src/log";
 import { ModalVolumeClient } from "../src/clients/modal";
 import { DEFAULT_VARIANT_IMAGE_REF } from "../src/services/image.service";
 import { getImageSharedVolumeName } from "../src/services/image-volume";
-import { formatCoordinatorSemanticActionIdBullets } from "../../shared/coordinator-actions-contract";
-import { formatCoordinatorClientToolNameBullets } from "../../shared/coordinator-client-tools-contract";
 
 const GLOBAL_SETTINGS_ID = "default";
 const IMAGE_NAME = "Default Coordinator";
@@ -20,48 +18,9 @@ const __dirname = dirname(__filename);
 const COORDINATOR_SEED_DIR = join(__dirname, "..", "seeds", "coordinator");
 const COORDINATOR_AGENTS_TEMPLATE_PATH = join(COORDINATOR_SEED_DIR, "AGENTS.md");
 const COORDINATOR_TOOLS_DIR = join(COORDINATOR_SEED_DIR, "tools");
-const COORDINATOR_CLIENT_TOOLS_START =
-  "<!-- GENERATED:COORDINATOR_CLIENT_TOOLS_START -->";
-const COORDINATOR_CLIENT_TOOLS_END =
-  "<!-- GENERATED:COORDINATOR_CLIENT_TOOLS_END -->";
-const COORDINATOR_ACTIONS_START =
-  "<!-- GENERATED:COORDINATOR_ACTIONS_START -->";
-const COORDINATOR_ACTIONS_END =
-  "<!-- GENERATED:COORDINATOR_ACTIONS_END -->";
-
-function replaceGeneratedSection(input: {
-  readonly content: string;
-  readonly startMarker: string;
-  readonly endMarker: string;
-  readonly replacement: string;
-}): string {
-  const startIndex = input.content.indexOf(input.startMarker);
-  const endIndex = input.content.indexOf(input.endMarker);
-  if (startIndex < 0 || endIndex < 0 || endIndex < startIndex) {
-    throw new Error(
-      `Missing generated section markers: ${input.startMarker} ... ${input.endMarker}`,
-    );
-  }
-
-  const before = input.content.slice(0, startIndex + input.startMarker.length);
-  const after = input.content.slice(endIndex);
-  return `${before}\n\n${input.replacement}\n\n${after}`;
-}
 
 async function renderCoordinatorAgentsMarkdown(): Promise<string> {
-  const template = await readFile(COORDINATOR_AGENTS_TEMPLATE_PATH, "utf8");
-  const withClientTools = replaceGeneratedSection({
-    content: template,
-    startMarker: COORDINATOR_CLIENT_TOOLS_START,
-    endMarker: COORDINATOR_CLIENT_TOOLS_END,
-    replacement: formatCoordinatorClientToolNameBullets(),
-  });
-  return replaceGeneratedSection({
-    content: withClientTools,
-    startMarker: COORDINATOR_ACTIONS_START,
-    endMarker: COORDINATOR_ACTIONS_END,
-    replacement: formatCoordinatorSemanticActionIdBullets(),
-  });
+  return await readFile(COORDINATOR_AGENTS_TEMPLATE_PATH, "utf8");
 }
 
 async function syncCoordinatorSeedVolume(imageId: string): Promise<void> {

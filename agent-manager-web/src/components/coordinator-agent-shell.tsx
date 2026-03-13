@@ -307,7 +307,7 @@ export function CoordinatorAgentShell (props: {
       },
       selectSession: async input => {
         const session = sessions.find(
-          current => current.id === input.coordinatorSessionId.trim()
+          current => current.id === input.sessionId.trim()
         )
         if (!session) {
           throw new Error('Session not found')
@@ -315,7 +315,7 @@ export function CoordinatorAgentShell (props: {
         selectSession(session)
         return {
           selected: true as const,
-          coordinatorSessionId: session.id,
+          sessionId: session.id,
           mode: 'conversation' as const
         }
       },
@@ -323,7 +323,7 @@ export function CoordinatorAgentShell (props: {
         startDraftSession(input?.title)
         return {
           created: true as const,
-          coordinatorSessionId: '',
+          sessionId: '',
           mode: 'conversation' as const
         }
       },

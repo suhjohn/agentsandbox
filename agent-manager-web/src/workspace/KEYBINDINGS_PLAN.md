@@ -93,7 +93,6 @@ Implementation constraints:
 - `agent-manager-web/src/routes/root.tsx`
 - `agent-manager-web/src/workspace/panels/agent-session.tsx`
 - `agent-manager-web/src/workspace/panels/agent-detail.tsx`
-- `agent-manager-web/src/routes/chat-conversation.tsx`
 - `agent-manager-web/src/components/messages/codex-message.tsx`
 - `agent-manager-web/src/components/messages/pi-message.tsx`
 
@@ -103,25 +102,23 @@ These are the files involved in what gets exposed to coordinator today, and are 
 
 ### Backend
 
-- `agent-manager/src/coordinator/index.ts`
-- `agent-manager/src/routes/coordinator.ts`
-- `agent-manager/src/services/agent-run-manager.ts`
-- `shared/coordinator-client-tools-contract.ts`
-- `shared/coordinator-actions-contract.ts`
+- `agent-manager/src/routes/session.ts`
+- `agent-manager/src/routes/agents.ts`
+- `agent-manager/src/services/session.service.ts`
+- `shared/ui-actions-contract.ts`
 
 ### Frontend coordinator runtime + contracts
 
 - `agent-manager-web/src/lib/api.ts`
-- `agent-manager-web/src/routes/chat-conversation.tsx`
-- `agent-manager-web/src/coordinator-actions/executor.ts`
-- `agent-manager-web/src/coordinator-actions/context.ts`
-- `agent-manager-web/src/coordinator-actions/types.ts`
+- `agent-manager-web/src/ui-actions/execute.ts`
+- `agent-manager-web/src/ui-actions/context.ts`
+- `agent-manager-web/src/ui-actions/types.ts`
 - `agent-manager-web/src/coordinator-actions/runtime-bridge.ts`
 - `agent-manager-web/src/coordinator-actions/workspace-bridge.tsx`
-- `agent-manager-web/src/coordinator-actions/registry.ts`
-- `agent-manager-web/src/coordinator-actions/actions/navigation.ts`
-- `agent-manager-web/src/coordinator-actions/actions/workspace.ts`
-- `agent-manager-web/src/coordinator-actions/actions/chat.ts`
+- `agent-manager-web/src/ui-actions/registry.ts`
+- `agent-manager-web/src/ui-actions/actions/navigation.ts`
+- `agent-manager-web/src/ui-actions/actions/workspace.ts`
+- `agent-manager-web/src/ui-actions/actions/chat.ts`
 - `agent-manager-web/src/components/coordinator-session-dialog.tsx`
 - `agent-manager-web/src/routes/workspace.tsx`
 - `agent-manager-web/src/workspace/ui/workspace-view.tsx`
@@ -199,19 +196,18 @@ Current state:
 If we want coordinator visibility/editability for keybindings, add in this order:
 
 1. Extend snapshot types and builders:
-   - `agent-manager-web/src/coordinator-actions/types.ts`
-   - `agent-manager-web/src/coordinator-actions/context.ts`.
+   - `agent-manager-web/src/ui-actions/types.ts`
+   - `agent-manager-web/src/ui-actions/context.ts`.
 2. Add semantic action IDs + contract updates:
-   - `shared/coordinator-actions-contract.ts`
-   - `agent-manager-web/src/coordinator-actions/registry.ts`
-   - `agent-manager-web/src/coordinator-actions/actions/*.ts`.
+   - `shared/ui-actions-contract.ts`
+   - `agent-manager-web/src/ui-actions/registry.ts`
+   - `agent-manager-web/src/ui-actions/actions/*.ts`.
 3. Expose runtime bridge/controller surface needed for keybinding read/write:
    - `agent-manager-web/src/coordinator-actions/runtime-bridge.ts`
    - keybinding host layer under `agent-manager-web/src/workspace/keybindings/*`.
 4. Keep client-tool contract alignment checks intact:
-   - `shared/coordinator-client-tools-contract.ts`
-   - `agent-manager/src/coordinator/index.ts`
-   - `agent-manager-web/src/coordinator-actions/executor.ts`.
+   - `shared/ui-actions-contract.ts`
+   - `agent-manager-web/src/ui-actions/execute.ts`.
 
 ## Safety and Behavior Constraints
 

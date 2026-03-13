@@ -246,6 +246,13 @@
       "when": 1773274719532,
       "tag": "0034_overconfident_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1773444980284,
+      "tag": "0035_silky_maestro",
+      "breakpoints": true
     }
   ]
 }

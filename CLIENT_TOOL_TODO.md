@@ -134,8 +134,6 @@ coordinator-run transport.
 ## Seed / Legacy Artifact Cleanup
 
 - [ ] Re-run generation for agent-manager-tools via commands in agent-manager-client
-- [ ] Update `agent-manager/scripts/ensure-default-coordinator-image.ts` to
-      stop importing the deleted `shared/coordinator-client-tools-contract.ts`.
 - [ ] Update coordinator seed docs that still reference deleted transport
       files.
 

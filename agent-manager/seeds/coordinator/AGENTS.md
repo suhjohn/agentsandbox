@@ -244,8 +244,8 @@ Trigger conditions:
 - User asks to place JSON artifacts inside agent sandbox for downstream use.
 - User asks for data handoff with explicit output file path confirmation.
 
-1. List coordinator sessions: \`GET /coordinator/session\`.
-2. Fetch messages: \`GET /coordinator/session/{coordinatorSessionId}/messages\`.
+1. List sessions with \`GET /session\` (filter by \`agentId\` when appropriate).
+2. Fetch a session payload with \`GET /session/{sessionId}\`.
 3. Write the JSON payload into the agent sandbox with \`agent_sandbox_bash\`.
 4. Return exact file path plus record count.
 

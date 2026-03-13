@@ -269,27 +269,27 @@ Notes:
 - Optional `session_id` must be 32 hex if you provide it.
 - This is the manager-side way to resume an agent. Do not send the manager bearer token straight to runtime `/session/*` routes.
 
-### Export Conversation Data to Agent Sandbox JSON
+### Export Session Data to Agent Sandbox JSON
 
-Coordinator case: fetch coordinator-session data before writing it into a sandbox file.
+Coordinator case: fetch session data before writing it into a sandbox file.
 
 ```python
-from agent_manager_client.generated_client.api.agent import (
-    get_coordinator_session,
-    get_coordinator_session_coordinator_session_id_messages,
+from agent_manager_client.generated_client.api.session import (
+    get_session,
+    get_session_id,
 )
 
-sessions = get_coordinator_session.sync(client=manager_client)
+sessions = get_session.sync(client=manager_client, limit=20)
 for session in sessions.data:
     print(session.id, session.title)
 
-messages = get_coordinator_session_coordinator_session_id_messages.sync(
-    coordinator_session_id="<coordinator-session-id>",
+session_detail = get_session_id.sync(
+    id="<session-id>",
     client=manager_client,
 )
 
-payload = [message.to_dict() for message in messages.data]
-print("message count:", len(payload))
+payload = session_detail.to_dict()
+print("message count:", len(payload.get("messages", [])))
 ```
 
 Notes:

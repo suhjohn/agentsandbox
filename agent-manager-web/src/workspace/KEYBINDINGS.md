@@ -227,39 +227,23 @@ type Command = {
 
 ## Client tool contract and entry points
 
-- Tool names are contract-backed in `shared/coordinator-client-tools-contract.ts`:
-  - semantic: `ui_get_state`, `ui_list_available_actions`, `ui_run_action`
-  - browser fallback: `ui_browser_*`
-- Backend coordinator exposes those tools in `agent-manager/src/coordinator/index.ts` (`createClientUiTools`).
-- Frontend executes the same tool set in `agent-manager-web/src/coordinator-actions/executor.ts`.
-- Backend and frontend both assert contract alignment with the shared contract file.
+- The canonical UI action contract lives in `shared/ui-actions-contract.ts`.
+- Frontend executes UI actions via `agent-manager-web/src/ui-actions/execute.ts`.
+- Coordinator-visible actions are the subset where `surfaces.coordinator === true`.
 
 ## End-to-end request path (backend to frontend)
 
-1. Frontend starts run with browser tools enabled:
-   - `agent-manager-web/src/lib/api.ts` (`startCoordinatorRun`, `browserAvailable`)
-   - called from `agent-manager-web/src/routes/chat-conversation.tsx`.
-2. Backend receives run create and stores `browserAvailable`:
-   - `agent-manager/src/routes/coordinator.ts`
-   - `agent-manager/src/services/agent-run-manager.ts`.
-3. During stream, backend emits `client_tool_request` events and waits for result:
-   - `agent-manager/src/services/agent-run-manager.ts`.
-4. Frontend stream handler receives request, executes, and submits result:
-   - `agent-manager-web/src/routes/chat-conversation.tsx`
-   - `agent-manager-web/src/coordinator-actions/executor.ts`
-   - `agent-manager-web/src/lib/api.ts` (`submitCoordinatorToolResult`).
-5. Backend accepts tool result at:
-   - `agent-manager/src/routes/coordinator.ts` (`/coordinator/runs/:runId/tool-result`).
+The legacy coordinator-specific transport has been removed. Coordinator UI now uses the normal agent/session manager APIs together with frontend-local UI action execution.
 
 ## What coordinator can currently “see”
 
-- Semantic action contract: `shared/coordinator-actions-contract.ts`.
+- Semantic action contract: `shared/ui-actions-contract.ts`.
 - Action registry and implementations:
-  - `agent-manager-web/src/coordinator-actions/registry.ts`
-  - `agent-manager-web/src/coordinator-actions/actions/*.ts`.
+  - `agent-manager-web/src/ui-actions/registry.ts`
+  - `agent-manager-web/src/ui-actions/actions/*.ts`.
 - Runtime state exposed by `ui_get_state`:
-  - `agent-manager-web/src/coordinator-actions/types.ts`
-  - `agent-manager-web/src/coordinator-actions/context.ts`
+  - `agent-manager-web/src/ui-actions/types.ts`
+  - `agent-manager-web/src/ui-actions/context.ts`
   - `agent-manager-web/src/coordinator-actions/runtime-bridge.ts`
   - `agent-manager-web/src/coordinator-actions/workspace-bridge.tsx`
   - `agent-manager-web/src/routes/workspace.tsx`

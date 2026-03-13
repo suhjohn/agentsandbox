@@ -480,10 +480,10 @@ export function CoordinatorSessionDialog (props: {
   )
 
   const selectSession = useCallback(
-    async (input: { readonly coordinatorSessionId: string }) => {
-      const nextSessionId = input.coordinatorSessionId.trim()
+    async (input: { readonly sessionId: string }) => {
+      const nextSessionId = input.sessionId.trim()
       if (!nextSessionId) {
-        throw new Error('coordinatorSessionId is required')
+        throw new Error('sessionId is required')
       }
 
       const matchingSession =
@@ -500,7 +500,7 @@ export function CoordinatorSessionDialog (props: {
 
       return {
         selected: true as const,
-        coordinatorSessionId: nextSessionId,
+        sessionId: nextSessionId,
         mode: 'conversation' as const
       }
     },
@@ -517,7 +517,7 @@ export function CoordinatorSessionDialog (props: {
 
       return {
         created: true as const,
-        coordinatorSessionId: '',
+        sessionId: '',
         mode: 'conversation' as const
       }
     },

@@ -8,7 +8,7 @@ const listDialogSessionsSchema = z.object({
 });
 
 const selectDialogSessionSchema = z.object({
-  coordinatorSessionId: z.string().trim().min(1),
+  sessionId: z.string().trim().min(1),
 });
 
 const createDialogSessionSchema = z.object({
@@ -80,7 +80,7 @@ export const coordinatorDialogSelectSessionAction: UiActionDefinition<
   z.infer<typeof selectDialogSessionSchema>,
   {
     readonly selected: true;
-    readonly coordinatorSessionId: string;
+    readonly sessionId: string;
     readonly mode: "conversation";
   }
 > = {
@@ -89,9 +89,9 @@ export const coordinatorDialogSelectSessionAction: UiActionDefinition<
   paramsJsonSchema: {
     type: "object",
     additionalProperties: false,
-    required: ["coordinatorSessionId"],
+    required: ["sessionId"],
     properties: {
-      coordinatorSessionId: { type: "string", minLength: 1 },
+      sessionId: { type: "string", minLength: 1 },
     },
   },
   canRun: (ctx) => {
@@ -104,7 +104,7 @@ export const coordinatorDialogSelectSessionAction: UiActionDefinition<
     const controller = ctx.dialogController;
     if (!controller) throw new Error("Dialog controller unavailable");
     return await controller.selectSession({
-      coordinatorSessionId: params.coordinatorSessionId,
+      sessionId: params.sessionId,
     });
   },
 };
@@ -113,7 +113,7 @@ export const coordinatorDialogCreateSessionAction: UiActionDefinition<
   z.infer<typeof createDialogSessionSchema>,
   {
     readonly created: true;
-    readonly coordinatorSessionId: string;
+    readonly sessionId: string;
     readonly mode: "conversation";
   }
 > = {

@@ -158,17 +158,17 @@ export type DialogRuntimeController = {
     readonly isDraftingNewSession: boolean;
   }>;
   readonly selectSession: (input: {
-    readonly coordinatorSessionId: string;
+    readonly sessionId: string;
   }) => Promise<{
     readonly selected: true;
-    readonly coordinatorSessionId: string;
+    readonly sessionId: string;
     readonly mode: "conversation";
   }>;
   readonly createSession: (input?: {
     readonly title?: string;
   }) => Promise<{
     readonly created: true;
-    readonly coordinatorSessionId: string;
+    readonly sessionId: string;
     readonly mode: "conversation";
   }>;
   readonly clearConversation: () => Promise<{ readonly cleared: boolean }>;

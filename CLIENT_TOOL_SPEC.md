@@ -840,12 +840,10 @@ The important architectural distinction is:
 These files were part of the deleted legacy coordinator-run transport and are
 no longer part of the status quo.
 
-- `agent-manager-web/src/routes/chat-conversation.tsx`
 - `agent-manager-web/src/coordinator-actions/executor.ts`
 - `agent-manager-web/src/coordinator-actions/context.ts`
 - `agent-manager-web/src/coordinator-actions/browser-tools.ts`
 - `agent-manager-web/src/coordinator-actions/registry.ts`
-- `shared/coordinator-client-tools-contract.ts`
 - `agent-manager/src/services/coordinator-session.service.ts`
 
 ### Files to keep but rename or re-home
