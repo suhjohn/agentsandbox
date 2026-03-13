@@ -6,7 +6,6 @@ COPY . ${AGENT_REPO_DIR}
 
 WORKDIR ${AGENT_REPO_DIR}/agent-go
 
-RUN chmod +x docker/env.sh docker/setup.sh docker/start.sh docker/docker-wrapper.sh docker/runit/*.sh \
-  && bash docker/setup.sh
+RUN bash docker/setup.sh
 
 CMD ["sleep", "infinity"]

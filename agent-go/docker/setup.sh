@@ -93,14 +93,11 @@ install_base_packages() {
   apt_install \
     autocutsel \
     apt-utils \
-    ca-certificates \
-    curl \
     dumb-init \
     fd-find \
     fonts-dejavu-core \
     fonts-liberation \
     git \
-    gnupg \
     iproute2 \
     iptables \
     jq \
@@ -150,7 +147,9 @@ configure_package_repos() {
   . /etc/os-release
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" >/etc/apt/sources.list.d/docker.list
 
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+  chmod a+r /etc/apt/keyrings/nodesource.gpg
+  echo "deb [arch=${arch} signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" >/etc/apt/sources.list.d/nodesource.list
 
   invalidate_apt_update
   rm -f "${SETUP_STATE_DIR}"/packages-*.ready
@@ -291,8 +290,6 @@ sync_repo_files() {
   install -m 0644 "${novnc_src}" /usr/share/novnc/index.html
   install -m 0644 "${novnc_src}" /usr/share/novnc/vnc.html
   install -m 0644 "${novnc_src}" /usr/share/novnc/vnc_lite.html
-  chmod +x "${AGENT_DOCKER_DIR}/env.sh" "${AGENT_DOCKER_DIR}/setup.sh" "${AGENT_DOCKER_DIR}/start.sh" "${AGENT_DOCKER_DIR}/docker-wrapper.sh"
-  chmod +x "${AGENT_DOCKER_DIR}/runit/"*.sh
   [[ -f "${AGENT_SERVER_BIN}" ]] && chmod +x "${AGENT_SERVER_BIN}"
   printf '%s\n' "${desired_state}" >"${marker}"
 }
