@@ -28,39 +28,6 @@ Compilation of all important info
 - When exported function signatures or behavior change in any file under `agent-manager/src/services/*.ts`, update that README in the same change.
 - Keep function names, input parameter types, and return/output types in sync with code.
 
-# Coordinator Semantic Actions Sync Rule
-
-- Canonical semantic action ID + version contract source:
-  - `shared/coordinator-actions-contract.ts`
-- Canonical coordinator semantic action docs:
-  - `docs/COORDINATOR_AGENT_SPEC.md`
-  - `docs/COORDINATOR_SEMANTIC_ACTIONS.md`
-- Canonical frontend action runtime implementation:
-  - `agent-manager-web/src/coordinator-actions/`
-- Treat semantic actions as a contract. If behavior changes in any of these files, update the coordinator-actions contract in the same change:
-  - `agent-manager-web/src/coordinator-actions/types.ts`
-  - `agent-manager-web/src/coordinator-actions/registry.ts`
-  - `agent-manager-web/src/coordinator-actions/context.ts`
-  - `agent-manager-web/src/coordinator-actions/executor.ts`
-  - `agent-manager-web/src/coordinator-actions/runtime-bridge.ts`
-  - `agent-manager-web/src/coordinator-actions/workspace-bridge.tsx`
-  - `agent-manager-web/src/coordinator-actions/actions/*.ts`
-  - `agent-manager-web/src/routes/root.tsx`
-  - `agent-manager-web/src/routes/workspace.tsx`
-  - `agent-manager-web/src/routes/chat-conversation.tsx`
-  - `agent-manager-web/src/components/chat-dialog.tsx`
-  - `agent-manager/src/coordinator/index.ts`
-- Update rules when UI/routes/hooks change:
-  - If auth/route/dialog/workspace visibility conditions change, update `context.ts` snapshot fields and all affected `canRun(...)` logic.
-  - If chat/dialog/workspace runtime controller signatures change, update `types.ts`, `runtime-bridge.ts`, and all registration/call sites in the same PR.
-  - If workspace panel types or panel placement behavior changes, update `actions/workspace.ts`, `workspace-bridge.tsx`, and semantic action docs.
-  - If action params or result shape change in a breaking way, bump action version rather than silently changing behavior.
-  - If action IDs are added/removed/renamed, update `shared/coordinator-actions-contract.ts` first, then `registry.ts` and docs in the same change; do not leave unregistered action modules.
-  - Keep manager prompt guidance sourced from `shared/coordinator-actions-contract.ts` (do not maintain a second hard-coded action ID list in `agent-manager/src/coordinator/index.ts`).
-- Keep frontend and backend tool contracts aligned:
-  - Frontend executor tool names (`ui_list_available_actions`, `ui_get_state`, `ui_run_action`) must stay in sync with backend coordinator expectations.
-  - If those names or payload shapes change, update frontend + backend in the same change.
-
 # UI Feeling Observations
 
 The coordinator/workspace UI should feel:
