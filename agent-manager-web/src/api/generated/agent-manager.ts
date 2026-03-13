@@ -113,6 +113,97 @@ export type GetAuthGithubCallback501 = {
   error: string;
 };
 
+export type GetApiKeys200DataItem = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  userId: string;
+  /** @nullable */
+  agentId: string | null;
+  /** @nullable */
+  expiresAt: string | null;
+  /** @nullable */
+  revokedAt: string | null;
+  /** @nullable */
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GetApiKeys200 = {
+  data: GetApiKeys200DataItem[];
+};
+
+export type PostApiKeysBody = {
+  /**
+   * @minLength 1
+   * @maxLength 255
+   */
+  name: string;
+  /** @minItems 1 */
+  scopes: string[];
+  agentId?: string;
+  /**
+   * @minimum 60
+   * @maximum 2592000
+   */
+  expiresInSeconds?: number;
+};
+
+export type PostApiKeys201ApiKey = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  userId: string;
+  /** @nullable */
+  agentId: string | null;
+  /** @nullable */
+  expiresAt: string | null;
+  /** @nullable */
+  revokedAt: string | null;
+  /** @nullable */
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PostApiKeys201 = {
+  key: string;
+  apiKey: PostApiKeys201ApiKey;
+};
+
+export type PostApiKeys400 = {
+  error: string;
+};
+
+export type PostApiKeysIdRevoke200ApiKey = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  userId: string;
+  /** @nullable */
+  agentId: string | null;
+  /** @nullable */
+  expiresAt: string | null;
+  /** @nullable */
+  revokedAt: string | null;
+  /** @nullable */
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PostApiKeysIdRevoke200 = {
+  apiKey: PostApiKeysIdRevoke200ApiKey;
+};
+
+export type PostApiKeysIdRevoke404 = {
+  error: string;
+};
+
 export type GetUsersParams = {
 ids?: string;
 /**
@@ -665,6 +756,7 @@ export type PostImagesImageIdSetupSandbox200 = {
   sandboxId: string;
   variantId: string;
   draftImageId: string;
+  authorizedPublicKeys?: string[];
   /** @nullable */
   ssh?: PostImagesImageIdSetupSandbox200Ssh;
 };
@@ -674,6 +766,41 @@ export type PostImagesImageIdSetupSandbox400 = {
 };
 
 export type PostImagesImageIdSetupSandbox404 = {
+  error: string;
+};
+
+export type PostImagesImageIdSetupSandboxSandboxIdSshBody = {
+  /**
+   * @minItems 1
+   * @maxItems 20
+   */
+  sshPublicKeys: string[];
+};
+
+/**
+ * @nullable
+ */
+export type PostImagesImageIdSetupSandboxSandboxIdSsh200Ssh = {
+  username: string;
+  host: string;
+  /** @exclusiveMinimum 0 */
+  port: number;
+  hostPublicKey: string;
+  hostKeyFingerprint: string;
+  knownHostsLine: string;
+} | null;
+
+export type PostImagesImageIdSetupSandboxSandboxIdSsh200 = {
+  authorizedPublicKeys?: string[];
+  /** @nullable */
+  ssh?: PostImagesImageIdSetupSandboxSandboxIdSsh200Ssh;
+};
+
+export type PostImagesImageIdSetupSandboxSandboxIdSsh400 = {
+  error: string;
+};
+
+export type PostImagesImageIdSetupSandboxSandboxIdSsh404 = {
   error: string;
 };
 
@@ -2213,234 +2340,6 @@ export type PutSessionId409 = {
   error: string;
 };
 
-export type PostCoordinatorSessionBody = {
-  /**
-   * @minLength 1
-   * @maxLength 255
-   */
-  title?: string;
-};
-
-export type PostCoordinatorSession201 = {
-  id: string;
-  /** @nullable */
-  title: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type GetCoordinatorSessionParams = {
-/**
- * @minimum 1
- * @maximum 50
- */
-limit?: number;
-cursor?: string;
-};
-
-export type GetCoordinatorSession200DataItem = {
-  id: string;
-  /** @nullable */
-  title: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type GetCoordinatorSession200 = {
-  data: GetCoordinatorSession200DataItem[];
-  /** @nullable */
-  nextCursor: string | null;
-};
-
-export type PostCoordinatorSessionCoordinatorSessionIdRunsBody = {
-  /** @minLength 1 */
-  message: string;
-  browserAvailable?: boolean;
-};
-
-export type PostCoordinatorSessionCoordinatorSessionIdRuns200 = {
-  runId: string;
-  coordinatorSessionId: string;
-  streamUrl: string;
-};
-
-export type PostCoordinatorSessionCoordinatorSessionIdRuns404 = {
-  error: string;
-};
-
-export type PostCoordinatorRunsRunIdCancelBody = {
-  /**
-   * @minLength 1
-   * @maxLength 200
-   */
-  reason?: string;
-};
-
-export type PostCoordinatorRunsRunIdCancel200Status = typeof PostCoordinatorRunsRunIdCancel200Status[keyof typeof PostCoordinatorRunsRunIdCancel200Status];
-
-
-export const PostCoordinatorRunsRunIdCancel200Status = {
-  canceled: 'canceled',
-  already_canceled: 'already_canceled',
-  already_finished: 'already_finished',
-} as const;
-
-export type PostCoordinatorRunsRunIdCancel200 = {
-  ok: boolean;
-  status: PostCoordinatorRunsRunIdCancel200Status;
-};
-
-export type PostCoordinatorRunsRunIdCancel404 = {
-  error: string;
-};
-
-export type GetCoordinatorRunsRunIdStreamParams = {
-/**
- * @minimum 0
- * @nullable
- */
-after?: number | null;
-};
-
-export type GetCoordinatorRunsRunIdStream200 = {
-  stream: string;
-};
-
-export type GetCoordinatorRunsRunIdStream404 = {
-  error: string;
-};
-
-export type GetCoordinatorRunsRunId200Status = typeof GetCoordinatorRunsRunId200Status[keyof typeof GetCoordinatorRunsRunId200Status];
-
-
-export const GetCoordinatorRunsRunId200Status = {
-  running: 'running',
-  completed: 'completed',
-  error: 'error',
-  canceled: 'canceled',
-} as const;
-
-export type GetCoordinatorRunsRunId200 = {
-  runId: string;
-  coordinatorSessionId: string;
-  status: GetCoordinatorRunsRunId200Status;
-  /** @nullable */
-  errorMessage: string | null;
-};
-
-export type GetCoordinatorRunsRunId404 = {
-  error: string;
-};
-
-export type PostCoordinatorRunsRunIdToolResultBody = {
-  /** @minLength 1 */
-  toolCallId: string;
-  ok: boolean;
-  result?: unknown;
-  error?: string;
-};
-
-export type PostCoordinatorRunsRunIdToolResult200Status = typeof PostCoordinatorRunsRunIdToolResult200Status[keyof typeof PostCoordinatorRunsRunIdToolResult200Status];
-
-
-export const PostCoordinatorRunsRunIdToolResult200Status = {
-  accepted: 'accepted',
-  already_resolved: 'already_resolved',
-} as const;
-
-export type PostCoordinatorRunsRunIdToolResult200 = {
-  ok: boolean;
-  status: PostCoordinatorRunsRunIdToolResult200Status;
-};
-
-export type PostCoordinatorRunsRunIdToolResult404 = {
-  error: string;
-};
-
-export type PostCoordinatorRunsRunIdToolResult409 = {
-  error: string;
-};
-
-export type PostCoordinatorTranscription200 = {
-  text: string;
-  model: string;
-};
-
-export type PostCoordinatorTranscription400 = {
-  error: string;
-};
-
-export type GetCoordinatorSessionCoordinatorSessionId200 = {
-  id: string;
-  /** @nullable */
-  title: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type GetCoordinatorSessionCoordinatorSessionId404 = {
-  error: string;
-};
-
-export type PatchCoordinatorSessionCoordinatorSessionIdBody = {
-  /**
-   * @minLength 1
-   * @maxLength 255
-   */
-  title: string;
-};
-
-export type PatchCoordinatorSessionCoordinatorSessionId200 = {
-  id: string;
-  /** @nullable */
-  title: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type PatchCoordinatorSessionCoordinatorSessionId404 = {
-  error: string;
-};
-
-export type DeleteCoordinatorSessionCoordinatorSessionId200 = {
-  ok: boolean;
-};
-
-export type DeleteCoordinatorSessionCoordinatorSessionId404 = {
-  error: string;
-};
-
-export type GetCoordinatorSessionCoordinatorSessionIdMessages200DataItemRole = typeof GetCoordinatorSessionCoordinatorSessionIdMessages200DataItemRole[keyof typeof GetCoordinatorSessionCoordinatorSessionIdMessages200DataItemRole];
-
-
-export const GetCoordinatorSessionCoordinatorSessionIdMessages200DataItemRole = {
-  user: 'user',
-  assistant: 'assistant',
-  tool: 'tool',
-} as const;
-
-export type GetCoordinatorSessionCoordinatorSessionIdMessages200DataItem = {
-  id: string;
-  coordinatorSessionId: string;
-  role: GetCoordinatorSessionCoordinatorSessionIdMessages200DataItemRole;
-  content: string;
-  toolCalls?: unknown;
-  toolResults?: unknown;
-  createdAt: string;
-};
-
-export type GetCoordinatorSessionCoordinatorSessionIdMessages200 = {
-  data: GetCoordinatorSessionCoordinatorSessionIdMessages200DataItem[];
-};
-
-export type GetCoordinatorSessionCoordinatorSessionIdMessages404 = {
-  error: string;
-};
-
 export type PostTerminalConnectBody = {
   targetType: 'setupSandbox';
   /** @minLength 1 */
@@ -3109,6 +3008,296 @@ export function useGetAuthGithubCallback<TData = Awaited<ReturnType<typeof getAu
 
 
 
+/**
+ * @summary List API keys
+ */
+export type getApiKeysResponse200 = {
+  data: GetApiKeys200
+  status: 200
+}
+    
+export type getApiKeysResponseSuccess = (getApiKeysResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getApiKeysResponse = (getApiKeysResponseSuccess)
+
+export const getGetApiKeysUrl = () => {
+
+
+  
+
+  return `/api-keys`
+}
+
+export const getApiKeys = async ( options?: RequestInit): Promise<getApiKeysResponse> => {
+  
+  return orvalFetcher<getApiKeysResponse>(getGetApiKeysUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getGetApiKeysQueryKey = () => {
+    return [
+    `/api-keys`
+    ] as const;
+    }
+
+    
+export const getGetApiKeysQueryOptions = <TData = Awaited<ReturnType<typeof getApiKeys>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiKeys>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetApiKeysQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getApiKeys>>> = ({ signal }) => getApiKeys({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getApiKeys>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetApiKeysQueryResult = NonNullable<Awaited<ReturnType<typeof getApiKeys>>>
+export type GetApiKeysQueryError = unknown
+
+
+export function useGetApiKeys<TData = Awaited<ReturnType<typeof getApiKeys>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiKeys>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiKeys>>,
+          TError,
+          Awaited<ReturnType<typeof getApiKeys>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetApiKeys<TData = Awaited<ReturnType<typeof getApiKeys>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiKeys>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiKeys>>,
+          TError,
+          Awaited<ReturnType<typeof getApiKeys>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetApiKeys<TData = Awaited<ReturnType<typeof getApiKeys>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiKeys>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List API keys
+ */
+
+export function useGetApiKeys<TData = Awaited<ReturnType<typeof getApiKeys>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiKeys>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetApiKeysQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+/**
+ * @summary Create API key
+ */
+export type postApiKeysResponse201 = {
+  data: PostApiKeys201
+  status: 201
+}
+
+export type postApiKeysResponse400 = {
+  data: PostApiKeys400
+  status: 400
+}
+    
+export type postApiKeysResponseSuccess = (postApiKeysResponse201) & {
+  headers: Headers;
+};
+export type postApiKeysResponseError = (postApiKeysResponse400) & {
+  headers: Headers;
+};
+
+export type postApiKeysResponse = (postApiKeysResponseSuccess | postApiKeysResponseError)
+
+export const getPostApiKeysUrl = () => {
+
+
+  
+
+  return `/api-keys`
+}
+
+export const postApiKeys = async (postApiKeysBody: PostApiKeysBody, options?: RequestInit): Promise<postApiKeysResponse> => {
+  
+  return orvalFetcher<postApiKeysResponse>(getPostApiKeysUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      postApiKeysBody,)
+  }
+);}
+
+
+
+
+export const getPostApiKeysMutationOptions = <TError = PostApiKeys400,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postApiKeys>>, TError,{data: PostApiKeysBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof postApiKeys>>, TError,{data: PostApiKeysBody}, TContext> => {
+
+const mutationKey = ['postApiKeys'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postApiKeys>>, {data: PostApiKeysBody}> = (props) => {
+          const {data} = props ?? {};
+
+          return  postApiKeys(data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostApiKeysMutationResult = NonNullable<Awaited<ReturnType<typeof postApiKeys>>>
+    export type PostApiKeysMutationBody = PostApiKeysBody
+    export type PostApiKeysMutationError = PostApiKeys400
+
+    /**
+ * @summary Create API key
+ */
+export const usePostApiKeys = <TError = PostApiKeys400,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postApiKeys>>, TError,{data: PostApiKeysBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postApiKeys>>,
+        TError,
+        {data: PostApiKeysBody},
+        TContext
+      > => {
+      return useMutation(getPostApiKeysMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Revoke API key
+ */
+export type postApiKeysIdRevokeResponse200 = {
+  data: PostApiKeysIdRevoke200
+  status: 200
+}
+
+export type postApiKeysIdRevokeResponse404 = {
+  data: PostApiKeysIdRevoke404
+  status: 404
+}
+    
+export type postApiKeysIdRevokeResponseSuccess = (postApiKeysIdRevokeResponse200) & {
+  headers: Headers;
+};
+export type postApiKeysIdRevokeResponseError = (postApiKeysIdRevokeResponse404) & {
+  headers: Headers;
+};
+
+export type postApiKeysIdRevokeResponse = (postApiKeysIdRevokeResponseSuccess | postApiKeysIdRevokeResponseError)
+
+export const getPostApiKeysIdRevokeUrl = (id: string,) => {
+
+
+  
+
+  return `/api-keys/${id}/revoke`
+}
+
+export const postApiKeysIdRevoke = async (id: string, options?: RequestInit): Promise<postApiKeysIdRevokeResponse> => {
+  
+  return orvalFetcher<postApiKeysIdRevokeResponse>(getPostApiKeysIdRevokeUrl(id),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+
+export const getPostApiKeysIdRevokeMutationOptions = <TError = PostApiKeysIdRevoke404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postApiKeysIdRevoke>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof postApiKeysIdRevoke>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['postApiKeysIdRevoke'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postApiKeysIdRevoke>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  postApiKeysIdRevoke(id,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostApiKeysIdRevokeMutationResult = NonNullable<Awaited<ReturnType<typeof postApiKeysIdRevoke>>>
+    
+    export type PostApiKeysIdRevokeMutationError = PostApiKeysIdRevoke404
+
+    /**
+ * @summary Revoke API key
+ */
+export const usePostApiKeysIdRevoke = <TError = PostApiKeysIdRevoke404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postApiKeysIdRevoke>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postApiKeysIdRevoke>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getPostApiKeysIdRevokeMutationOptions(options), queryClient);
+    }
+    
 /**
  * @summary List users
  */
@@ -5162,6 +5351,104 @@ export const usePostImagesImageIdSetupSandbox = <TError = PostImagesImageIdSetup
         TContext
       > => {
       return useMutation(getPostImagesImageIdSetupSandboxMutationOptions(options), queryClient);
+    }
+    
+/**
+ * @summary Add SSH public keys to setup sandbox
+ */
+export type postImagesImageIdSetupSandboxSandboxIdSshResponse200 = {
+  data: PostImagesImageIdSetupSandboxSandboxIdSsh200
+  status: 200
+}
+
+export type postImagesImageIdSetupSandboxSandboxIdSshResponse400 = {
+  data: PostImagesImageIdSetupSandboxSandboxIdSsh400
+  status: 400
+}
+
+export type postImagesImageIdSetupSandboxSandboxIdSshResponse404 = {
+  data: PostImagesImageIdSetupSandboxSandboxIdSsh404
+  status: 404
+}
+    
+export type postImagesImageIdSetupSandboxSandboxIdSshResponseSuccess = (postImagesImageIdSetupSandboxSandboxIdSshResponse200) & {
+  headers: Headers;
+};
+export type postImagesImageIdSetupSandboxSandboxIdSshResponseError = (postImagesImageIdSetupSandboxSandboxIdSshResponse400 | postImagesImageIdSetupSandboxSandboxIdSshResponse404) & {
+  headers: Headers;
+};
+
+export type postImagesImageIdSetupSandboxSandboxIdSshResponse = (postImagesImageIdSetupSandboxSandboxIdSshResponseSuccess | postImagesImageIdSetupSandboxSandboxIdSshResponseError)
+
+export const getPostImagesImageIdSetupSandboxSandboxIdSshUrl = (imageId: string,
+    sandboxId: string,) => {
+
+
+  
+
+  return `/images/${imageId}/setup-sandbox/${sandboxId}/ssh`
+}
+
+export const postImagesImageIdSetupSandboxSandboxIdSsh = async (imageId: string,
+    sandboxId: string,
+    postImagesImageIdSetupSandboxSandboxIdSshBody: PostImagesImageIdSetupSandboxSandboxIdSshBody, options?: RequestInit): Promise<postImagesImageIdSetupSandboxSandboxIdSshResponse> => {
+  
+  return orvalFetcher<postImagesImageIdSetupSandboxSandboxIdSshResponse>(getPostImagesImageIdSetupSandboxSandboxIdSshUrl(imageId,sandboxId),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      postImagesImageIdSetupSandboxSandboxIdSshBody,)
+  }
+);}
+
+
+
+
+export const getPostImagesImageIdSetupSandboxSandboxIdSshMutationOptions = <TError = PostImagesImageIdSetupSandboxSandboxIdSsh400 | PostImagesImageIdSetupSandboxSandboxIdSsh404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdSetupSandboxSandboxIdSsh>>, TError,{imageId: string;sandboxId: string;data: PostImagesImageIdSetupSandboxSandboxIdSshBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdSetupSandboxSandboxIdSsh>>, TError,{imageId: string;sandboxId: string;data: PostImagesImageIdSetupSandboxSandboxIdSshBody}, TContext> => {
+
+const mutationKey = ['postImagesImageIdSetupSandboxSandboxIdSsh'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postImagesImageIdSetupSandboxSandboxIdSsh>>, {imageId: string;sandboxId: string;data: PostImagesImageIdSetupSandboxSandboxIdSshBody}> = (props) => {
+          const {imageId,sandboxId,data} = props ?? {};
+
+          return  postImagesImageIdSetupSandboxSandboxIdSsh(imageId,sandboxId,data,requestOptions)
+        }
+
+
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostImagesImageIdSetupSandboxSandboxIdSshMutationResult = NonNullable<Awaited<ReturnType<typeof postImagesImageIdSetupSandboxSandboxIdSsh>>>
+    export type PostImagesImageIdSetupSandboxSandboxIdSshMutationBody = PostImagesImageIdSetupSandboxSandboxIdSshBody
+    export type PostImagesImageIdSetupSandboxSandboxIdSshMutationError = PostImagesImageIdSetupSandboxSandboxIdSsh400 | PostImagesImageIdSetupSandboxSandboxIdSsh404
+
+    /**
+ * @summary Add SSH public keys to setup sandbox
+ */
+export const usePostImagesImageIdSetupSandboxSandboxIdSsh = <TError = PostImagesImageIdSetupSandboxSandboxIdSsh400 | PostImagesImageIdSetupSandboxSandboxIdSsh404,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postImagesImageIdSetupSandboxSandboxIdSsh>>, TError,{imageId: string;sandboxId: string;data: PostImagesImageIdSetupSandboxSandboxIdSshBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postImagesImageIdSetupSandboxSandboxIdSsh>>,
+        TError,
+        {imageId: string;sandboxId: string;data: PostImagesImageIdSetupSandboxSandboxIdSshBody},
+        TContext
+      > => {
+      return useMutation(getPostImagesImageIdSetupSandboxSandboxIdSshMutationOptions(options), queryClient);
     }
     
 /**
@@ -7500,1241 +7787,6 @@ export const usePutSessionId = <TError = PutSessionId404 | PutSessionId409,
       return useMutation(getPutSessionIdMutationOptions(options), queryClient);
     }
     
-/**
- * @summary Create a coordinator session
- */
-export type postCoordinatorSessionResponse201 = {
-  data: PostCoordinatorSession201
-  status: 201
-}
-    
-export type postCoordinatorSessionResponseSuccess = (postCoordinatorSessionResponse201) & {
-  headers: Headers;
-};
-;
-
-export type postCoordinatorSessionResponse = (postCoordinatorSessionResponseSuccess)
-
-export const getPostCoordinatorSessionUrl = () => {
-
-
-  
-
-  return `/coordinator/session`
-}
-
-export const postCoordinatorSession = async (postCoordinatorSessionBody: PostCoordinatorSessionBody, options?: RequestInit): Promise<postCoordinatorSessionResponse> => {
-  
-  return orvalFetcher<postCoordinatorSessionResponse>(getPostCoordinatorSessionUrl(),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postCoordinatorSessionBody,)
-  }
-);}
-
-
-
-
-export const getPostCoordinatorSessionMutationOptions = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorSession>>, TError,{data: PostCoordinatorSessionBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
-): UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorSession>>, TError,{data: PostCoordinatorSessionBody}, TContext> => {
-
-const mutationKey = ['postCoordinatorSession'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCoordinatorSession>>, {data: PostCoordinatorSessionBody}> = (props) => {
-          const {data} = props ?? {};
-
-          return  postCoordinatorSession(data,requestOptions)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PostCoordinatorSessionMutationResult = NonNullable<Awaited<ReturnType<typeof postCoordinatorSession>>>
-    export type PostCoordinatorSessionMutationBody = PostCoordinatorSessionBody
-    export type PostCoordinatorSessionMutationError = unknown
-
-    /**
- * @summary Create a coordinator session
- */
-export const usePostCoordinatorSession = <TError = unknown,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorSession>>, TError,{data: PostCoordinatorSessionBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof postCoordinatorSession>>,
-        TError,
-        {data: PostCoordinatorSessionBody},
-        TContext
-      > => {
-      return useMutation(getPostCoordinatorSessionMutationOptions(options), queryClient);
-    }
-    
-/**
- * @summary List coordinator sessions for the current user
- */
-export type getCoordinatorSessionResponse200 = {
-  data: GetCoordinatorSession200
-  status: 200
-}
-    
-export type getCoordinatorSessionResponseSuccess = (getCoordinatorSessionResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getCoordinatorSessionResponse = (getCoordinatorSessionResponseSuccess)
-
-export const getGetCoordinatorSessionUrl = (params?: GetCoordinatorSessionParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/coordinator/session?${stringifiedParams}` : `/coordinator/session`
-}
-
-export const getCoordinatorSession = async (params?: GetCoordinatorSessionParams, options?: RequestInit): Promise<getCoordinatorSessionResponse> => {
-  
-  return orvalFetcher<getCoordinatorSessionResponse>(getGetCoordinatorSessionUrl(params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetCoordinatorSessionQueryKey = (params?: GetCoordinatorSessionParams,) => {
-    return [
-    `/coordinator/session`, ...(params ? [params] : [])
-    ] as const;
-    }
-
-    
-export const getGetCoordinatorSessionQueryOptions = <TData = Awaited<ReturnType<typeof getCoordinatorSession>>, TError = unknown>(params?: GetCoordinatorSessionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSession>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetCoordinatorSessionQueryKey(params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCoordinatorSession>>> = ({ signal }) => getCoordinatorSession(params, { signal, ...requestOptions });
-
-      
-
-      
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSession>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetCoordinatorSessionQueryResult = NonNullable<Awaited<ReturnType<typeof getCoordinatorSession>>>
-export type GetCoordinatorSessionQueryError = unknown
-
-
-export function useGetCoordinatorSession<TData = Awaited<ReturnType<typeof getCoordinatorSession>>, TError = unknown>(
- params: undefined |  GetCoordinatorSessionParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSession>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorSession>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorSession>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorSession<TData = Awaited<ReturnType<typeof getCoordinatorSession>>, TError = unknown>(
- params?: GetCoordinatorSessionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSession>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorSession>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorSession>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorSession<TData = Awaited<ReturnType<typeof getCoordinatorSession>>, TError = unknown>(
- params?: GetCoordinatorSessionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSession>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary List coordinator sessions for the current user
- */
-
-export function useGetCoordinatorSession<TData = Awaited<ReturnType<typeof getCoordinatorSession>>, TError = unknown>(
- params?: GetCoordinatorSessionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSession>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetCoordinatorSessionQueryOptions(params,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-
-
-
-
-/**
- * @summary Start a coordinator run for an existing session
- */
-export type postCoordinatorSessionCoordinatorSessionIdRunsResponse200 = {
-  data: PostCoordinatorSessionCoordinatorSessionIdRuns200
-  status: 200
-}
-
-export type postCoordinatorSessionCoordinatorSessionIdRunsResponse404 = {
-  data: PostCoordinatorSessionCoordinatorSessionIdRuns404
-  status: 404
-}
-    
-export type postCoordinatorSessionCoordinatorSessionIdRunsResponseSuccess = (postCoordinatorSessionCoordinatorSessionIdRunsResponse200) & {
-  headers: Headers;
-};
-export type postCoordinatorSessionCoordinatorSessionIdRunsResponseError = (postCoordinatorSessionCoordinatorSessionIdRunsResponse404) & {
-  headers: Headers;
-};
-
-export type postCoordinatorSessionCoordinatorSessionIdRunsResponse = (postCoordinatorSessionCoordinatorSessionIdRunsResponseSuccess | postCoordinatorSessionCoordinatorSessionIdRunsResponseError)
-
-export const getPostCoordinatorSessionCoordinatorSessionIdRunsUrl = (coordinatorSessionId: string,) => {
-
-
-  
-
-  return `/coordinator/session/${coordinatorSessionId}/runs`
-}
-
-export const postCoordinatorSessionCoordinatorSessionIdRuns = async (coordinatorSessionId: string,
-    postCoordinatorSessionCoordinatorSessionIdRunsBody: PostCoordinatorSessionCoordinatorSessionIdRunsBody, options?: RequestInit): Promise<postCoordinatorSessionCoordinatorSessionIdRunsResponse> => {
-  
-  return orvalFetcher<postCoordinatorSessionCoordinatorSessionIdRunsResponse>(getPostCoordinatorSessionCoordinatorSessionIdRunsUrl(coordinatorSessionId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postCoordinatorSessionCoordinatorSessionIdRunsBody,)
-  }
-);}
-
-
-
-
-export const getPostCoordinatorSessionCoordinatorSessionIdRunsMutationOptions = <TError = PostCoordinatorSessionCoordinatorSessionIdRuns404,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorSessionCoordinatorSessionIdRuns>>, TError,{coordinatorSessionId: string;data: PostCoordinatorSessionCoordinatorSessionIdRunsBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
-): UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorSessionCoordinatorSessionIdRuns>>, TError,{coordinatorSessionId: string;data: PostCoordinatorSessionCoordinatorSessionIdRunsBody}, TContext> => {
-
-const mutationKey = ['postCoordinatorSessionCoordinatorSessionIdRuns'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCoordinatorSessionCoordinatorSessionIdRuns>>, {coordinatorSessionId: string;data: PostCoordinatorSessionCoordinatorSessionIdRunsBody}> = (props) => {
-          const {coordinatorSessionId,data} = props ?? {};
-
-          return  postCoordinatorSessionCoordinatorSessionIdRuns(coordinatorSessionId,data,requestOptions)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PostCoordinatorSessionCoordinatorSessionIdRunsMutationResult = NonNullable<Awaited<ReturnType<typeof postCoordinatorSessionCoordinatorSessionIdRuns>>>
-    export type PostCoordinatorSessionCoordinatorSessionIdRunsMutationBody = PostCoordinatorSessionCoordinatorSessionIdRunsBody
-    export type PostCoordinatorSessionCoordinatorSessionIdRunsMutationError = PostCoordinatorSessionCoordinatorSessionIdRuns404
-
-    /**
- * @summary Start a coordinator run for an existing session
- */
-export const usePostCoordinatorSessionCoordinatorSessionIdRuns = <TError = PostCoordinatorSessionCoordinatorSessionIdRuns404,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorSessionCoordinatorSessionIdRuns>>, TError,{coordinatorSessionId: string;data: PostCoordinatorSessionCoordinatorSessionIdRunsBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof postCoordinatorSessionCoordinatorSessionIdRuns>>,
-        TError,
-        {coordinatorSessionId: string;data: PostCoordinatorSessionCoordinatorSessionIdRunsBody},
-        TContext
-      > => {
-      return useMutation(getPostCoordinatorSessionCoordinatorSessionIdRunsMutationOptions(options), queryClient);
-    }
-    
-/**
- * @summary Cancel an existing agent run
- */
-export type postCoordinatorRunsRunIdCancelResponse200 = {
-  data: PostCoordinatorRunsRunIdCancel200
-  status: 200
-}
-
-export type postCoordinatorRunsRunIdCancelResponse404 = {
-  data: PostCoordinatorRunsRunIdCancel404
-  status: 404
-}
-    
-export type postCoordinatorRunsRunIdCancelResponseSuccess = (postCoordinatorRunsRunIdCancelResponse200) & {
-  headers: Headers;
-};
-export type postCoordinatorRunsRunIdCancelResponseError = (postCoordinatorRunsRunIdCancelResponse404) & {
-  headers: Headers;
-};
-
-export type postCoordinatorRunsRunIdCancelResponse = (postCoordinatorRunsRunIdCancelResponseSuccess | postCoordinatorRunsRunIdCancelResponseError)
-
-export const getPostCoordinatorRunsRunIdCancelUrl = (runId: string,) => {
-
-
-  
-
-  return `/coordinator/runs/${runId}/cancel`
-}
-
-export const postCoordinatorRunsRunIdCancel = async (runId: string,
-    postCoordinatorRunsRunIdCancelBody: PostCoordinatorRunsRunIdCancelBody, options?: RequestInit): Promise<postCoordinatorRunsRunIdCancelResponse> => {
-  
-  return orvalFetcher<postCoordinatorRunsRunIdCancelResponse>(getPostCoordinatorRunsRunIdCancelUrl(runId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postCoordinatorRunsRunIdCancelBody,)
-  }
-);}
-
-
-
-
-export const getPostCoordinatorRunsRunIdCancelMutationOptions = <TError = PostCoordinatorRunsRunIdCancel404,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorRunsRunIdCancel>>, TError,{runId: string;data: PostCoordinatorRunsRunIdCancelBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
-): UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorRunsRunIdCancel>>, TError,{runId: string;data: PostCoordinatorRunsRunIdCancelBody}, TContext> => {
-
-const mutationKey = ['postCoordinatorRunsRunIdCancel'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCoordinatorRunsRunIdCancel>>, {runId: string;data: PostCoordinatorRunsRunIdCancelBody}> = (props) => {
-          const {runId,data} = props ?? {};
-
-          return  postCoordinatorRunsRunIdCancel(runId,data,requestOptions)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PostCoordinatorRunsRunIdCancelMutationResult = NonNullable<Awaited<ReturnType<typeof postCoordinatorRunsRunIdCancel>>>
-    export type PostCoordinatorRunsRunIdCancelMutationBody = PostCoordinatorRunsRunIdCancelBody
-    export type PostCoordinatorRunsRunIdCancelMutationError = PostCoordinatorRunsRunIdCancel404
-
-    /**
- * @summary Cancel an existing agent run
- */
-export const usePostCoordinatorRunsRunIdCancel = <TError = PostCoordinatorRunsRunIdCancel404,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorRunsRunIdCancel>>, TError,{runId: string;data: PostCoordinatorRunsRunIdCancelBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof postCoordinatorRunsRunIdCancel>>,
-        TError,
-        {runId: string;data: PostCoordinatorRunsRunIdCancelBody},
-        TContext
-      > => {
-      return useMutation(getPostCoordinatorRunsRunIdCancelMutationOptions(options), queryClient);
-    }
-    
-/**
- * @summary Stream events for an existing agent run
- */
-export type getCoordinatorRunsRunIdStreamResponse200 = {
-  data: GetCoordinatorRunsRunIdStream200
-  status: 200
-}
-
-export type getCoordinatorRunsRunIdStreamResponse404 = {
-  data: GetCoordinatorRunsRunIdStream404
-  status: 404
-}
-    
-export type getCoordinatorRunsRunIdStreamResponseSuccess = (getCoordinatorRunsRunIdStreamResponse200) & {
-  headers: Headers;
-};
-export type getCoordinatorRunsRunIdStreamResponseError = (getCoordinatorRunsRunIdStreamResponse404) & {
-  headers: Headers;
-};
-
-export type getCoordinatorRunsRunIdStreamResponse = (getCoordinatorRunsRunIdStreamResponseSuccess | getCoordinatorRunsRunIdStreamResponseError)
-
-export const getGetCoordinatorRunsRunIdStreamUrl = (runId: string,
-    params?: GetCoordinatorRunsRunIdStreamParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString())
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/coordinator/runs/${runId}/stream?${stringifiedParams}` : `/coordinator/runs/${runId}/stream`
-}
-
-export const getCoordinatorRunsRunIdStream = async (runId: string,
-    params?: GetCoordinatorRunsRunIdStreamParams, options?: RequestInit): Promise<getCoordinatorRunsRunIdStreamResponse> => {
-  
-  return orvalFetcher<getCoordinatorRunsRunIdStreamResponse>(getGetCoordinatorRunsRunIdStreamUrl(runId,params),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetCoordinatorRunsRunIdStreamQueryKey = (runId: string,
-    params?: GetCoordinatorRunsRunIdStreamParams,) => {
-    return [
-    `/coordinator/runs/${runId}/stream`, ...(params ? [params] : [])
-    ] as const;
-    }
-
-    
-export const getGetCoordinatorRunsRunIdStreamQueryOptions = <TData = Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError = GetCoordinatorRunsRunIdStream404>(runId: string,
-    params?: GetCoordinatorRunsRunIdStreamParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetCoordinatorRunsRunIdStreamQueryKey(runId,params);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>> = ({ signal }) => getCoordinatorRunsRunIdStream(runId,params, { signal, ...requestOptions });
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(runId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetCoordinatorRunsRunIdStreamQueryResult = NonNullable<Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>>
-export type GetCoordinatorRunsRunIdStreamQueryError = GetCoordinatorRunsRunIdStream404
-
-
-export function useGetCoordinatorRunsRunIdStream<TData = Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError = GetCoordinatorRunsRunIdStream404>(
- runId: string,
-    params: undefined |  GetCoordinatorRunsRunIdStreamParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorRunsRunIdStream<TData = Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError = GetCoordinatorRunsRunIdStream404>(
- runId: string,
-    params?: GetCoordinatorRunsRunIdStreamParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorRunsRunIdStream<TData = Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError = GetCoordinatorRunsRunIdStream404>(
- runId: string,
-    params?: GetCoordinatorRunsRunIdStreamParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Stream events for an existing agent run
- */
-
-export function useGetCoordinatorRunsRunIdStream<TData = Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError = GetCoordinatorRunsRunIdStream404>(
- runId: string,
-    params?: GetCoordinatorRunsRunIdStreamParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunIdStream>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetCoordinatorRunsRunIdStreamQueryOptions(runId,params,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-
-
-
-
-/**
- * @summary Get status for an existing agent run
- */
-export type getCoordinatorRunsRunIdResponse200 = {
-  data: GetCoordinatorRunsRunId200
-  status: 200
-}
-
-export type getCoordinatorRunsRunIdResponse404 = {
-  data: GetCoordinatorRunsRunId404
-  status: 404
-}
-    
-export type getCoordinatorRunsRunIdResponseSuccess = (getCoordinatorRunsRunIdResponse200) & {
-  headers: Headers;
-};
-export type getCoordinatorRunsRunIdResponseError = (getCoordinatorRunsRunIdResponse404) & {
-  headers: Headers;
-};
-
-export type getCoordinatorRunsRunIdResponse = (getCoordinatorRunsRunIdResponseSuccess | getCoordinatorRunsRunIdResponseError)
-
-export const getGetCoordinatorRunsRunIdUrl = (runId: string,) => {
-
-
-  
-
-  return `/coordinator/runs/${runId}`
-}
-
-export const getCoordinatorRunsRunId = async (runId: string, options?: RequestInit): Promise<getCoordinatorRunsRunIdResponse> => {
-  
-  return orvalFetcher<getCoordinatorRunsRunIdResponse>(getGetCoordinatorRunsRunIdUrl(runId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetCoordinatorRunsRunIdQueryKey = (runId: string,) => {
-    return [
-    `/coordinator/runs/${runId}`
-    ] as const;
-    }
-
-    
-export const getGetCoordinatorRunsRunIdQueryOptions = <TData = Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError = GetCoordinatorRunsRunId404>(runId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetCoordinatorRunsRunIdQueryKey(runId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCoordinatorRunsRunId>>> = ({ signal }) => getCoordinatorRunsRunId(runId, { signal, ...requestOptions });
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(runId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetCoordinatorRunsRunIdQueryResult = NonNullable<Awaited<ReturnType<typeof getCoordinatorRunsRunId>>>
-export type GetCoordinatorRunsRunIdQueryError = GetCoordinatorRunsRunId404
-
-
-export function useGetCoordinatorRunsRunId<TData = Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError = GetCoordinatorRunsRunId404>(
- runId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorRunsRunId>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorRunsRunId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorRunsRunId<TData = Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError = GetCoordinatorRunsRunId404>(
- runId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorRunsRunId>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorRunsRunId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorRunsRunId<TData = Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError = GetCoordinatorRunsRunId404>(
- runId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Get status for an existing agent run
- */
-
-export function useGetCoordinatorRunsRunId<TData = Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError = GetCoordinatorRunsRunId404>(
- runId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorRunsRunId>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetCoordinatorRunsRunIdQueryOptions(runId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-
-
-
-
-/**
- * @summary Submit a client tool result for a pending run tool call
- */
-export type postCoordinatorRunsRunIdToolResultResponse200 = {
-  data: PostCoordinatorRunsRunIdToolResult200
-  status: 200
-}
-
-export type postCoordinatorRunsRunIdToolResultResponse404 = {
-  data: PostCoordinatorRunsRunIdToolResult404
-  status: 404
-}
-
-export type postCoordinatorRunsRunIdToolResultResponse409 = {
-  data: PostCoordinatorRunsRunIdToolResult409
-  status: 409
-}
-    
-export type postCoordinatorRunsRunIdToolResultResponseSuccess = (postCoordinatorRunsRunIdToolResultResponse200) & {
-  headers: Headers;
-};
-export type postCoordinatorRunsRunIdToolResultResponseError = (postCoordinatorRunsRunIdToolResultResponse404 | postCoordinatorRunsRunIdToolResultResponse409) & {
-  headers: Headers;
-};
-
-export type postCoordinatorRunsRunIdToolResultResponse = (postCoordinatorRunsRunIdToolResultResponseSuccess | postCoordinatorRunsRunIdToolResultResponseError)
-
-export const getPostCoordinatorRunsRunIdToolResultUrl = (runId: string,) => {
-
-
-  
-
-  return `/coordinator/runs/${runId}/tool-result`
-}
-
-export const postCoordinatorRunsRunIdToolResult = async (runId: string,
-    postCoordinatorRunsRunIdToolResultBody: PostCoordinatorRunsRunIdToolResultBody, options?: RequestInit): Promise<postCoordinatorRunsRunIdToolResultResponse> => {
-  
-  return orvalFetcher<postCoordinatorRunsRunIdToolResultResponse>(getPostCoordinatorRunsRunIdToolResultUrl(runId),
-  {      
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      postCoordinatorRunsRunIdToolResultBody,)
-  }
-);}
-
-
-
-
-export const getPostCoordinatorRunsRunIdToolResultMutationOptions = <TError = PostCoordinatorRunsRunIdToolResult404 | PostCoordinatorRunsRunIdToolResult409,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorRunsRunIdToolResult>>, TError,{runId: string;data: PostCoordinatorRunsRunIdToolResultBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
-): UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorRunsRunIdToolResult>>, TError,{runId: string;data: PostCoordinatorRunsRunIdToolResultBody}, TContext> => {
-
-const mutationKey = ['postCoordinatorRunsRunIdToolResult'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCoordinatorRunsRunIdToolResult>>, {runId: string;data: PostCoordinatorRunsRunIdToolResultBody}> = (props) => {
-          const {runId,data} = props ?? {};
-
-          return  postCoordinatorRunsRunIdToolResult(runId,data,requestOptions)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PostCoordinatorRunsRunIdToolResultMutationResult = NonNullable<Awaited<ReturnType<typeof postCoordinatorRunsRunIdToolResult>>>
-    export type PostCoordinatorRunsRunIdToolResultMutationBody = PostCoordinatorRunsRunIdToolResultBody
-    export type PostCoordinatorRunsRunIdToolResultMutationError = PostCoordinatorRunsRunIdToolResult404 | PostCoordinatorRunsRunIdToolResult409
-
-    /**
- * @summary Submit a client tool result for a pending run tool call
- */
-export const usePostCoordinatorRunsRunIdToolResult = <TError = PostCoordinatorRunsRunIdToolResult404 | PostCoordinatorRunsRunIdToolResult409,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorRunsRunIdToolResult>>, TError,{runId: string;data: PostCoordinatorRunsRunIdToolResultBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof postCoordinatorRunsRunIdToolResult>>,
-        TError,
-        {runId: string;data: PostCoordinatorRunsRunIdToolResultBody},
-        TContext
-      > => {
-      return useMutation(getPostCoordinatorRunsRunIdToolResultMutationOptions(options), queryClient);
-    }
-    
-/**
- * @summary Transcribe uploaded audio for coordinator composer input
- */
-export type postCoordinatorTranscriptionResponse200 = {
-  data: PostCoordinatorTranscription200
-  status: 200
-}
-
-export type postCoordinatorTranscriptionResponse400 = {
-  data: PostCoordinatorTranscription400
-  status: 400
-}
-    
-export type postCoordinatorTranscriptionResponseSuccess = (postCoordinatorTranscriptionResponse200) & {
-  headers: Headers;
-};
-export type postCoordinatorTranscriptionResponseError = (postCoordinatorTranscriptionResponse400) & {
-  headers: Headers;
-};
-
-export type postCoordinatorTranscriptionResponse = (postCoordinatorTranscriptionResponseSuccess | postCoordinatorTranscriptionResponseError)
-
-export const getPostCoordinatorTranscriptionUrl = () => {
-
-
-  
-
-  return `/coordinator/transcription`
-}
-
-export const postCoordinatorTranscription = async ( options?: RequestInit): Promise<postCoordinatorTranscriptionResponse> => {
-  
-  return orvalFetcher<postCoordinatorTranscriptionResponse>(getPostCoordinatorTranscriptionUrl(),
-  {      
-    ...options,
-    method: 'POST'
-    
-    
-  }
-);}
-
-
-
-
-export const getPostCoordinatorTranscriptionMutationOptions = <TError = PostCoordinatorTranscription400,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorTranscription>>, TError,void, TContext>, request?: SecondParameter<typeof orvalFetcher>}
-): UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorTranscription>>, TError,void, TContext> => {
-
-const mutationKey = ['postCoordinatorTranscription'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postCoordinatorTranscription>>, void> = () => {
-          
-
-          return  postCoordinatorTranscription(requestOptions)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PostCoordinatorTranscriptionMutationResult = NonNullable<Awaited<ReturnType<typeof postCoordinatorTranscription>>>
-    
-    export type PostCoordinatorTranscriptionMutationError = PostCoordinatorTranscription400
-
-    /**
- * @summary Transcribe uploaded audio for coordinator composer input
- */
-export const usePostCoordinatorTranscription = <TError = PostCoordinatorTranscription400,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postCoordinatorTranscription>>, TError,void, TContext>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof postCoordinatorTranscription>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getPostCoordinatorTranscriptionMutationOptions(options), queryClient);
-    }
-    
-/**
- * @summary Get a coordinator session by ID
- */
-export type getCoordinatorSessionCoordinatorSessionIdResponse200 = {
-  data: GetCoordinatorSessionCoordinatorSessionId200
-  status: 200
-}
-
-export type getCoordinatorSessionCoordinatorSessionIdResponse404 = {
-  data: GetCoordinatorSessionCoordinatorSessionId404
-  status: 404
-}
-    
-export type getCoordinatorSessionCoordinatorSessionIdResponseSuccess = (getCoordinatorSessionCoordinatorSessionIdResponse200) & {
-  headers: Headers;
-};
-export type getCoordinatorSessionCoordinatorSessionIdResponseError = (getCoordinatorSessionCoordinatorSessionIdResponse404) & {
-  headers: Headers;
-};
-
-export type getCoordinatorSessionCoordinatorSessionIdResponse = (getCoordinatorSessionCoordinatorSessionIdResponseSuccess | getCoordinatorSessionCoordinatorSessionIdResponseError)
-
-export const getGetCoordinatorSessionCoordinatorSessionIdUrl = (coordinatorSessionId: string,) => {
-
-
-  
-
-  return `/coordinator/session/${coordinatorSessionId}`
-}
-
-export const getCoordinatorSessionCoordinatorSessionId = async (coordinatorSessionId: string, options?: RequestInit): Promise<getCoordinatorSessionCoordinatorSessionIdResponse> => {
-  
-  return orvalFetcher<getCoordinatorSessionCoordinatorSessionIdResponse>(getGetCoordinatorSessionCoordinatorSessionIdUrl(coordinatorSessionId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetCoordinatorSessionCoordinatorSessionIdQueryKey = (coordinatorSessionId: string,) => {
-    return [
-    `/coordinator/session/${coordinatorSessionId}`
-    ] as const;
-    }
-
-    
-export const getGetCoordinatorSessionCoordinatorSessionIdQueryOptions = <TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError = GetCoordinatorSessionCoordinatorSessionId404>(coordinatorSessionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetCoordinatorSessionCoordinatorSessionIdQueryKey(coordinatorSessionId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>> = ({ signal }) => getCoordinatorSessionCoordinatorSessionId(coordinatorSessionId, { signal, ...requestOptions });
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(coordinatorSessionId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetCoordinatorSessionCoordinatorSessionIdQueryResult = NonNullable<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>>
-export type GetCoordinatorSessionCoordinatorSessionIdQueryError = GetCoordinatorSessionCoordinatorSessionId404
-
-
-export function useGetCoordinatorSessionCoordinatorSessionId<TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError = GetCoordinatorSessionCoordinatorSessionId404>(
- coordinatorSessionId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorSessionCoordinatorSessionId<TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError = GetCoordinatorSessionCoordinatorSessionId404>(
- coordinatorSessionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorSessionCoordinatorSessionId<TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError = GetCoordinatorSessionCoordinatorSessionId404>(
- coordinatorSessionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Get a coordinator session by ID
- */
-
-export function useGetCoordinatorSessionCoordinatorSessionId<TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError = GetCoordinatorSessionCoordinatorSessionId404>(
- coordinatorSessionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionId>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetCoordinatorSessionCoordinatorSessionIdQueryOptions(coordinatorSessionId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-
-
-
-
-/**
- * @summary Update coordinator session title
- */
-export type patchCoordinatorSessionCoordinatorSessionIdResponse200 = {
-  data: PatchCoordinatorSessionCoordinatorSessionId200
-  status: 200
-}
-
-export type patchCoordinatorSessionCoordinatorSessionIdResponse404 = {
-  data: PatchCoordinatorSessionCoordinatorSessionId404
-  status: 404
-}
-    
-export type patchCoordinatorSessionCoordinatorSessionIdResponseSuccess = (patchCoordinatorSessionCoordinatorSessionIdResponse200) & {
-  headers: Headers;
-};
-export type patchCoordinatorSessionCoordinatorSessionIdResponseError = (patchCoordinatorSessionCoordinatorSessionIdResponse404) & {
-  headers: Headers;
-};
-
-export type patchCoordinatorSessionCoordinatorSessionIdResponse = (patchCoordinatorSessionCoordinatorSessionIdResponseSuccess | patchCoordinatorSessionCoordinatorSessionIdResponseError)
-
-export const getPatchCoordinatorSessionCoordinatorSessionIdUrl = (coordinatorSessionId: string,) => {
-
-
-  
-
-  return `/coordinator/session/${coordinatorSessionId}`
-}
-
-export const patchCoordinatorSessionCoordinatorSessionId = async (coordinatorSessionId: string,
-    patchCoordinatorSessionCoordinatorSessionIdBody: PatchCoordinatorSessionCoordinatorSessionIdBody, options?: RequestInit): Promise<patchCoordinatorSessionCoordinatorSessionIdResponse> => {
-  
-  return orvalFetcher<patchCoordinatorSessionCoordinatorSessionIdResponse>(getPatchCoordinatorSessionCoordinatorSessionIdUrl(coordinatorSessionId),
-  {      
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(
-      patchCoordinatorSessionCoordinatorSessionIdBody,)
-  }
-);}
-
-
-
-
-export const getPatchCoordinatorSessionCoordinatorSessionIdMutationOptions = <TError = PatchCoordinatorSessionCoordinatorSessionId404,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCoordinatorSessionCoordinatorSessionId>>, TError,{coordinatorSessionId: string;data: PatchCoordinatorSessionCoordinatorSessionIdBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
-): UseMutationOptions<Awaited<ReturnType<typeof patchCoordinatorSessionCoordinatorSessionId>>, TError,{coordinatorSessionId: string;data: PatchCoordinatorSessionCoordinatorSessionIdBody}, TContext> => {
-
-const mutationKey = ['patchCoordinatorSessionCoordinatorSessionId'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchCoordinatorSessionCoordinatorSessionId>>, {coordinatorSessionId: string;data: PatchCoordinatorSessionCoordinatorSessionIdBody}> = (props) => {
-          const {coordinatorSessionId,data} = props ?? {};
-
-          return  patchCoordinatorSessionCoordinatorSessionId(coordinatorSessionId,data,requestOptions)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type PatchCoordinatorSessionCoordinatorSessionIdMutationResult = NonNullable<Awaited<ReturnType<typeof patchCoordinatorSessionCoordinatorSessionId>>>
-    export type PatchCoordinatorSessionCoordinatorSessionIdMutationBody = PatchCoordinatorSessionCoordinatorSessionIdBody
-    export type PatchCoordinatorSessionCoordinatorSessionIdMutationError = PatchCoordinatorSessionCoordinatorSessionId404
-
-    /**
- * @summary Update coordinator session title
- */
-export const usePatchCoordinatorSessionCoordinatorSessionId = <TError = PatchCoordinatorSessionCoordinatorSessionId404,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchCoordinatorSessionCoordinatorSessionId>>, TError,{coordinatorSessionId: string;data: PatchCoordinatorSessionCoordinatorSessionIdBody}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof patchCoordinatorSessionCoordinatorSessionId>>,
-        TError,
-        {coordinatorSessionId: string;data: PatchCoordinatorSessionCoordinatorSessionIdBody},
-        TContext
-      > => {
-      return useMutation(getPatchCoordinatorSessionCoordinatorSessionIdMutationOptions(options), queryClient);
-    }
-    
-/**
- * @summary Delete a coordinator session
- */
-export type deleteCoordinatorSessionCoordinatorSessionIdResponse200 = {
-  data: DeleteCoordinatorSessionCoordinatorSessionId200
-  status: 200
-}
-
-export type deleteCoordinatorSessionCoordinatorSessionIdResponse404 = {
-  data: DeleteCoordinatorSessionCoordinatorSessionId404
-  status: 404
-}
-    
-export type deleteCoordinatorSessionCoordinatorSessionIdResponseSuccess = (deleteCoordinatorSessionCoordinatorSessionIdResponse200) & {
-  headers: Headers;
-};
-export type deleteCoordinatorSessionCoordinatorSessionIdResponseError = (deleteCoordinatorSessionCoordinatorSessionIdResponse404) & {
-  headers: Headers;
-};
-
-export type deleteCoordinatorSessionCoordinatorSessionIdResponse = (deleteCoordinatorSessionCoordinatorSessionIdResponseSuccess | deleteCoordinatorSessionCoordinatorSessionIdResponseError)
-
-export const getDeleteCoordinatorSessionCoordinatorSessionIdUrl = (coordinatorSessionId: string,) => {
-
-
-  
-
-  return `/coordinator/session/${coordinatorSessionId}`
-}
-
-export const deleteCoordinatorSessionCoordinatorSessionId = async (coordinatorSessionId: string, options?: RequestInit): Promise<deleteCoordinatorSessionCoordinatorSessionIdResponse> => {
-  
-  return orvalFetcher<deleteCoordinatorSessionCoordinatorSessionIdResponse>(getDeleteCoordinatorSessionCoordinatorSessionIdUrl(coordinatorSessionId),
-  {      
-    ...options,
-    method: 'DELETE'
-    
-    
-  }
-);}
-
-
-
-
-export const getDeleteCoordinatorSessionCoordinatorSessionIdMutationOptions = <TError = DeleteCoordinatorSessionCoordinatorSessionId404,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCoordinatorSessionCoordinatorSessionId>>, TError,{coordinatorSessionId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteCoordinatorSessionCoordinatorSessionId>>, TError,{coordinatorSessionId: string}, TContext> => {
-
-const mutationKey = ['deleteCoordinatorSessionCoordinatorSessionId'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-      
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCoordinatorSessionCoordinatorSessionId>>, {coordinatorSessionId: string}> = (props) => {
-          const {coordinatorSessionId} = props ?? {};
-
-          return  deleteCoordinatorSessionCoordinatorSessionId(coordinatorSessionId,requestOptions)
-        }
-
-
-
-        
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteCoordinatorSessionCoordinatorSessionIdMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCoordinatorSessionCoordinatorSessionId>>>
-    
-    export type DeleteCoordinatorSessionCoordinatorSessionIdMutationError = DeleteCoordinatorSessionCoordinatorSessionId404
-
-    /**
- * @summary Delete a coordinator session
- */
-export const useDeleteCoordinatorSessionCoordinatorSessionId = <TError = DeleteCoordinatorSessionCoordinatorSessionId404,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCoordinatorSessionCoordinatorSessionId>>, TError,{coordinatorSessionId: string}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteCoordinatorSessionCoordinatorSessionId>>,
-        TError,
-        {coordinatorSessionId: string},
-        TContext
-      > => {
-      return useMutation(getDeleteCoordinatorSessionCoordinatorSessionIdMutationOptions(options), queryClient);
-    }
-    
-/**
- * @summary Get messages for a coordinator session
- */
-export type getCoordinatorSessionCoordinatorSessionIdMessagesResponse200 = {
-  data: GetCoordinatorSessionCoordinatorSessionIdMessages200
-  status: 200
-}
-
-export type getCoordinatorSessionCoordinatorSessionIdMessagesResponse404 = {
-  data: GetCoordinatorSessionCoordinatorSessionIdMessages404
-  status: 404
-}
-    
-export type getCoordinatorSessionCoordinatorSessionIdMessagesResponseSuccess = (getCoordinatorSessionCoordinatorSessionIdMessagesResponse200) & {
-  headers: Headers;
-};
-export type getCoordinatorSessionCoordinatorSessionIdMessagesResponseError = (getCoordinatorSessionCoordinatorSessionIdMessagesResponse404) & {
-  headers: Headers;
-};
-
-export type getCoordinatorSessionCoordinatorSessionIdMessagesResponse = (getCoordinatorSessionCoordinatorSessionIdMessagesResponseSuccess | getCoordinatorSessionCoordinatorSessionIdMessagesResponseError)
-
-export const getGetCoordinatorSessionCoordinatorSessionIdMessagesUrl = (coordinatorSessionId: string,) => {
-
-
-  
-
-  return `/coordinator/session/${coordinatorSessionId}/messages`
-}
-
-export const getCoordinatorSessionCoordinatorSessionIdMessages = async (coordinatorSessionId: string, options?: RequestInit): Promise<getCoordinatorSessionCoordinatorSessionIdMessagesResponse> => {
-  
-  return orvalFetcher<getCoordinatorSessionCoordinatorSessionIdMessagesResponse>(getGetCoordinatorSessionCoordinatorSessionIdMessagesUrl(coordinatorSessionId),
-  {      
-    ...options,
-    method: 'GET'
-    
-    
-  }
-);}
-
-
-
-
-
-export const getGetCoordinatorSessionCoordinatorSessionIdMessagesQueryKey = (coordinatorSessionId: string,) => {
-    return [
-    `/coordinator/session/${coordinatorSessionId}/messages`
-    ] as const;
-    }
-
-    
-export const getGetCoordinatorSessionCoordinatorSessionIdMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError = GetCoordinatorSessionCoordinatorSessionIdMessages404>(coordinatorSessionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetCoordinatorSessionCoordinatorSessionIdMessagesQueryKey(coordinatorSessionId);
-
-  
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>> = ({ signal }) => getCoordinatorSessionCoordinatorSessionIdMessages(coordinatorSessionId, { signal, ...requestOptions });
-
-      
-
-      
-
-   return  { queryKey, queryFn, enabled: !!(coordinatorSessionId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetCoordinatorSessionCoordinatorSessionIdMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>>
-export type GetCoordinatorSessionCoordinatorSessionIdMessagesQueryError = GetCoordinatorSessionCoordinatorSessionIdMessages404
-
-
-export function useGetCoordinatorSessionCoordinatorSessionIdMessages<TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError = GetCoordinatorSessionCoordinatorSessionIdMessages404>(
- coordinatorSessionId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorSessionCoordinatorSessionIdMessages<TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError = GetCoordinatorSessionCoordinatorSessionIdMessages404>(
- coordinatorSessionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>,
-          TError,
-          Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetCoordinatorSessionCoordinatorSessionIdMessages<TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError = GetCoordinatorSessionCoordinatorSessionIdMessages404>(
- coordinatorSessionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Get messages for a coordinator session
- */
-
-export function useGetCoordinatorSessionCoordinatorSessionIdMessages<TData = Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError = GetCoordinatorSessionCoordinatorSessionIdMessages404>(
- coordinatorSessionId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getCoordinatorSessionCoordinatorSessionIdMessages>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient 
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetCoordinatorSessionCoordinatorSessionIdMessagesQueryOptions(coordinatorSessionId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-
-
-
-
 /**
  * @summary Create direct terminal connect credentials
  */

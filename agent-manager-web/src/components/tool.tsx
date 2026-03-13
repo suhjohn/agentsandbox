@@ -7,7 +7,6 @@
 // - web_search: OpenAI web search tool
 // - Image tools: get_images, post_images, get/patch/delete_images_imageId, post_images_imageId_{archive,build,clone}
 // - Session tools: get_sessions, post_sessions, get/patch/delete_sessions_sessionId, post_sessions_sessionId_{archive,resume,complete}
-// - Coordinator session tools: post/get_coordinator_session, post_coordinator_session_coordinatorSessionId_runs, get/patch/delete_coordinator_session_coordinatorSessionId, get_coordinator_session_coordinatorSessionId_messages
 
 import type { ReactNode } from "react";
 
@@ -150,74 +149,6 @@ interface ResumeSessionArgs {
 
 interface CompleteSessionArgs {
   params: { sessionId: string };
-}
-
-// =============================================================================
-// Coordinator Session Types
-// =============================================================================
-
-interface CoordinatorSession {
-  id: string;
-  title: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Message {
-  id: string;
-  coordinatorSessionId: string;
-  role: "user" | "assistant" | "tool";
-  content: string;
-  toolCalls?: unknown;
-  toolResults?: unknown;
-  createdAt: string;
-}
-
-interface CreateCoordinatorSessionArgs {
-  body?: {
-    title?: string;
-  };
-}
-
-interface StartCoordinatorRunArgs {
-  params: { coordinatorSessionId: string };
-  body: {
-    message: string;
-    browserAvailable?: boolean;
-  };
-}
-
-interface StartCoordinatorRunResult {
-  runId: string;
-  coordinatorSessionId: string;
-  streamUrl: string;
-}
-
-interface ListCoordinatorSessionsResult {
-  data: CoordinatorSession[];
-  nextCursor: string | null;
-}
-
-interface GetCoordinatorSessionArgs {
-  params: { coordinatorSessionId: string };
-}
-
-interface GetCoordinatorSessionMessagesArgs {
-  params: { coordinatorSessionId: string };
-}
-
-interface GetCoordinatorSessionMessagesResult {
-  data: Message[];
-}
-
-interface UpdateCoordinatorSessionArgs {
-  params: { coordinatorSessionId: string };
-  body: { title: string };
-}
-
-interface DeleteCoordinatorSessionArgs {
-  params: { coordinatorSessionId: string };
 }
 
 // =============================================================================
@@ -596,125 +527,6 @@ export const ToolUIMap: Record<string, ToolUI> = {
     },
   },
 
-  // Coordinator Sessions
-  post_coordinator_session: {
-    args: ({ args }) => {
-      const a = args as CreateCoordinatorSessionArgs;
-      return (
-        <div className="text-sm">
-          <span className="font-medium">Create coordinator session</span>
-          {a.body?.title ? `: ${a.body.title}` : ""}
-        </div>
-      );
-    },
-    result: ({ result }) => {
-      const r = result as CoordinatorSession;
-      return <div className="text-sm">Created coordinator session: {r.id}</div>;
-    },
-  },
-
-  post_coordinator_session_coordinatorSessionId_runs: {
-    args: ({ args }) => {
-      const a = args as StartCoordinatorRunArgs;
-      return (
-        <div className="text-sm">
-          <span className="font-medium">Start coordinator run:</span>{" "}
-          {a.params?.coordinatorSessionId}
-          {a.body?.message ? ` (${a.body.message.slice(0, 50)}${a.body.message.length > 50 ? "..." : ""})` : ""}
-        </div>
-      );
-    },
-    result: ({ result }) => {
-      const r = result as StartCoordinatorRunResult;
-      return (
-        <div className="text-sm">
-          Run started: {r.runId}
-        </div>
-      );
-    },
-  },
-
-  get_coordinator_session: {
-    args: () => <div className="text-sm">List coordinator sessions</div>,
-    result: ({ result }) => {
-      const r = result as ListCoordinatorSessionsResult;
-      return (
-        <div className="text-sm">Found {r.data?.length ?? 0} coordinator sessions</div>
-      );
-    },
-  },
-
-  get_coordinator_session_coordinatorSessionId: {
-    args: ({ args }) => {
-      const a = args as GetCoordinatorSessionArgs;
-      return (
-        <div className="text-sm">
-          <span className="font-medium">Get coordinator session:</span>{" "}
-          {a.params?.coordinatorSessionId}
-        </div>
-      );
-    },
-    result: ({ result }) => {
-      const r = result as CoordinatorSession | ErrorResult;
-      return (
-        <div className="text-sm">
-          {"error" in r ? r.error : `Coordinator session: ${r.title ?? r.id}`}
-        </div>
-      );
-    },
-  },
-
-  get_coordinator_session_coordinatorSessionId_messages: {
-    args: ({ args }) => {
-      const a = args as GetCoordinatorSessionMessagesArgs;
-      return (
-        <div className="text-sm">
-          <span className="font-medium">Get messages:</span>{" "}
-          {a.params?.coordinatorSessionId}
-        </div>
-      );
-    },
-    result: ({ result }) => {
-      const r = result as GetCoordinatorSessionMessagesResult;
-      return <div className="text-sm">Found {r.data?.length ?? 0} messages</div>;
-    },
-  },
-
-  patch_coordinator_session_coordinatorSessionId: {
-    args: ({ args }) => {
-      const a = args as UpdateCoordinatorSessionArgs;
-      return (
-        <div className="text-sm">
-          <span className="font-medium">Update coordinator session:</span>{" "}
-          {a.params?.coordinatorSessionId}
-        </div>
-      );
-    },
-    result: ({ result }) => {
-      const r = result as CoordinatorSession | ErrorResult;
-      return (
-        <div className="text-sm">
-          {"error" in r ? r.error : `Updated: ${r.title ?? r.id}`}
-        </div>
-      );
-    },
-  },
-
-  delete_coordinator_session_coordinatorSessionId: {
-    args: ({ args }) => {
-      const a = args as DeleteCoordinatorSessionArgs;
-      return (
-        <div className="text-sm">
-          <span className="font-medium">Delete coordinator session:</span>{" "}
-          {a.params?.coordinatorSessionId}
-        </div>
-      );
-    },
-    result: ({ result }) => {
-      const r = result as OkResult;
-      return <div className="text-sm">{r.ok ? "Deleted" : "Failed"}</div>;
-    },
-  },
 };
 
 // =============================================================================
