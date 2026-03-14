@@ -46,8 +46,8 @@ func runClientToolMCP(args []string) error {
 	baseURL := strings.TrimSpace(os.Getenv("AGENT_GO_INTERNAL_BASE_URL"))
 	internalToken := strings.TrimSpace(os.Getenv("AGENT_GO_INTERNAL_TOKEN"))
 	runID := strings.TrimSpace(os.Getenv("AGENT_GO_CLIENT_TOOL_RUN_ID"))
-	if baseURL == "" || internalToken == "" || runID == "" {
-		return errors.New("AGENT_GO_INTERNAL_BASE_URL, AGENT_GO_INTERNAL_TOKEN, and AGENT_GO_CLIENT_TOOL_RUN_ID are required")
+	if baseURL == "" || internalToken == "" {
+		return errors.New("AGENT_GO_INTERNAL_BASE_URL and AGENT_GO_INTERNAL_TOKEN are required")
 	}
 	client := &http.Client{}
 	return serveClientToolMCP(os.Stdin, os.Stdout, client, baseURL, internalToken, runID)
@@ -184,6 +184,9 @@ func handleMCPRequest(client *http.Client, baseURL, internalToken, runID string,
 }
 
 func callInternalClientToolRequest(client *http.Client, baseURL, internalToken, runID string, arguments map[string]any) (clientToolCallResult, error) {
+	if strings.TrimSpace(runID) == "" {
+		return clientToolCallResult{}, errors.New("AGENT_GO_CLIENT_TOOL_RUN_ID is required for client_tool_request")
+	}
 	body, err := json.Marshal(internalClientToolRequestPayload{
 		RunID:    runID,
 		ToolName: asString(arguments["toolName"]),

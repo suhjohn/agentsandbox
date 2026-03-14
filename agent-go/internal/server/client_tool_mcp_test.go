@@ -63,3 +63,29 @@ func TestWriteMCPMessageWritesNewlineDelimitedJSON(t *testing.T) {
 		t.Fatalf("unexpected output %q", got)
 	}
 }
+
+func TestHandleMCPRequestToolCallRequiresRunIDAtCallTime(t *testing.T) {
+	t.Parallel()
+
+	resp := handleMCPRequest(&http.Client{}, "http://127.0.0.1:1", "token", "", mcpRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "tools/call",
+		Params: map[string]any{
+			"name": "client_tool_request",
+			"arguments": map[string]any{
+				"toolName": "ui_get_state",
+				"args":     map[string]any{},
+				"userId":   "user-1",
+				"deviceId": "device-1",
+			},
+		},
+	})
+
+	if resp.Error == nil {
+		t.Fatalf("expected tools/call without run id to fail")
+	}
+	if resp.Error.Message != "AGENT_GO_CLIENT_TOOL_RUN_ID is required for client_tool_request" {
+		t.Fatalf("unexpected error %q", resp.Error.Message)
+	}
+}
