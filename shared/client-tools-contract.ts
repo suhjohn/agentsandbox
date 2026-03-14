@@ -10,8 +10,6 @@ export type ClientToolName = (typeof CLIENT_TOOL_NAMES)[number];
 export type ClientToolRequestInput = {
   readonly toolName: ClientToolName;
   readonly args: unknown;
-  readonly userId: string;
-  readonly deviceId: string;
 };
 
 export type ClientToolErrorEnvelope = {

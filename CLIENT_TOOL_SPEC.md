@@ -129,7 +129,7 @@ definition:
 {
   "name": "client_tool_request",
   "title": "Client Tool Request",
-  "description": "Request execution of a named client-side tool on an attached device and wait until the device returns a terminal result.",
+  "description": "Request execution of a named client-side tool and wait until agent-go routes it to a compatible attached device for the current run user.",
   "inputSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -140,17 +140,9 @@ definition:
       },
       "args": {
         "description": "JSON-serializable arguments forwarded to the named client tool."
-      },
-      "userId": {
-        "type": "string",
-        "description": "The user identity that owns the target client registration."
-      },
-      "deviceId": {
-        "type": "string",
-        "description": "The target client device identifier."
       }
     },
-    "required": ["toolName", "args", "userId", "deviceId"]
+    "required": ["toolName"]
   },
   "outputSchema": {
     "type": "object",
@@ -213,9 +205,7 @@ Example `tools/call` arguments for a UI request:
 ```json
 {
   "toolName": "ui_list_available_actions",
-  "args": {},
-  "userId": "user_123",
-  "deviceId": "device_macbook_abc"
+  "args": {}
 }
 ```
 
@@ -225,11 +215,9 @@ Example `tools/call` arguments for a non-UI request:
 {
   "toolName": "add_secret",
   "args": {
-    "key": "OPENAI_API_KEY",
+    "name": "OPENAI_API_KEY",
     "value": "sk-..."
-  },
-  "userId": "user_123",
-  "deviceId": "device_phone_xyz"
+  }
 }
 ```
 
@@ -287,13 +275,31 @@ Example error result:
 - `client_tool_request` is the only MCP tool exposed in v1.
 - `toolName` is required and refers to a client-registered capability.
 - `args` must be JSON-serializable and valid for the named client tool.
-- `userId` is required and identifies the owner of the targeted client
-  registration.
-- `deviceId` is required and identifies the exact target device.
 - The MCP call blocks until a response or cancellation.
-- `agent-go` must validate that `deviceId` is registered for `userId`.
-- `agent-go` must validate that the target device supports `toolName`.
-- `agent-go` dispatches only to the specified `userId + deviceId` target.
+- `agent-go` injects the run user from server-owned run context.
+- `agent-go` selects the most recently seen compatible registered device for
+  that run user.
+- `agent-go` must validate that the selected target device supports
+  `toolName`.
+
+### MCP resources
+
+The MCP server may expose dynamic resources alongside the single
+`client_tool_request` tool.
+
+The current implementation exposes:
+
+- `agent-go://client-tools/catalog`
+- `agent-go://client-tools/tools/{toolName}`
+
+These resources provide a dynamic catalog of:
+
+- available client tool names
+- argument schema hints
+- routing behavior
+- discovery metadata, including how `ui_run_action.actionId` values are
+  discovered from `ui_list_available_actions`
+- runtime implementation file paths rooted from the sandbox repo layout
 
 ## Server-Side Transport Contract
 
@@ -574,7 +580,7 @@ Diagram:
 
 ```text
 Codex
-  -> MCP client_tool_request(toolName, args, userId, deviceId)
+  -> MCP client_tool_request(toolName, args)
   -> agent-go
   -> emit client_tool_request on /session/{id}/message/{runId}/stream
   -> frontend session runtime executes local tool
@@ -601,6 +607,10 @@ Codex discovers that server through a managed entry in
 The stdio MCP server proxies `tools/call` requests into
 `POST /internal/client-tools/request` on the local `agent-go` HTTP server using
 an internal bearer token derived from `SECRET_SEED + AGENT_ID`.
+
+The same MCP server also exposes dynamic resources so MCP clients can inspect
+the available client tool catalog and implementation paths without hardcoding
+the current tool set.
 
 The attached client needs a separate HTTP API surface for registration and
 responses.
@@ -778,6 +788,8 @@ stream should be introduced in v1.
   Maps `requestId -> pending request state`
 - `runPendingRequests`
   Maps `runId -> set of requestIds`
+- `runClientToolUsers`
+  Maps `runId -> userId`
 
 Suggested pending request fields:
 
@@ -803,15 +815,17 @@ Suggested device registration fields:
 ### Request lifecycle
 
 1. Harness calls MCP tool `client_tool_request`.
-2. `agent-go` validates `toolName`, `args`, `userId`, and `deviceId`.
-3. `agent-go` verifies that the `userId + deviceId` registration exists.
-4. `agent-go` verifies that the target device advertises the requested tool.
-5. `agent-go` creates a pending request record.
-6. `agent-go` emits `client_tool_request` on the existing run stream.
-7. Target client executes the request locally.
-8. Client posts terminal result to `POST /client-tools/respond`.
-9. `agent-go` validates the responder identity and resolves the pending request.
-10. MCP call returns the structured result to the harness.
+2. `agent-go` validates `toolName` and `args`.
+3. `agent-go` resolves the run user from server-owned run context.
+4. `agent-go` selects the most recently seen compatible registration for that
+   user.
+5. `agent-go` verifies that the selected device advertises the requested tool.
+6. `agent-go` creates a pending request record.
+7. `agent-go` emits `client_tool_request` on the existing run stream.
+8. Target client executes the request locally.
+9. Client posts terminal result to `POST /client-tools/respond`.
+10. `agent-go` validates the responder identity and resolves the pending request.
+11. MCP call returns the structured result to the harness.
 
 ### Cancellation lifecycle
 
@@ -940,19 +954,23 @@ session/run stream lifecycle.
 These points are resolved for v1:
 
 1. Default targeting
-   There is no default targeting rule in v1. The MCP caller must provide both
-   `userId` and `deviceId` in every `client_tool_request` call.
+   `agent-go` injects the run user and automatically selects the most recently
+   seen compatible registered device for that user.
 2. Device override behavior
-   There is no separate override API in v1. A later-attached device becomes the
-   target for future requests only when the MCP caller chooses that device by
-   sending its `deviceId` in a subsequent `client_tool_request` call.
+   There is no separate override API in v1. A later registration with a newer
+   `lastSeenAt` wins future automatic selection for compatible tools.
 3. Persistence model
    Pending request state and live device registrations are in-memory only in v1.
    On server restart:
    - all pending client tool requests are treated as cancelled
    - clients must reconnect and re-register their supported tools
    - stale post-restart responses must be rejected as unknown or cancelled
-4. `add_secret` v1 contract
+4. Dynamic tool catalog
+   The MCP server exposes dynamic resources for the current client tool catalog
+   and implementation paths:
+   - `agent-go://client-tools/catalog`
+   - `agent-go://client-tools/tools/{toolName}`
+5. `add_secret` v1 contract
    `add_secret` is a named client tool with this initial application contract.
 
    Arguments:

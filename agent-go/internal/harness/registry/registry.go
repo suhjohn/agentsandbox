@@ -29,8 +29,6 @@ type RunResult struct {
 type ClientToolRequestInput struct {
 	ToolName string
 	Args     any
-	UserID   string
-	DeviceID string
 }
 
 type ClientToolError struct {

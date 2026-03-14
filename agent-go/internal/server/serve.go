@@ -907,6 +907,10 @@ func (s *server) executeRunAsync(parent context.Context, sessionID, runID, userI
 	s.state.BindRunCancel(sessionID, cancel)
 	defer cancel()
 	defer s.state.FinishRun(sessionID)
+	if s.clientTools != nil {
+		s.clientTools.BeginRun(runID, userID)
+		defer s.clientTools.EndRun(runID)
+	}
 	streamedEventCount := 0
 
 	pushError := func(message string) {
@@ -1036,8 +1040,6 @@ func (s *server) executeHarnessRun(ctx context.Context, runID, userID string, de
 			result, err := s.clientTools.Request(
 				requestCtx,
 				runID,
-				input.UserID,
-				input.DeviceID,
 				input.ToolName,
 				input.Args,
 			)
@@ -1393,8 +1395,6 @@ func (s *server) handleInternalClientToolRequest(w http.ResponseWriter, r *http.
 	result, err := s.clientTools.Request(
 		r.Context(),
 		payload.RunID,
-		payload.UserID,
-		payload.DeviceID,
 		payload.ToolName,
 		payload.Args,
 	)

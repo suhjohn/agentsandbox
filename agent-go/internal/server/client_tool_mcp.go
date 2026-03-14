@@ -103,6 +103,9 @@ func handleMCPRequest(client *http.Client, baseURL, internalToken, runID string,
 				"tools": map[string]any{
 					"listChanged": false,
 				},
+				"resources": map[string]any{
+					"listChanged": false,
+				},
 			},
 			"serverInfo": map[string]any{
 				"name":    "agent-go-client-tool-mcp",
@@ -119,17 +122,20 @@ func handleMCPRequest(client *http.Client, baseURL, internalToken, runID string,
 				{
 					"name":        "client_tool_request",
 					"title":       "Client Tool Request",
-					"description": "Request execution of a named client-side tool on an attached device and wait until the device returns a terminal result.",
+					"description": "Request execution of a named client-side tool and wait until agent-go routes it to a compatible attached device for the current run user.",
 					"inputSchema": map[string]any{
 						"type":                 "object",
 						"additionalProperties": false,
 						"properties": map[string]any{
-							"toolName": map[string]any{"type": "string"},
-							"args":     map[string]any{},
-							"userId":   map[string]any{"type": "string"},
-							"deviceId": map[string]any{"type": "string"},
+							"toolName": map[string]any{
+								"type": "string",
+								"enum": sortedClientToolNames(),
+							},
+							"args": map[string]any{
+								"description": "JSON-serializable arguments forwarded to the selected client tool.",
+							},
 						},
-						"required": []string{"toolName", "args", "userId", "deviceId"},
+						"required": []string{"toolName"},
 					},
 					"outputSchema": map[string]any{
 						"type":                 "object",
@@ -152,6 +158,33 @@ func handleMCPRequest(client *http.Client, baseURL, internalToken, runID string,
 					},
 				},
 			},
+		}
+	case "resources/list":
+		resp.Result = map[string]any{
+			"resources": listClientToolResources(),
+		}
+	case "resources/templates/list":
+		resp.Result = map[string]any{
+			"resourceTemplates": []map[string]any{},
+		}
+	case "resources/read":
+		uri := asString(req.Params["uri"])
+		document, ok := clientToolResourceByURI(uri)
+		if !ok {
+			resp.Error = &mcpErrorReply{Code: -32602, Message: "Unknown resource"}
+			return resp
+		}
+		raw, err := json.Marshal(document)
+		if err != nil {
+			resp.Error = &mcpErrorReply{Code: -32603, Message: err.Error()}
+			return resp
+		}
+		resp.Result = map[string]any{
+			"contents": []map[string]any{{
+				"uri":      uri,
+				"mimeType": "application/json",
+				"text":     string(raw),
+			}},
 		}
 	case "tools/call":
 		name, _ := req.Params["name"].(string)
@@ -191,8 +224,6 @@ func callInternalClientToolRequest(client *http.Client, baseURL, internalToken, 
 		RunID:    runID,
 		ToolName: asString(arguments["toolName"]),
 		Args:     arguments["args"],
-		UserID:   asString(arguments["userId"]),
-		DeviceID: asString(arguments["deviceId"]),
 	})
 	if err != nil {
 		return clientToolCallResult{}, err

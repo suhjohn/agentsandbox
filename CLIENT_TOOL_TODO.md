@@ -19,8 +19,6 @@ coordinator-run transport.
 - [x] Define the MCP-facing `client_tool_request` input:
   - `toolName`
   - `args`
-  - `userId`
-  - `deviceId`
 - [x] Define server-to-client event payload types:
   - `client_tool_request`
   - `client_tool_cancel`
@@ -43,7 +41,8 @@ coordinator-run transport.
   - `client_tool_cancel`
 - [x] Add in-memory registration tracking keyed by `userId + deviceId`.
 - [x] Add in-memory pending request tracking keyed by `requestId`.
-- [x] Validate that the requested `deviceId` exists for the provided `userId`.
+- [x] Track run-owned client-tool context keyed by `runId`.
+- [x] Select a compatible registered device server-side for the run user.
 - [x] Validate that the target device advertises the requested `toolName`.
 - [x] Ensure only the targeted `userId + deviceId` can satisfy a pending
       request.
@@ -59,6 +58,7 @@ coordinator-run transport.
 - [x] Expose a single MCP tool: `client_tool_request`.
 - [x] Define its `inputSchema`.
 - [x] Define its `outputSchema`.
+- [x] Expose a dynamic MCP resource catalog for available client tools.
 - [x] Make the MCP tool block until success, error, or cancellation.
 - [x] Route MCP tool calls into the client-tool pending request manager.
 
