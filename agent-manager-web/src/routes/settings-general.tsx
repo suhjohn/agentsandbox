@@ -3,6 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { useAuth } from "../lib/auth";
+import {
+  fetchGlobalSettings,
+  normalizeDiffignore,
+  SETTINGS_GLOBAL_QUERY_KEY,
+} from "../lib/settings-global";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,18 +74,6 @@ function toErrorMessage(value: unknown): string {
   return "Save failed";
 }
 
-function normalizeDiffignore(value: readonly string[]): readonly string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const raw of value) {
-    const normalized = raw.trim().replaceAll("\\", "/");
-    if (normalized.length === 0 || seen.has(normalized)) continue;
-    seen.add(normalized);
-    out.push(normalized);
-  }
-  return out;
-}
-
 function parseDiffignoreInput(raw: string): readonly string[] {
   return normalizeDiffignore(
     raw
@@ -92,35 +85,6 @@ function parseDiffignoreInput(raw: string): readonly string[] {
 
 function formatDiffignoreInput(value: readonly string[]): string {
   return normalizeDiffignore(value).join("\n");
-}
-
-type GlobalSettingsResponse = {
-  readonly diffignore: readonly string[];
-  readonly defaultCoordinatorImageId: string;
-};
-
-function parseGlobalSettingsResponse(value: unknown): GlobalSettingsResponse {
-  if (typeof value !== "object" || value === null) {
-    return { diffignore: [], defaultCoordinatorImageId: "" };
-  }
-  const rawDiffignore = (value as { diffignore?: unknown }).diffignore;
-  const rawDefaultCoordinatorImageId = (
-    value as { defaultCoordinatorImageId?: unknown }
-  ).defaultCoordinatorImageId;
-
-  return {
-    diffignore: Array.isArray(rawDiffignore)
-      ? normalizeDiffignore(
-          rawDiffignore.filter(
-            (item): item is string => typeof item === "string",
-          ),
-        )
-      : [],
-    defaultCoordinatorImageId:
-      typeof rawDefaultCoordinatorImageId === "string"
-        ? rawDefaultCoordinatorImageId.trim()
-        : "",
-  };
 }
 
 export function SettingsGeneralPage() {
@@ -145,17 +109,10 @@ export function SettingsGeneralPage() {
   ] = useState(false);
 
   const globalSettingsQuery = useQuery({
-    queryKey: ["settings", "global"],
+    queryKey: SETTINGS_GLOBAL_QUERY_KEY,
     enabled: Boolean(auth.user),
     staleTime: 60_000,
-    queryFn: async () => {
-      const res = await auth.fetchAuthed("/settings/global");
-      const text = await res.text();
-      const body =
-        text.trim().length > 0 ? (JSON.parse(text) as unknown) : null;
-      if (!res.ok) throw new Error(toErrorMessage(body));
-      return parseGlobalSettingsResponse(body);
-    },
+    queryFn: async () => fetchGlobalSettings(auth.fetchAuthed),
   });
 
   useEffect(() => {
@@ -259,7 +216,7 @@ export function SettingsGeneralPage() {
       setDidEditDefaultCoordinatorImageId(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["images"] }),
-        queryClient.invalidateQueries({ queryKey: ["settings", "global"] }),
+        queryClient.invalidateQueries({ queryKey: SETTINGS_GLOBAL_QUERY_KEY }),
       ]);
     },
     onError: (err) => {

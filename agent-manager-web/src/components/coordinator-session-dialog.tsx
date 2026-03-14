@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth";
 import type { Agent, AgentManagerApiClient } from "../lib/api";
+import {
+  fetchGlobalSettings,
+  SETTINGS_GLOBAL_QUERY_KEY,
+} from "../lib/settings-global";
 import { SandboxLoader } from "./loader";
 import { TerminalPanel } from "./terminal-panel";
 import {
@@ -30,10 +34,6 @@ type DialogMode = "conversation" | "sessions";
 type ManagerSessionRecord = Awaited<
   ReturnType<AgentManagerApiClient["listSessions"]>
 >["data"][number];
-
-type GlobalSettingsResponse = {
-  readonly defaultCoordinatorImageId: string;
-};
 
 const DIALOG_RUNTIME: PanelRuntime = {
   leafId: "coordinator-dialog",
@@ -62,30 +62,6 @@ function selectCoordinatorAgent(
     if (selected) return selected;
   }
   return agents[0] ?? null;
-}
-
-function parseGlobalSettingsResponse(value: unknown): GlobalSettingsResponse {
-  if (typeof value !== "object" || value === null) {
-    return { defaultCoordinatorImageId: "" };
-  }
-  const raw = (value as { defaultCoordinatorImageId?: unknown })
-    .defaultCoordinatorImageId;
-  return {
-    defaultCoordinatorImageId:
-      typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : "",
-  };
-}
-
-async function fetchGlobalSettings(
-  fetchAuthed: (path: string, init?: RequestInit) => Promise<Response>,
-): Promise<GlobalSettingsResponse> {
-  const res = await fetchAuthed("/settings/global");
-  const text = await res.text();
-  const body = text.trim().length > 0 ? (JSON.parse(text) as unknown) : null;
-  if (!res.ok) {
-    throw new Error(toErrorMessage(body));
-  }
-  return parseGlobalSettingsResponse(body);
 }
 
 function isFocusInsideTerminalPanel(): boolean {
@@ -117,7 +93,7 @@ export function CoordinatorSessionDialog(props: {
   });
 
   const globalSettingsQuery = useQuery({
-    queryKey: ["settings", "global"],
+    queryKey: SETTINGS_GLOBAL_QUERY_KEY,
     enabled: props.open && !!auth.user && !auth.isBootstrapping,
     staleTime: 60_000,
     queryFn: async () => fetchGlobalSettings(auth.fetchAuthed),
@@ -286,6 +262,9 @@ export function CoordinatorSessionDialog(props: {
           agentName: "",
           sessionId: "",
           sessionTitle: "",
+          sessionHarness: undefined,
+          sessionModel: undefined,
+          sessionModelReasoningEffort: undefined,
         };
       }
 
@@ -295,7 +274,13 @@ export function CoordinatorSessionDialog(props: {
         agentName: nextAgentName,
         ...(prevAgentId === nextAgentId
           ? {}
-          : { sessionId: "", sessionTitle: "" }),
+          : {
+              sessionId: "",
+              sessionTitle: "",
+              sessionHarness: undefined,
+              sessionModel: undefined,
+              sessionModelReasoningEffort: undefined,
+            }),
       };
     });
   }, [props.open, selectedAgent]);
@@ -327,6 +312,9 @@ export function CoordinatorSessionDialog(props: {
         ...prev,
         sessionId: nextSessionId,
         sessionTitle: nextSessionTitle,
+        sessionHarness: undefined,
+        sessionModel: undefined,
+        sessionModelReasoningEffort: undefined,
       };
     });
   }, [
@@ -503,6 +491,9 @@ export function CoordinatorSessionDialog(props: {
         ...prev,
         sessionId: nextSessionId,
         sessionTitle: matchingSession?.title?.trim() ?? "",
+        sessionHarness: undefined,
+        sessionModel: undefined,
+        sessionModelReasoningEffort: undefined,
       }));
       setIsDraftingNewSession(false);
       setMode("conversation");
@@ -707,6 +698,9 @@ export function CoordinatorSessionDialog(props: {
                     agentName: nextAgent?.name?.trim() ?? "",
                     sessionId: "",
                     sessionTitle: "",
+                    sessionHarness: undefined,
+                    sessionModel: undefined,
+                    sessionModelReasoningEffort: undefined,
                   }));
                 }}
                 disabled={coordinatorAgentsQuery.isLoading}
@@ -813,6 +807,9 @@ export function CoordinatorSessionDialog(props: {
                               ...prev,
                               sessionId: session.id,
                               sessionTitle: session.title?.trim() ?? "",
+                              sessionHarness: undefined,
+                              sessionModel: undefined,
+                              sessionModelReasoningEffort: undefined,
                             }));
                             setIsDraftingNewSession(false);
                             setMode("conversation");

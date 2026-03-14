@@ -330,6 +330,17 @@ Behavior:
 - Creates a Modal sandbox from explicit create arguments without introducing a shared “sandbox spec” object.
 - Keeps Modal app selection as an internal creation parameter rather than part of the public sandbox runtime model.
 
+### `warmBaseImage()`
+
+```ts
+warmBaseImage(): Promise<void>
+```
+
+Behavior:
+
+- Resolves `env.AGENT_BASE_IMAGE_REF` through the normal Modal image resolution path.
+- Starts a minimal one-shot sandbox, runs a `/bin/sh` no-op command, and then terminates the sandbox in cleanup.
+
 ## build.workflow.ts
 
 ### `runImageBuild(input)`

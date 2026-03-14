@@ -32,8 +32,13 @@ export function ModelCombobox ({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const deferredQuery = useDeferredValue(query)
   const normalizedQuery = deferredQuery.trim().toLowerCase()
+  const popoverContainer = (() => {
+    const container = triggerRef.current?.closest('[role="dialog"]')
+    return container instanceof HTMLElement ? container : undefined
+  })()
 
   const commitSelection = (nextValue: string) => {
     onChange(nextValue)
@@ -117,6 +122,7 @@ export function ModelCombobox ({
     >
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef}
           variant='icon'
           role='combobox'
           aria-expanded={open}
@@ -131,6 +137,7 @@ export function ModelCombobox ({
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        container={popoverContainer}
         className='w-[300px] p-0 bg-surface-1/95 backdrop-blur-sm'
         align='start'
         onOpenAutoFocus={event => {

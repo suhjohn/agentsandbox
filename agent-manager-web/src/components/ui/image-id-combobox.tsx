@@ -58,8 +58,13 @@ export function ImageIdCombobox({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const deferredQuery = useDeferredValue(query)
   const normalizedQuery = deferredQuery.trim().toLowerCase()
+  const popoverContainer = (() => {
+    const container = triggerRef.current?.closest('[role="dialog"]')
+    return container instanceof HTMLElement ? container : undefined
+  })()
 
   const commitSelection = (nextValue: string) => {
     if (onChange && !readOnly) {
@@ -93,6 +98,7 @@ export function ImageIdCombobox({
     >
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef}
           variant='outline'
           role='combobox'
           aria-expanded={open}
@@ -109,6 +115,7 @@ export function ImageIdCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent
+        container={popoverContainer}
         className='w-[360px] p-0 bg-surface-1/95 backdrop-blur-sm'
         align='start'
         onOpenAutoFocus={event => {

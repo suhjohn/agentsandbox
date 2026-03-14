@@ -64,7 +64,7 @@ import {
   type PostSession201,
   type PostSessionIdMessage200,
 } from "@/api/generated/agent";
-import { getHarnessOrFallback } from "@/harnesses/registry";
+import { getHarnessOrFallback, listHarnesses } from "@/harnesses/registry";
 import {
   formatThinkingLevelLabel,
   normalizeThinkingLevel,
@@ -1462,6 +1462,7 @@ function SessionComposer(props: {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadingCount, setUploadingCount] = useState(0);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const availableHarnesses = useMemo(() => listHarnesses(), []);
 
   const buildAgentDetailConfig = useCallback(
     (activeTab: SessionToolTab) => ({
@@ -1841,10 +1842,12 @@ function SessionComposer(props: {
       ...prev,
       sessionId: created.id,
       sessionTitle: created.title?.trim() || "",
+      sessionHarness: props.harness.id,
     }));
     return created.id;
   }, [
     createSessionMutation,
+    props.harness.id,
     props.selectedModel,
     props.selectedModelReasoningEffort,
     props.sessionId,
@@ -1945,6 +1948,7 @@ function SessionComposer(props: {
     sendMutation.isPending ||
     createSessionMutation.isPending ||
     uploadingCount > 0;
+  const canChangeHarness = props.sessionId.length === 0 && !composerDisabled;
 
   useEffect(() => {
     props.controllerRef.current = {
@@ -1977,6 +1981,20 @@ function SessionComposer(props: {
       }
     };
   }, [composerDisabled, props.controllerRef, props.inputRef, sendDraftText]);
+
+  const handleHarnessChange = useCallback(
+    (harnessId: string) => {
+      const nextHarnessId = harnessId.trim();
+      if (!nextHarnessId || nextHarnessId === props.harness.id) return;
+      props.setConfig((prev) => ({
+        ...prev,
+        sessionHarness: nextHarnessId,
+        sessionModel: "",
+        sessionModelReasoningEffort: "",
+      }));
+    },
+    [props.harness.id, props.setConfig],
+  );
 
   return (
     <div className="mx-3 flex flex-col">
@@ -2060,9 +2078,48 @@ function SessionComposer(props: {
       </div>
       <div className="bg-surface-1 px-3 flex items-center gap-3 pb-1">
         <div className="flex items-center gap-3">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
-            {props.harness.label}
-          </p>
+          {props.sessionId.length === 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 px-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary hover:text-text-primary"
+                  disabled={!canChangeHarness}
+                  title="Harness for this new session"
+                >
+                  {props.harness.label}
+                  <ChevronsUpDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" sideOffset={4}>
+                <DropdownMenuLabel>Harness</DropdownMenuLabel>
+                {availableHarnesses.map((harness) => {
+                  const isSelected = harness.id === props.harness.id;
+                  return (
+                    <DropdownMenuItem
+                      key={harness.id}
+                      onClick={() => {
+                        handleHarnessChange(harness.id);
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          isSelected ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      {harness.label}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
+              {props.harness.label}
+            </p>
+          )}
           {uploadingCount > 0 && (
             <p className="text-[11px] text-text-tertiary">
               Uploading {uploadingCount}…

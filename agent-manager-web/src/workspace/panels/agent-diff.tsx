@@ -1,6 +1,10 @@
 import { SandboxLoader } from '@/components/loader'
 import { WorkspaceDiffPanel } from '@/components/workspace-diff-panel'
 import { useAuth } from '@/lib/auth'
+import {
+  fetchGlobalSettings,
+  SETTINGS_GLOBAL_QUERY_KEY
+} from '@/lib/settings-global'
 import { useQuery } from '@tanstack/react-query'
 import { useAgentRuntimeAccess } from '../hooks/use-agent-runtime-access'
 import type { PanelProps } from './types'
@@ -55,22 +59,6 @@ function toErrorMessage (value: unknown): string {
   return 'Something went wrong.'
 }
 
-function parseDiffignoreFromSettings (value: unknown): readonly string[] {
-  if (typeof value !== 'object' || value === null) return []
-  const raw = (value as { diffignore?: unknown }).diffignore
-  if (!Array.isArray(raw)) return []
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const item of raw) {
-    if (typeof item !== 'string') continue
-    const normalized = item.trim().replaceAll('\\', '/')
-    if (normalized.length === 0 || seen.has(normalized)) continue
-    seen.add(normalized)
-    out.push(normalized)
-  }
-  return out
-}
-
 export function AgentDiffPanel (props: PanelProps<AgentDiffPanelConfig>) {
   const auth = useAuth()
   const config =
@@ -88,16 +76,10 @@ export function AgentDiffPanel (props: PanelProps<AgentDiffPanelConfig>) {
     staleTime: 10_000
   })
   const globalSettingsQuery = useQuery({
-    queryKey: ['settings', 'global'],
+    queryKey: SETTINGS_GLOBAL_QUERY_KEY,
     enabled: Boolean(auth.user),
     staleTime: 60_000,
-    queryFn: async () => {
-      const res = await auth.fetchAuthed('/settings/global')
-      const text = await res.text()
-      const body = text.trim().length > 0 ? (JSON.parse(text) as unknown) : null
-      if (!res.ok) throw new Error(toErrorMessage(body))
-      return parseDiffignoreFromSettings(body)
-    }
+    queryFn: async () => fetchGlobalSettings(auth.fetchAuthed)
   })
 
   const setDiffStyle = (next: 'split' | 'unified') => {
@@ -143,7 +125,7 @@ export function AgentDiffPanel (props: PanelProps<AgentDiffPanelConfig>) {
         diffStyle={diffStyle}
         onDiffStyleChange={setDiffStyle}
         showInlineControls={false}
-        diffIgnorePatterns={globalSettingsQuery.data ?? []}
+        diffIgnorePatterns={globalSettingsQuery.data?.diffignore ?? []}
       />
     </div>
   )

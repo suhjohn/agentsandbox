@@ -1,11 +1,13 @@
 import { closeDb } from './db'
 import { env } from './env'
 import { log } from './log'
+import { startBaseImageWarmer } from './base-image-warmer'
 import { startServer } from './server'
 import { closeRedis } from './services/redis.service'
 import { ensureTailscaleFunnelPublicBaseUrl, stopTailscaleFunnel } from './clients/tailscale'
 
 const server = startServer()
+const stopBaseImageWarmer = startBaseImageWarmer()
 const port = server.port ?? env.PORT
 log.info('server.start', { url: `http://localhost:${port}` })
 
@@ -24,6 +26,7 @@ if (already.length === 0 && process.env.NODE_ENV === 'development') {
 }
 
 process.on('SIGINT', async () => {
+  stopBaseImageWarmer()
   await stopTailscaleFunnel()
   await closeRedis()
   await closeDb()
@@ -31,6 +34,7 @@ process.on('SIGINT', async () => {
 })
 
 process.on('SIGTERM', async () => {
+  stopBaseImageWarmer()
   await stopTailscaleFunnel()
   await closeRedis()
   await closeDb()

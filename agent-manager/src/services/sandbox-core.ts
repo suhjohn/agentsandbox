@@ -168,6 +168,8 @@ export const SANDBOX_TUNNELS_RETRY_INTERVAL_MS = envInt(
 );
 export const DEFAULT_SANDBOX_AUTH_TTL_SECONDS = 24 * 60 * 60;
 export const STANDARD_RUNTIME_COMMAND = parseSandboxStartCommand();
+const BASE_IMAGE_WARM_APP_NAME = "base-image-warmer";
+const BASE_IMAGE_WARM_TIMEOUT_MS = 2 * 60 * 1000;
 
 function parseSandboxStartCommand(): readonly string[] {
   const name = "AGENT_SANDBOX_COMMAND_JSON";
@@ -504,6 +506,36 @@ export async function createModalSandbox(input: {
     "sandbox create",
   );
   return { sandbox, sandboxId: sandbox.sandboxId };
+}
+
+export async function warmBaseImage(): Promise<void> {
+  const { image } = await resolveModalImage({
+    imageIdOrRef: env.AGENT_BASE_IMAGE_REF,
+  });
+  const handle = await createModalSandbox({
+    appName: BASE_IMAGE_WARM_APP_NAME,
+    image,
+    command: ["sleep", "infinity"],
+    secrets: [],
+    timeoutMs: BASE_IMAGE_WARM_TIMEOUT_MS,
+  });
+
+  try {
+    const result = await execSandboxCommand({
+      sandbox: handle.sandbox,
+      command: ["/bin/sh", "-lc", "echo warm-base-image >/dev/null"],
+      timeoutMs: 15_000,
+    });
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `base image warmup failed (exit ${result.exitCode})${
+          result.stderr.trim().length > 0 ? `: ${result.stderr.trim()}` : ""
+        }`,
+      );
+    }
+  } finally {
+    await safeTerminateSandbox(handle);
+  }
 }
 
 export async function waitForSandboxTunnels(input: {
