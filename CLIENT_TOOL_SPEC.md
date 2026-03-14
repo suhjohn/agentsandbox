@@ -36,9 +36,13 @@ The frontend is not the MCP client in this design. The harness is.
 The first implementation must support:
 
 - `ui_get_state`
-- `ui_list_available_actions`
 - `ui_run_action`
 - `add_secret`
+
+The server-owned tool descriptions should be self-contained and may point
+callers to the relevant source files to inspect for exact behavior and schema
+details. When a description mentions repo-relative paths from the `agent-go`
+runtime side, the repo-root env var is `AGENT_GO_REPO_DIR`.
 
 The transport itself remains generic and must not be specialized around `ui_*`.
 
@@ -136,7 +140,7 @@ definition:
     "properties": {
       "toolName": {
         "type": "string",
-        "description": "The registered client tool to execute, such as ui_get_state, ui_list_available_actions, ui_run_action, or add_secret."
+        "description": "The registered client tool to execute, such as ui_get_state, ui_run_action, or add_secret."
       },
       "args": {
         "description": "JSON-serializable arguments forwarded to the named client tool."
@@ -204,8 +208,13 @@ Example `tools/call` arguments for a UI request:
 
 ```json
 {
-  "toolName": "ui_list_available_actions",
-  "args": {}
+  "toolName": "ui_run_action",
+  "args": {
+    "actionId": "nav.go",
+    "params": {
+      "to": "/workspace"
+    }
+  }
 }
 ```
 
@@ -284,25 +293,6 @@ Example error result:
 - `agent-go` must validate that the selected target device supports
   `toolName`.
 
-### MCP resources
-
-The MCP server may expose dynamic resources alongside the single
-`client_tool_request` tool.
-
-The current implementation exposes:
-
-- `agent-go://client-tools/catalog`
-- `agent-go://client-tools/tools/{toolName}`
-
-These resources provide a dynamic catalog of:
-
-- available client tool names
-- argument schema hints
-- routing behavior
-- discovery metadata, including how `ui_run_action.actionId` values are
-  discovered from `ui_list_available_actions`
-- runtime implementation file paths rooted from the sandbox repo layout
-
 ## Server-Side Transport Contract
 
 These are transport-level shapes between `agent-go` and attached clients. The
@@ -376,7 +366,6 @@ exact API routes may evolve, but these fields define the contract.
   "deviceId": "device_macbook_abc",
   "tools": [
     "ui_get_state",
-    "ui_list_available_actions",
     "ui_run_action",
     "add_secret"
   ],
@@ -610,10 +599,6 @@ The stdio MCP server proxies `tools/call` requests into
 `POST /internal/client-tools/request` on the local `agent-go` HTTP server using
 an internal bearer token derived from `SECRET_SEED + AGENT_ID`.
 
-The same MCP server also exposes dynamic resources so MCP clients can inspect
-the available client tool catalog and implementation paths without hardcoding
-the current tool set.
-
 The attached client needs a separate HTTP API surface for registration and
 responses.
 
@@ -629,7 +614,6 @@ Request body:
   "deviceId": "device_macbook_abc",
   "tools": [
     "ui_get_state",
-    "ui_list_available_actions",
     "ui_run_action",
     "add_secret"
   ],
@@ -944,7 +928,6 @@ The cleanest target split remains:
 2. `ui-actions/`
    Owns:
    - `ui_get_state`
-   - `ui_list_available_actions`
    - `ui_run_action`
    - runtime controllers
    - semantic UI execution
@@ -973,10 +956,8 @@ These points are resolved for v1:
    - clients must reconnect and re-register their supported tools
    - stale post-restart responses must be rejected as unknown or cancelled
 4. Dynamic tool catalog
-   The MCP server exposes dynamic resources for the current client tool catalog
-   and implementation paths:
-   - `agent-go://client-tools/catalog`
-   - `agent-go://client-tools/tools/{toolName}`
+   The current MCP server is intentionally minimal and does not expose
+   `resources/*`. The client tool catalog remains server-owned in code.
 5. `add_secret` v1 contract
    `add_secret` is a named client tool with this initial application contract.
 

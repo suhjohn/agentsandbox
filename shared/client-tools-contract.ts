@@ -1,6 +1,5 @@
 export const CLIENT_TOOL_NAMES = [
   "ui_get_state",
-  "ui_list_available_actions",
   "ui_run_action",
   "add_secret",
 ] as const;

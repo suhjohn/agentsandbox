@@ -27,7 +27,6 @@ coordinator-run transport.
 - [x] Define shared client-tool error envelope types.
 - [x] Define the initial tool-name set:
   - `ui_get_state`
-  - `ui_list_available_actions`
   - `ui_run_action`
   - `add_secret`
 
@@ -87,8 +86,6 @@ coordinator-run transport.
       neutral module boundary.
 - [x] Implement `ui_get_state` using the existing frontend runtime snapshot
       logic.
-- [x] Implement `ui_list_available_actions` using the existing semantic UI
-      action registry.
 - [x] Implement `ui_run_action` using the existing semantic UI action executor.
 - [x] Implement `add_secret` on the client side.
 - [x] Decide where client-side secret storage lives in v1.
@@ -146,7 +143,6 @@ coordinator-run transport.
 - [x] Verify duplicate responses are rejected.
 - [x] Verify cancelled requests reject late responses.
 - [ ] Verify `ui_get_state` works end-to-end.
-- [ ] Verify `ui_list_available_actions` works end-to-end.
 - [ ] Verify `ui_run_action` works end-to-end.
 - [ ] Verify `add_secret` works end-to-end.
 - [ ] Verify cross-device routing works by switching `deviceId` between

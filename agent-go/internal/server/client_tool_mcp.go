@@ -103,9 +103,6 @@ func handleMCPRequest(client *http.Client, baseURL, internalToken, runID string,
 				"tools": map[string]any{
 					"listChanged": false,
 				},
-				"resources": map[string]any{
-					"listChanged": false,
-				},
 			},
 			"serverInfo": map[string]any{
 				"name":    "agent-go-client-tool-mcp",
@@ -114,8 +111,6 @@ func handleMCPRequest(client *http.Client, baseURL, internalToken, runID string,
 		}
 	case "notifications/initialized":
 		resp.ID = nil
-	case "ping":
-		resp.Result = map[string]any{}
 	case "tools/list":
 		resp.Result = map[string]any{
 			"tools": []map[string]any{
@@ -158,33 +153,6 @@ func handleMCPRequest(client *http.Client, baseURL, internalToken, runID string,
 					},
 				},
 			},
-		}
-	case "resources/list":
-		resp.Result = map[string]any{
-			"resources": listClientToolResources(),
-		}
-	case "resources/templates/list":
-		resp.Result = map[string]any{
-			"resourceTemplates": []map[string]any{},
-		}
-	case "resources/read":
-		uri := asString(req.Params["uri"])
-		document, ok := clientToolResourceByURI(uri)
-		if !ok {
-			resp.Error = &mcpErrorReply{Code: -32602, Message: "Unknown resource"}
-			return resp
-		}
-		raw, err := json.Marshal(document)
-		if err != nil {
-			resp.Error = &mcpErrorReply{Code: -32603, Message: err.Error()}
-			return resp
-		}
-		resp.Result = map[string]any{
-			"contents": []map[string]any{{
-				"uri":      uri,
-				"mimeType": "application/json",
-				"text":     string(raw),
-			}},
 		}
 	case "tools/call":
 		name, _ := req.Params["name"].(string)

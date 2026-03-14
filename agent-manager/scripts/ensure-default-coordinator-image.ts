@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { dirname, join, posix as pathPosix, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { and, eq, isNull } from "drizzle-orm";
@@ -16,43 +16,55 @@ const IMAGE_DESCRIPTION =
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const COORDINATOR_SEED_DIR = join(__dirname, "..", "seeds", "coordinator");
-const COORDINATOR_AGENTS_TEMPLATE_PATH = join(COORDINATOR_SEED_DIR, "AGENTS.md");
-const COORDINATOR_TOOLS_DIR = join(COORDINATOR_SEED_DIR, "tools");
 
-async function renderCoordinatorAgentsMarkdown(): Promise<string> {
-  return await readFile(COORDINATOR_AGENTS_TEMPLATE_PATH, "utf8");
+async function listCoordinatorSeedEntries(rootDir: string): Promise<string[]> {
+  const entries = await readdir(rootDir, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() || entry.isDirectory())
+    .map((entry) => join(rootDir, entry.name))
+    .sort();
+}
+
+async function listCoordinatorSyncEntries(rootDir: string): Promise<string[]> {
+  const rootEntries = await listCoordinatorSeedEntries(rootDir);
+  const syncEntries: string[] = [];
+
+  for (const entryPath of rootEntries) {
+    const nestedEntries = await listCoordinatorSeedEntries(entryPath).catch(() => null);
+    if (nestedEntries == null) {
+      syncEntries.push(entryPath);
+      continue;
+    }
+
+    if (nestedEntries.length === 0) {
+      syncEntries.push(entryPath);
+      continue;
+    }
+
+    syncEntries.push(...nestedEntries);
+  }
+
+  return syncEntries.sort();
 }
 
 async function syncCoordinatorSeedVolume(imageId: string): Promise<void> {
   const volume = new ModalVolumeClient({
     volumeName: getImageSharedVolumeName(imageId),
   });
+  const seedEntries = await listCoordinatorSyncEntries(COORDINATOR_SEED_DIR);
 
-  await volume.putText({
-    text: await renderCoordinatorAgentsMarkdown(),
-    remotePath: "/AGENTS.md",
-    overwrite: true,
-  });
-
-  try {
-    await access(COORDINATOR_TOOLS_DIR);
-  } catch (error: unknown) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
-      return;
-    }
-    throw error;
+  for (const localPath of seedEntries) {
+    const remotePath = pathPosix.join(
+      "/",
+      relative(COORDINATOR_SEED_DIR, localPath),
+    );
+    console.log(`Syncing ${remotePath}`);
+    await volume.putFile({
+      localPath,
+      remotePath,
+      overwrite: true,
+    });
   }
-
-  await volume.putFile({
-    localPath: COORDINATOR_TOOLS_DIR,
-    remotePath: pathPosix.join("/", "tools"),
-    overwrite: true,
-  });
 }
 
 async function ensureGlobalSettingsRow() {

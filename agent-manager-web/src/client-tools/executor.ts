@@ -9,10 +9,7 @@ import {
   buildUiActionExecutionContext,
   getUiStateSnapshot,
 } from "@/ui-actions/context";
-import {
-  executeUiAction,
-  listAvailableUiActionsForContext,
-} from "@/ui-actions/execute";
+import { executeUiAction } from "@/ui-actions/execute";
 
 export type ClientToolExecutorDeps = {
   readonly auth: AuthContextValue;
@@ -119,16 +116,6 @@ export async function executeClientTool(input: {
   switch (input.toolName) {
     case "ui_get_state":
       return getUiStateSnapshot(input.deps.auth);
-    case "ui_list_available_actions": {
-      const context = buildContext(input.deps);
-      const surface =
-        args.surface === "keyboard" ||
-        args.surface === "palette" ||
-        args.surface === "coordinator"
-          ? args.surface
-          : undefined;
-      return listAvailableUiActionsForContext({ context, surface });
-    }
     case "ui_run_action": {
       if (
         typeof args.actionId !== "string" ||

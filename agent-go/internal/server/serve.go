@@ -76,6 +76,18 @@ func fail(status int, message string) error {
 	return apierr.Fail(status, message)
 }
 
+func piInternalClientToolEnv(cfg serveConfig) []string {
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.Port)
+	token := deriveClientToolInternalToken(cfg.SecretSeed, cfg.AgentID)
+	if strings.TrimSpace(token) == "" {
+		return nil
+	}
+	return []string{
+		"AGENT_GO_INTERNAL_BASE_URL=" + baseURL,
+		"AGENT_GO_INTERNAL_TOKEN=" + token,
+	}
+}
+
 func runServe(args []string) error {
 	cfg, err := parseServeConfig(args)
 	if err != nil {
@@ -111,6 +123,7 @@ func runServe(args []string) error {
 	if strings.TrimSpace(cfg.PIDir) != "" {
 		app.pi.Env = append(app.pi.Env, "PI_CODING_AGENT_DIR="+strings.TrimSpace(cfg.PIDir))
 	}
+	app.pi.Env = append(app.pi.Env, piInternalClientToolEnv(cfg)...)
 	app.harnesses, err = harnessall.Build(app.codex, app.pi, harnessall.Config{
 		DefaultWorkingDir: cfg.DefaultWorkingDir,
 		RuntimeDir:        cfg.RuntimeDir,

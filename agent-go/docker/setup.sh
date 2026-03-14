@@ -449,6 +449,43 @@ ensure_workspace_tools_links() {
   fi
 }
 
+ensure_workspace_skills_links() {
+  local workspace_skills_root="${WORKSPACES_DIR}/.agents"
+  local skills_path="${workspace_skills_root}/skills"
+  local src_root="${IMAGE_SKILLS_DIR}"
+  local src_path=""
+
+  if [[ ! -d "${src_root}" ]]; then
+    return 0
+  fi
+
+  if [[ -e "${skills_path}" ]] && [[ ! -d "${skills_path}" ]]; then
+    return 0
+  fi
+
+  mkdir -p "${workspace_skills_root}" "${skills_path}" 2>/dev/null || true
+
+  while IFS= read -r -d '' src_path; do
+    local name=""
+    local target_path=""
+    local resolved_target=""
+    name="$(basename "${src_path}")"
+    target_path="${skills_path}/${name}"
+
+    if [[ -L "${target_path}" ]]; then
+      resolved_target="$(readlink -f "${target_path}" 2>/dev/null || true)"
+      if [[ "${resolved_target}" == "${src_path}" ]]; then
+        continue
+      fi
+      rm -f "${target_path}" 2>/dev/null || true
+    fi
+    if [[ -e "${target_path}" ]]; then
+      continue
+    fi
+    ln -s "${src_path}" "${target_path}"
+  done < <(find "${src_root}" -mindepth 1 -maxdepth 1 -print0)
+}
+
 seed_workspace_baseline_runtime() {
   local src="/opt/agent-image/workspace-baseline/sandbox"
   local dst="${ROOT_DIR}/workspace-baseline/sandbox"
@@ -501,6 +538,7 @@ prepare_runtime_state() {
     2>/dev/null || true
 
   ensure_workspace_tools_links
+  ensure_workspace_skills_links
   seed_workspace_baseline_runtime
 }
 

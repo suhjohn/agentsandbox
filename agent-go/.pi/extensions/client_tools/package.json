@@ -1,0 +1,10 @@
+{
+  "name": "agent-go-pi-client-tools-extension",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

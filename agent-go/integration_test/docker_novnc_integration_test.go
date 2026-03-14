@@ -92,6 +92,12 @@ func TestDockerNoVNCSmokeAndBasicAPIs(t *testing.T) {
 	imageToolsSymlinkCmd := `EXPECTED_IMAGE_TOOLS_DIR="${IMAGE_TOOLS_DIR:-/shared/image/tools}"; test -d "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/image" && test -L "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/image/image-test-tool" && test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/image/image-test-tool/README.md" && readlink -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/image/image-test-tool" | rg -n "${EXPECTED_IMAGE_TOOLS_DIR}/image-test-tool$" >/dev/null`
 	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", imageToolsSymlinkCmd}, root, nil, false)
 
+	imageSkillsSetupCmd := `mkdir -p "${IMAGE_SKILLS_DIR:-/shared/image/skills}/create-user" && printf '# Create User Skill\n' >"${IMAGE_SKILLS_DIR:-/shared/image/skills}/create-user/SKILLS.md" && printf 'extra\n' >"${IMAGE_SKILLS_DIR:-/shared/image/skills}/create-user/notes.txt" && /opt/agentsandbox/agent-go/docker/setup.sh`
+	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", imageSkillsSetupCmd}, root, nil, false)
+
+	imageSkillsSymlinkCmd := `EXPECTED_IMAGE_SKILLS_DIR="${IMAGE_SKILLS_DIR:-/shared/image/skills}"; test -d "${WORKSPACES_DIR:-/home/agent/workspaces}/.agents/skills" && test -L "${WORKSPACES_DIR:-/home/agent/workspaces}/.agents/skills/create-user" && test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/.agents/skills/create-user/SKILLS.md" && test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/.agents/skills/create-user/notes.txt" && readlink -f "${WORKSPACES_DIR:-/home/agent/workspaces}/.agents/skills/create-user" | rg -n "${EXPECTED_IMAGE_SKILLS_DIR}/create-user$" >/dev/null`
+	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", imageSkillsSymlinkCmd}, root, nil, false)
+
 	agentsCmd := `CODEX_HOME_PATH="${CODEX_HOME:-${AGENT_HOME:-/home/agent}/.codex}"; test -f "${CODEX_HOME_PATH}/AGENTS.md" && rg -n "agent-go:managed kind=agents-md harness=codex version=2|Tool READMEs|/home/agent/workspaces/tools/default/browser-tools/README.md|# Browser Tools" "${CODEX_HOME_PATH}/AGENTS.md" >/dev/null`
 	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", agentsCmd}, root, nil, false)
 

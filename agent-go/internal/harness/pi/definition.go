@@ -15,6 +15,8 @@ type Harness struct {
 	CLI *PiCLI
 }
 
+const bundledClientToolsExtensionRelativePath = "agent-go/.pi/extensions/client_tools/index.ts"
+
 func NewHarness(cli *PiCLI) *Harness {
 	return &Harness{CLI: cli}
 }
@@ -57,6 +59,16 @@ func (h *Harness) PrepareStartRun(req registry.StartRunRequest) (registry.StartR
 }
 
 func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (registry.RunResult, error) {
+	cli := h.CLI
+	if cli == nil {
+		cli = NewPiCLI()
+	}
+	runCLI := *cli
+	runCLI.Env = append([]string(nil), cli.Env...)
+	if runID := strings.TrimSpace(req.RunID); runID != "" {
+		runCLI.Env = append(runCLI.Env, "AGENT_GO_CLIENT_TOOL_RUN_ID="+runID)
+	}
+
 	prompt := registry.PromptFromInputs(req.Input)
 	sessionFile := ""
 	if req.Session.ExternalSessionID != nil {
@@ -77,6 +89,7 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 		Mode:       "rpc",
 		Session:    sessionFile,
 		SessionDir: filepath.Dir(sessionFile),
+		Extensions: bundledExtensionPaths(),
 	}
 	if req.Session.Model != nil {
 		opts.Model = strings.TrimSpace(*req.Session.Model)
@@ -90,7 +103,7 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 	}
 
 	var textBuilder strings.Builder
-	_, err = h.CLI.RunJSONL(ctx, h.CLI.Args(opts), bytes.NewReader(stdinPayload), func(evt PiJSONLEvent) {
+	_, err = runCLI.RunJSONL(ctx, runCLI.Args(opts), bytes.NewReader(stdinPayload), func(evt PiJSONLEvent) {
 		if req.EmitEvent != nil {
 			if compact, ok := compactEventForStream(evt.Value); ok {
 				req.EmitEvent(compact)
@@ -384,4 +397,17 @@ func firstNonEmptyString(values ...any) string {
 func DefaultSessionFile(runtimeDir, sessionID string) string {
 	base := filepath.Join(runtimeDir, "runtime", "pi-sessions")
 	return filepath.Join(base, sessionID+".jsonl")
+}
+
+func bundledExtensionPaths() []string {
+	repoDir := strings.TrimSpace(os.Getenv("AGENT_GO_REPO_DIR"))
+	if repoDir == "" {
+		return nil
+	}
+	extensionPath := filepath.Join(repoDir, bundledClientToolsExtensionRelativePath)
+	info, err := os.Stat(extensionPath)
+	if err != nil || info.IsDir() {
+		return nil
+	}
+	return []string{extensionPath}
 }

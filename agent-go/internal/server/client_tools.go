@@ -6,8 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -17,74 +15,34 @@ import (
 )
 
 type clientToolDefinition struct {
-	Name                   string
-	Title                  string
-	Description            string
-	ArgsDescription        string
-	ArgsSchema             map[string]any
-	ImplementationRelPaths []string
-	Discovery              map[string]any
+	Name        string
+	Title       string
+	Description string
+	ArgsSchema  map[string]any
 }
 
 var clientToolDefinitions = []clientToolDefinition{
 	{
-		Name:            "ui_get_state",
-		Title:           "UI State Snapshot",
-		Description:     "Capture the current browser UI state for the attached workspace client.",
-		ArgsDescription: "Optional JSON object reserved for future state query options.",
+		Name:  "ui_get_state",
+		Title: "UI State Snapshot",
+		Description: "Capture the current browser UI state for the attached workspace client. " +
+			"For the returned state shape and snapshot sources, search `agent-manager-web/src/ui-actions/context.ts` and `agent-manager-web/src/frontend-runtime/bridge.ts`. " +
+			"The repo-root env var used elsewhere in agent-go for repo-relative paths is `AGENT_GO_REPO_DIR`.",
 		ArgsSchema: map[string]any{
 			"type":                 "object",
 			"additionalProperties": false,
 			"properties":           map[string]any{},
 		},
-		ImplementationRelPaths: []string{
-			"agent-manager-web/src/client-tools/executor.ts",
-			"agent-manager-web/src/ui-actions/context.ts",
-			"shared/client-tools-contract.ts",
-		},
-		Discovery: map[string]any{
-			"resultShape": map[string]any{
-				"state": "UI state snapshot object for the authenticated attached client.",
-			},
-		},
 	},
 	{
-		Name:            "ui_list_available_actions",
-		Title:           "List Available UI Actions",
-		Description:     "List UI actions currently available in the attached client context.",
-		ArgsDescription: "Optional filter object. Use `surface` to limit results to keyboard, palette, or coordinator actions.",
-		ArgsSchema: map[string]any{
-			"type":                 "object",
-			"additionalProperties": false,
-			"properties": map[string]any{
-				"surface": map[string]any{
-					"type": "string",
-					"enum": []string{"keyboard", "palette", "coordinator"},
-				},
-			},
-		},
-		ImplementationRelPaths: []string{
-			"agent-manager-web/src/client-tools/executor.ts",
-			"agent-manager-web/src/ui-actions/context.ts",
-			"agent-manager-web/src/ui-actions/execute.ts",
-			"shared/client-tools-contract.ts",
-		},
-		Discovery: map[string]any{
-			"returns": "The currently available UI action IDs, titles, categories, surface availability, and params JSON schema.",
-			"actionCatalogPaths": []string{
-				"agent-manager-web/src/ui-actions/execute.ts",
-				"agent-manager-web/src/ui-actions/registry.ts",
-				"agent-manager-web/src/ui-actions/types.ts",
-				"agent-manager-web/src/ui-actions/actions/",
-				"shared/ui-actions-contract.ts",
-			},
-		},
-	},
-	{
-		Name:            "ui_run_action",
-		Title:           "Run UI Action",
-		Description:     "Execute a named UI action in the attached client context.",
-		ArgsDescription: "Provide `actionId` and optional action parameters, timeout, or version constraints.",
+		Name:  "ui_run_action",
+		Title: "Run UI Action",
+		Description: "Execute a named UI action in the attached client context. " +
+			"`actionId` is the UI action identifier. Valid action IDs come from the shared UI action catalog in `shared/ui-actions-contract.ts`. " +
+			"`params` must conform to the selected action's `paramsJsonSchema`, and `actionVersion` should match the selected action's declared version. " +
+			"`timeoutMs` is optional. " +
+			"For the action catalog and execution flow, search `shared/ui-actions-contract.ts`, `agent-manager-web/src/ui-actions/execute.ts`, `agent-manager-web/src/ui-actions/registry.ts`, and `agent-manager-web/src/ui-actions/actions/`. " +
+			"The repo-root env var used elsewhere in agent-go for repo-relative paths is `AGENT_GO_REPO_DIR`.",
 		ArgsSchema: map[string]any{
 			"type":                 "object",
 			"additionalProperties": false,
@@ -96,52 +54,25 @@ var clientToolDefinitions = []clientToolDefinition{
 			},
 			"required": []string{"actionId"},
 		},
-		ImplementationRelPaths: []string{
-			"agent-manager-web/src/client-tools/executor.ts",
-			"agent-manager-web/src/ui-actions/context.ts",
-			"agent-manager-web/src/ui-actions/execute.ts",
-			"shared/client-tools-contract.ts",
-		},
-		Discovery: map[string]any{
-			"actionIdSource": "Call client_tool_request with toolName=ui_list_available_actions first. The returned actions[].id values are the valid actionId inputs for ui_run_action in the current client context.",
-			"actionCatalogPaths": []string{
-				"agent-manager-web/src/ui-actions/execute.ts",
-				"agent-manager-web/src/ui-actions/registry.ts",
-				"agent-manager-web/src/ui-actions/types.ts",
-				"agent-manager-web/src/ui-actions/actions/",
-				"shared/ui-actions-contract.ts",
-			},
-			"argsNotes": []string{
-				"actionId is required.",
-				"params must conform to the selected action's paramsJsonSchema returned by ui_list_available_actions.",
-				"actionVersion should usually match the version returned by ui_list_available_actions.",
-			},
-		},
 	},
-	{
-		Name:            "add_secret",
-		Title:           "Add Client Secret",
-		Description:     "Store a client-local secret on the attached device.",
-		ArgsDescription: "Provide `name` and `value`. Set `overwrite` to true to replace an existing secret.",
-		ArgsSchema: map[string]any{
-			"type":                 "object",
-			"additionalProperties": false,
-			"properties": map[string]any{
-				"name":      map[string]any{"type": "string"},
-				"value":     map[string]any{"type": "string"},
-				"overwrite": map[string]any{"type": "boolean"},
-			},
-			"required": []string{"name", "value"},
-		},
-		ImplementationRelPaths: []string{
-			"agent-manager-web/src/client-tools/executor.ts",
-			"agent-manager-web/src/client-tools/add-secret.ts",
-			"shared/client-tools-contract.ts",
-		},
-		Discovery: map[string]any{
-			"storage": "Browser localStorage keyed by authenticated userId and stable deviceId in v1.",
-		},
-	},
+	// this is the wrong implementation. We'll come back to this later.
+	// {
+	// 	Name:  "add_secret",
+	// 	Title: "Add Client Secret",
+	// 	Description: "Store a client-local secret on the attached device. Provide `name` and `value`. Set `overwrite` to true to replace an existing secret. " +
+	// 		"For storage behavior and validation, search `agent-manager-web/src/client-tools/add-secret.ts` and `agent-manager-web/src/client-tools/executor.ts`. " +
+	// 		"The repo-root env var used elsewhere in agent-go for repo-relative paths is `AGENT_GO_REPO_DIR`.",
+	// 	ArgsSchema: map[string]any{
+	// 		"type":                 "object",
+	// 		"additionalProperties": false,
+	// 		"properties": map[string]any{
+	// 			"name":      map[string]any{"type": "string"},
+	// 			"value":     map[string]any{"type": "string"},
+	// 			"overwrite": map[string]any{"type": "boolean"},
+	// 		},
+	// 		"required": []string{"name", "value"},
+	// 	},
+	// },
 }
 
 var clientToolDefinitionsByName = func() map[string]clientToolDefinition {
@@ -262,151 +193,6 @@ func sortedClientToolNames() []string {
 func clientToolDefinitionForName(name string) (clientToolDefinition, bool) {
 	definition, ok := clientToolDefinitionsByName[normalizeClientToolName(name)]
 	return definition, ok
-}
-
-func detectClientToolRepoRoot() string {
-	if value := strings.TrimSpace(os.Getenv("AGENT_GO_REPO_DIR")); value != "" {
-		return filepath.Clean(filepath.Join(value, ".."))
-	}
-	executablePath, err := os.Executable()
-	if err == nil {
-		candidate := filepath.Clean(filepath.Join(filepath.Dir(executablePath), "..", ".."))
-		if _, statErr := os.Stat(filepath.Join(candidate, "agent-go", "Dockerfile")); statErr == nil {
-			return candidate
-		}
-	}
-	return "/opt/agentsandbox"
-}
-
-func clientToolImplementationPaths(definition clientToolDefinition) []string {
-	root := detectClientToolRepoRoot()
-	paths := make([]string, 0, len(definition.ImplementationRelPaths))
-	for _, relPath := range definition.ImplementationRelPaths {
-		paths = append(paths, filepath.Join(root, filepath.FromSlash(relPath)))
-	}
-	return paths
-}
-
-func clientToolRuntimePaths(relPaths []string) []string {
-	root := detectClientToolRepoRoot()
-	paths := make([]string, 0, len(relPaths))
-	for _, relPath := range relPaths {
-		paths = append(paths, filepath.Join(root, filepath.FromSlash(relPath)))
-	}
-	return paths
-}
-
-func clientToolCatalogDocument() map[string]any {
-	tools := make([]map[string]any, 0, len(clientToolDefinitions))
-	for _, definition := range clientToolDefinitions {
-		tools = append(tools, map[string]any{
-			"name":                definition.Name,
-			"title":               definition.Title,
-			"description":         definition.Description,
-			"argsDescription":     definition.ArgsDescription,
-			"argsSchema":          definition.ArgsSchema,
-			"implementationPaths": clientToolImplementationPaths(definition),
-			"discovery":           clientToolDiscovery(definition),
-		})
-	}
-	sort.Slice(tools, func(i, j int) bool {
-		left, _ := tools[i]["name"].(string)
-		right, _ := tools[j]["name"].(string)
-		return left < right
-	})
-	return map[string]any{
-		"transport": "client_tool",
-		"mcpServer": "agent_go_client_tools",
-		"mcpTool": map[string]any{
-			"name":        "client_tool_request",
-			"description": "Request execution of a named client-side tool on an attached device and wait for the terminal result.",
-			"inputSchema": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"properties": map[string]any{
-					"toolName": map[string]any{
-						"type": "string",
-						"enum": sortedClientToolNames(),
-					},
-					"args": map[string]any{
-						"description": "JSON-serializable arguments forwarded to the selected client tool.",
-					},
-				},
-				"required": []string{"toolName"},
-			},
-			"routing": map[string]any{
-				"userId":   "Injected from the current run context by agent-go.",
-				"deviceId": "Selected by agent-go as the most recently seen compatible registered device for the run user.",
-			},
-		},
-		"tools": tools,
-	}
-}
-
-func clientToolResourceByURI(uri string) (map[string]any, bool) {
-	switch strings.TrimSpace(uri) {
-	case "agent-go://client-tools/catalog":
-		return clientToolCatalogDocument(), true
-	default:
-		const prefix = "agent-go://client-tools/tools/"
-		if !strings.HasPrefix(uri, prefix) {
-			return nil, false
-		}
-		name := strings.TrimSpace(strings.TrimPrefix(uri, prefix))
-		definition, ok := clientToolDefinitionForName(name)
-		if !ok {
-			return nil, false
-		}
-		return map[string]any{
-			"name":                definition.Name,
-			"title":               definition.Title,
-			"description":         definition.Description,
-			"argsDescription":     definition.ArgsDescription,
-			"argsSchema":          definition.ArgsSchema,
-			"implementationPaths": clientToolImplementationPaths(definition),
-			"discovery":           clientToolDiscovery(definition),
-		}, true
-	}
-}
-
-func clientToolDiscovery(definition clientToolDefinition) map[string]any {
-	if len(definition.Discovery) == 0 {
-		return nil
-	}
-	out := make(map[string]any, len(definition.Discovery))
-	for key, value := range definition.Discovery {
-		if key == "actionCatalogPaths" {
-			relPaths, ok := value.([]string)
-			if !ok {
-				out[key] = value
-				continue
-			}
-			out[key] = clientToolRuntimePaths(relPaths)
-			continue
-		}
-		out[key] = value
-	}
-	return out
-}
-
-func listClientToolResources() []map[string]any {
-	resources := []map[string]any{
-		{
-			"uri":         "agent-go://client-tools/catalog",
-			"name":        "Client Tool Catalog",
-			"description": "Dynamic catalog of available client tools, routing behavior, and implementation paths.",
-			"mimeType":    "application/json",
-		},
-	}
-	for _, definition := range clientToolDefinitions {
-		resources = append(resources, map[string]any{
-			"uri":         "agent-go://client-tools/tools/" + definition.Name,
-			"name":        definition.Title,
-			"description": definition.Description,
-			"mimeType":    "application/json",
-		})
-	}
-	return resources
 }
 
 func deriveClientToolInternalToken(secretSeed, agentID string) string {
