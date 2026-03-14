@@ -72,6 +72,15 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 	if req.Session.ModelReasoningEffort != nil && strings.TrimSpace(*req.Session.ModelReasoningEffort) != "" {
 		config = append(config, fmt.Sprintf("model_reasoning_effort=%q", strings.TrimSpace(*req.Session.ModelReasoningEffort)))
 	}
+	if strings.TrimSpace(req.RunID) != "" {
+		config = append(
+			config,
+			fmt.Sprintf(
+				"mcp_servers.agent_go_client_tools.env.AGENT_GO_CLIENT_TOOL_RUN_ID=%q",
+				strings.TrimSpace(req.RunID),
+			),
+		)
+	}
 
 	resumeSessionID := ""
 	if req.Session.ExternalSessionID != nil {

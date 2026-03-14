@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -94,10 +93,16 @@ func handleMCPRequest(client *http.Client, baseURL, internalToken, runID string,
 	}
 	switch req.Method {
 	case "initialize":
+		protocolVersion := clientToolMCPProtocolVersion
+		if value := asString(req.Params["protocolVersion"]); strings.TrimSpace(value) != "" {
+			protocolVersion = strings.TrimSpace(value)
+		}
 		resp.Result = map[string]any{
-			"protocolVersion": clientToolMCPProtocolVersion,
+			"protocolVersion": protocolVersion,
 			"capabilities": map[string]any{
-				"tools": map[string]any{},
+				"tools": map[string]any{
+					"listChanged": false,
+				},
 			},
 			"serverInfo": map[string]any{
 				"name":    "agent-go-client-tool-mcp",
@@ -212,36 +217,20 @@ func callInternalClientToolRequest(client *http.Client, baseURL, internalToken, 
 }
 
 func readMCPMessage(reader *bufio.Reader) ([]byte, error) {
-	contentLength := -1
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			return nil, err
 		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			break
-		}
-		key, value, ok := strings.Cut(line, ":")
-		if !ok {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(key), "Content-Length") {
-			n, err := strconv.Atoi(strings.TrimSpace(value))
-			if err != nil {
-				return nil, err
-			}
-			contentLength = n
+		if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+			return []byte(trimmed), nil
 		}
+		return nil, errors.New("invalid stdio MCP message framing")
 	}
-	if contentLength < 0 {
-		return nil, errors.New("missing Content-Length header")
-	}
-	payload := make([]byte, contentLength)
-	if _, err := io.ReadFull(reader, payload); err != nil {
-		return nil, err
-	}
-	return payload, nil
 }
 
 func writeMCPMessage(writer io.Writer, payload any) error {
@@ -249,10 +238,10 @@ func writeMCPMessage(writer io.Writer, payload any) error {
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(raw)); err != nil {
+	if _, err := writer.Write(raw); err != nil {
 		return err
 	}
-	_, err = writer.Write(raw)
+	_, err = writer.Write([]byte("\n"))
 	return err
 }
 

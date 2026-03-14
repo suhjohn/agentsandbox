@@ -536,5 +536,11 @@ export function TerminalPanel(props: TerminalPanelProps) {
     };
   }, [props.wsAuthToken, props.wsUrl]);
 
-  return <div ref={containerRef} className="h-full w-full overflow-hidden" />;
+  return (
+    <div
+      ref={containerRef}
+      className="h-full w-full overflow-hidden"
+      data-terminal-panel="true"
+    />
+  );
 }

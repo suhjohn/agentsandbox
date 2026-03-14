@@ -88,6 +88,14 @@ async function fetchGlobalSettings(
   return parseGlobalSettingsResponse(body);
 }
 
+function isFocusInsideTerminalPanel(): boolean {
+  const activeElement = document.activeElement;
+  return (
+    activeElement instanceof Element &&
+    activeElement.closest('[data-terminal-panel="true"]') !== null
+  );
+}
+
 export function CoordinatorSessionDialog(props: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -578,6 +586,11 @@ export function CoordinatorSessionDialog(props: {
         data-coordinator-dialog="true"
         className="max-w-6xl h-[80dvh] max-h-[calc(100dvh-3rem)] flex flex-col p-0 overflow-hidden gap-0"
         onEscapeKeyDown={(event) => {
+          if (isFocusInsideTerminalPanel()) {
+            event.preventDefault();
+            return;
+          }
+
           const shouldHandleInConversation =
             !!auth.user &&
             !coordinatorAgentsQuery.isLoading &&
