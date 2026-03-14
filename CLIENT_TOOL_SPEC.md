@@ -275,6 +275,8 @@ Example error result:
 - `client_tool_request` is the only MCP tool exposed in v1.
 - `toolName` is required and refers to a client-registered capability.
 - `args` must be JSON-serializable and valid for the named client tool.
+- the attached client implementation accepts either a JSON object `args` value
+  or a JSON string that parses to an object
 - The MCP call blocks until a response or cancellation.
 - `agent-go` injects the run user from server-owned run context.
 - `agent-go` selects the most recently seen compatible registered device for
@@ -777,6 +779,11 @@ Concretely, this means extending the `agent-go` run stream exposed at:
 The frontend should consume these events from the same `agent-go` stream it
 already uses for agent-backed session execution. No separate browser-facing
 stream should be introduced in v1.
+
+In the current implementation, browser registration and run-stream consumption
+are owned by a root-level frontend runtime provider instead of a single session
+panel component. This keeps client-tool availability stable across route
+changes and panel unmount/remount within the same authenticated app session.
 
 ### In-memory runtime state
 

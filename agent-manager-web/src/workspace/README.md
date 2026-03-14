@@ -37,23 +37,29 @@ This document describes how pane and panel behavior flows through the workspace 
 
 1. `WorkspacePage` wraps `WorkspaceView` with `WorkspaceProvider`.
    `WorkspaceProvider` uses a `globalThis`-backed context singleton so Vite/Fast Refresh updates do not temporarily disconnect `useWorkspaceStore` consumers from the active provider.
-2. `WorkspaceView` renders:
+2. `RootLayout` wraps the authenticated app in `ClientToolRuntimeProvider` (`agent-manager-web/src/client-tools/runtime-provider.tsx`).
+   That provider owns:
+   - stable browser `deviceId`
+   - persistent client-tool registration for the current app session
+   - active run-stream consumers for client-tool events
+   Workspace/session panels no longer unregister client-tool support on local component unmount.
+3. `WorkspaceView` renders:
    - the top bar (`Sandmux` + workspace controls + window chips)
    - `WorkspaceHotkeysLayer` (workspace keybinding engine + overlays)
    - the pane layout (`<LayoutNodeView node={activeWindowRoot} />`)
    - an optional left-side Sessions panel (local UI state in `workspace-view.tsx`)
    - right workspace content is a constrained column: fixed `h-10` top bar + `flex-1 min-h-0` pane region, so pane content scroll stays inside the workspace instead of page-level overflow
-3. `LayoutNodeView` is recursive:
+4. `LayoutNodeView` is recursive:
    - `split` -> `SplitView`
    - `leaf` -> `LeafView`
-4. `SplitView` renders child nodes (`a`, `b`) plus an overlay resize handle.
-5. `LeafView` renders:
+5. `SplitView` renders child nodes (`a`, `b`) plus an overlay resize handle.
+6. `LeafView` renders:
    - pane header (drag handle + panel title)
    - pane header fullscreen button (opens that pane's panel in a dialog)
    - pane controls (panel picker + optional panel header controls)
    - a panel body slot (`data-panel-active`) for that leaf’s `panelInstanceId`
-6. A root-level panel portal layer maps current leaf slots and mounts one `PanelHost` per visible `panelInstanceId` into its slot.
-7. `PanelHost` resolves the panel instance from `panelsById`, gets its definition from the registry, and mounts the panel component.
+7. A root-level panel portal layer maps current leaf slots and mounts one `PanelHost` per visible `panelInstanceId` into its slot.
+8. `PanelHost` resolves the panel instance from `panelsById`, gets its definition from the registry, and mounts the panel component.
 
 ## Root Sessions Side Panel (`/`)
 
@@ -171,6 +177,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - composer create/send/reset calls forward both `model` and `modelReasoningEffort` to the runtime session API
   - empty `Default model` / `Default thinking` selections are forwarded as explicit empty values so the runtime can materialize configured defaults onto the session record instead of silently keeping a previous override
   - dragging files onto the composer uploads them to the runtime `POST /files/upload` endpoint, saves them under `~/uploaded`, and appends `@~/uploaded/<filename>` references into the draft text
+  - when a send starts a run, the panel asks the root `ClientToolRuntimeProvider` to ensure runtime registration for that agent sandbox and attach the run stream for client-tool events; this survives route changes and panel unmount/remount within the same app session
   - tool icons for `Terminal`, `Browser`, `VSCode`, and `Diff` default to opening that tool in a side pane on click; hovering an icon opens a custom fixed-position hover card with `Open`, `Open to side`, `Open to bottom`, `Open to window side`, and `Open to window bottom`, and the card flips above the icon when needed instead of forcing panel scroll
   - `Escape` / `Prefix Escape` stream cancellation is pane-scoped: only the focused `agent-session` pane with a matching `leafId` should stop, even if other session panes are streaming in parallel
   - session detail scroll snaps to the latest message once when a session first loads in a pane, and a local send also forces one jump to bottom; otherwise it only sticky-scrolls while the user remains near the bottom

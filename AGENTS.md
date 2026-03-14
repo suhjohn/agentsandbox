@@ -28,6 +28,23 @@ Compilation of all important info
 - When exported function signatures or behavior change in any file under `agent-manager/src/services/*.ts`, update that README in the same change.
 - Keep function names, input parameter types, and return/output types in sync with code.
 
+# Client Tool Catalog Sync Rule
+
+- Canonical server-owned client-tool catalog file: `agent-go/internal/server/client_tools.go`
+- When changing client-tool names, descriptions, args schemas, discovery metadata, routing semantics, or implementation paths in `client_tools.go`, update the corresponding frontend/shared files in the same change:
+  - `shared/client-tools-contract.ts`
+  - `agent-manager-web/src/client-tools/executor.ts`
+  - `agent-manager-web/src/client-tools/runtime-provider.tsx`
+  - `agent-manager-web/src/ui-actions/execute.ts`
+  - `agent-manager-web/src/ui-actions/registry.ts`
+  - `shared/ui-actions-contract.ts`
+  - `CLIENT_TOOL_SPEC.md`
+- Keep these in sync:
+  - `client_tool_request` MCP input shape vs frontend executor expectations
+  - server catalog resource contents vs actual supported client tools
+  - `ui_run_action` discovery metadata vs the real UI action catalog and params schemas
+  - implementation file paths in the MCP catalog vs the runtime sandbox repo layout from `agent-go/Dockerfile` and `agent-go/docker/setup.sh`
+
 # UI Feeling Observations
 
 The coordinator/workspace UI should feel:

@@ -4,6 +4,7 @@ import { useAuth } from "../lib/auth";
 import { CoordinatorSessionDialog } from "../components/coordinator-session-dialog";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
+import { ClientToolRuntimeProvider } from "@/client-tools/runtime-provider";
 import {
   getDialogRuntimeController,
   setCoordinatorDialogOpen,
@@ -452,20 +453,22 @@ export function RootLayout() {
   }, []);
 
   return (
-    <div className="h-dvh w-full">
-      <Toaster position="bottom-right" />
-      <CoordinatorSessionDialog
-        open={isCoordinatorDialogOpen}
-        onOpenChange={setCoordinatorDialogOpenPersisted}
-      />
+    <ClientToolRuntimeProvider>
+      <div className="h-dvh w-full">
+        <Toaster position="bottom-right" />
+        <CoordinatorSessionDialog
+          open={isCoordinatorDialogOpen}
+          onOpenChange={setCoordinatorDialogOpenPersisted}
+        />
 
-      {auth.error ? (
-        <div className="mx-4 mt-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {auth.error}
-        </div>
-      ) : null}
+        {auth.error ? (
+          <div className="mx-4 mt-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {auth.error}
+          </div>
+        ) : null}
 
-      <Outlet />
-    </div>
+        <Outlet />
+      </div>
+    </ClientToolRuntimeProvider>
   );
 }

@@ -14,7 +14,6 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -79,12 +78,7 @@ import type {
   ThinkingLevel,
 } from "@/harnesses/types";
 import { useAuth } from "@/lib/auth";
-import { createClientToolStreamHandler } from "@/client-tools/stream-handler";
-import {
-  getClientToolDeviceId,
-  getSupportedClientTools,
-  retainClientToolRegistration,
-} from "@/client-tools/device-registration";
+import { useClientToolRuntime } from "@/client-tools/runtime-provider";
 import { registerChatRuntimeController } from "@/frontend-runtime/bridge";
 import type { PanelProps } from "./types";
 import { parseBody as parseBodyUtil } from "./session-message-utils";
@@ -1459,9 +1453,8 @@ function SessionComposer(props: {
   readonly controllerRef: { current: SessionComposerController | null };
 }) {
   const auth = useAuth();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const clientToolDeviceId = useMemo(() => getClientToolDeviceId(), []);
+  const clientToolRuntime = useClientToolRuntime();
 
   const [draft, setDraft] = useState("");
   const [copied, setCopied] = useState(false);
@@ -1757,63 +1750,6 @@ function SessionComposer(props: {
     },
   });
 
-  async function startClientToolRunStream(input: {
-    readonly sessionId: string;
-    readonly runId: string;
-  }): Promise<void> {
-    if (
-      input.sessionId.trim().length === 0 ||
-      input.runId.trim().length === 0
-    ) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const handler = createClientToolStreamHandler({
-      agentApiUrl: props.access.agentApiUrl,
-      agentAuthToken: props.access.agentAuthToken,
-      userId: auth.user?.id ?? "",
-      deviceId: clientToolDeviceId,
-      deps: {
-        auth,
-        navigate: (input) => navigate(input as any),
-        queryClient,
-        deviceId: clientToolDeviceId,
-      },
-      onError: (err) => {
-        if (!controller.signal.aborted) {
-          console.error("[client-tools] request handling failed", err);
-        }
-      },
-    });
-
-    try {
-      const response = await fetch(
-        `${props.access.agentApiUrl}/session/${input.sessionId}/message/${input.runId}/stream`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "text/event-stream",
-            "X-Agent-Auth": `Bearer ${props.access.agentAuthToken}`,
-          },
-          signal: controller.signal,
-        },
-      );
-      if (!response.ok || !response.body) {
-        throw new Error(
-          `Run stream failed (${response.status} ${response.statusText})`,
-        );
-      }
-      await handler.consumeRunStream(response.body, controller.signal);
-    } catch (err) {
-      if (!controller.signal.aborted) {
-        console.error("[client-tools] run stream failed", err);
-      }
-    } finally {
-      handler.cancelAll();
-    }
-  }
-
   const uploadDroppedFiles = useCallback(
     async (files: readonly File[]) => {
       if (files.length === 0) return;
@@ -1954,7 +1890,13 @@ function SessionComposer(props: {
           await sendMutation.mutateAsync({ sessionId: nextSessionId, text }),
         );
         if (startedRun?.runId) {
-          void startClientToolRunStream({
+          clientToolRuntime.ensureRuntimeAccess({
+            agentApiUrl: props.access.agentApiUrl,
+            agentAuthToken: props.access.agentAuthToken,
+          });
+          clientToolRuntime.startRunStream({
+            agentApiUrl: props.access.agentApiUrl,
+            agentAuthToken: props.access.agentAuthToken,
             sessionId: nextSessionId,
             runId: startedRun.runId,
           });
@@ -1986,9 +1928,11 @@ function SessionComposer(props: {
       props.selectedModel,
       props.selectedModelReasoningEffort,
       ensureSessionId,
+      props.access.agentApiUrl,
+      props.access.agentAuthToken,
+      clientToolRuntime,
       queryClient,
       sendMutation,
-      startClientToolRunStream,
     ],
   );
 
@@ -2204,7 +2148,7 @@ function WorkspaceSessionComposer(
 export function AgentSessionPanel(props: AgentSessionPanelProps) {
   const auth = useAuth();
   const queryClient = useQueryClient();
-  const clientToolDeviceId = useMemo(() => getClientToolDeviceId(), []);
+  const clientToolRuntime = useClientToolRuntime();
   const agentId =
     typeof props.config.agentId === "string" ? props.config.agentId.trim() : "";
   const sessionId =
@@ -2409,29 +2353,16 @@ export function AgentSessionPanel(props: AgentSessionPanelProps) {
     if (!access?.agentApiUrl || !access.agentAuthToken || !auth.user?.id) {
       return;
     }
-    return retainClientToolRegistration({
+    clientToolRuntime.ensureRuntimeAccess({
       agentApiUrl: access.agentApiUrl,
       agentAuthToken: access.agentAuthToken,
-      payload: {
-        userId: auth.user.id,
-        deviceId: clientToolDeviceId,
-        tools: getSupportedClientTools(),
-        device: {
-          platform:
-            (
-              window.navigator as Navigator & {
-                userAgentData?: { readonly platform?: string };
-              }
-            ).userAgentData?.platform ?? window.navigator.platform,
-          label: window.navigator.userAgent,
-        },
-      },
     });
+    return;
   }, [
     access?.agentApiUrl,
     access?.agentAuthToken,
     auth.user?.id,
-    clientToolDeviceId,
+    clientToolRuntime,
   ]);
 
   useEffect(() => {
