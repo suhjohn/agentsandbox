@@ -1,3 +1,6 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file renders the workspace keyboard
+// shortcuts/help dialog. Keep docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync
+// with any additions or behavior changes here.
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

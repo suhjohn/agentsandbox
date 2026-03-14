@@ -1,3 +1,6 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file provides the keybinding editor and
+// recording UI. Keep docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any
+// additions or behavior changes here.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAuth, type AuthContextValue } from '@/lib/auth'

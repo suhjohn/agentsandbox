@@ -1,3 +1,6 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file defines core workspace keybinding
+// types and contexts. Keep docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with
+// any additions or behavior changes here.
 import type { UiActionId } from "../../../../shared/ui-actions-contract";
 
 export type KeybindingContext =

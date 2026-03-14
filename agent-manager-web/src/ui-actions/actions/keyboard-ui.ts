@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file defines keyboard UI actions such as
+// help, palette, cancel, and window switcher. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import { toast } from "sonner";
 import { WORKSPACE_CANCEL_STREAM_EVENT } from "@/workspace/keybindings/events";
 import { createDirectWorkspaceAction } from "./workspace-shared";

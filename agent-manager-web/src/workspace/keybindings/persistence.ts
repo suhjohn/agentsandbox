@@ -1,3 +1,6 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file persists and sanitizes workspace
+// keybinding overrides. Keep docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with
+// any additions or behavior changes here.
 import { isWorkspaceCommandId } from "./commands";
 import {
   createEmptyKeybindingOverrides,

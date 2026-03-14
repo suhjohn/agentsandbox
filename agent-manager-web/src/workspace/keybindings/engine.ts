@@ -1,3 +1,6 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file implements the workspace keybinding
+// engine and mode transitions. Keep docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in
+// sync with any additions or behavior changes here.
 import {
   areKeyChordsEqual,
   areKeySequencesEqual,

@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file is the canonical UI action registry,
+// including keyboard-exposed workspace actions. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import {
   assertUiActionIdsMatch,
   type UiActionId,

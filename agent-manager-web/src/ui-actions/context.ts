@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file builds execution context for UI
+// actions and wires in workspace keyboard/runtime controllers. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import type { QueryClient } from "@tanstack/react-query";
 import type { AuthContextValue } from "@/lib/auth";
 import type {

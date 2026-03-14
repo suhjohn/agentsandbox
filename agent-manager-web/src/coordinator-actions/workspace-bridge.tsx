@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file exposes imperative workspace runtime
+// methods that canonical actions call into. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import { useEffect } from "react";
 import { registerWorkspaceRuntimeController } from "./runtime-bridge";
 import type {

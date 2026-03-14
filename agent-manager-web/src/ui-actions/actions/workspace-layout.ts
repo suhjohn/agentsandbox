@@ -1,3 +1,6 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file defines workspace layout and pane
+// keyboard actions. Keep docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any
+// additions or behavior changes here.
 import { z } from "zod";
 import {
   WORKSPACE_PANE_ZOOM_TOGGLE_EVENT,

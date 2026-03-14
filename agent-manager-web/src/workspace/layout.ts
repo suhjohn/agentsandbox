@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file implements layout operations used by
+// reducer-backed workspace actions. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import type {
   LayoutNode,
   LeafNode,

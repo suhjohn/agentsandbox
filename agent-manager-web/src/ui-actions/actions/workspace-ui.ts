@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file defines workspace UI and settings
+// actions exposed to keyboard flows. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import { createDirectWorkspaceAction } from "./workspace-shared";
 
 export const workspaceSessionsPanelToggleAction = createDirectWorkspaceAction({

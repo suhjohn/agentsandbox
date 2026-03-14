@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file validates and executes canonical UI
+// actions, including keyboard-triggered workspace actions. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import {
   isUiActionId,
   type UiActionId,

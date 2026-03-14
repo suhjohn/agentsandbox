@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file defines shared workspace action
+// availability and keyboard metadata. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import { z } from "zod";
 import type { UiActionDefinition, UiActionExecutionContext, UiContextSnapshot } from "../types";
 import type { UiActionId } from "../../../../shared/ui-actions-contract";

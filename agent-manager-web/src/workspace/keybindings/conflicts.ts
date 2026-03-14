@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file computes workspace keybinding
+// conflicts and reserved-chord collisions. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import type {
   KeybindingContext,
   WorkspaceKeySequence,

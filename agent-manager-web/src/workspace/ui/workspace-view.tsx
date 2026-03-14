@@ -1,3 +1,6 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file mounts the workspace UI and embeds
+// keyboard/runtime integrations. Keep docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in
+// sync with any additions or behavior changes here.
 import {
   useCallback,
   useEffect,

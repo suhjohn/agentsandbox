@@ -1,3 +1,6 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file defines workspace panel and window
+// keyboard actions. Keep docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any
+// additions or behavior changes here.
 import { createDirectWorkspaceAction } from "./workspace-shared";
 
 export const paneTypePrevAction = createDirectWorkspaceAction({

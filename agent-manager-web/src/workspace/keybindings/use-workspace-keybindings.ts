@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This hook resolves bindings, runs the engine,
+// and exposes workspace keybinding APIs. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getWorkspaceCommand, WORKSPACE_KEYBINDING_COMMANDS } from "./commands";
 import {

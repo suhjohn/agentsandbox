@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file defines the shared canonical UI
+// action contract that frontend action registries and workspace keybindings
+// build on. Keep docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any
+// additions or behavior changes here.
 export type UiActionVersion = 1;
 
 export type UiActionCategory = "direct" | "parameterized";

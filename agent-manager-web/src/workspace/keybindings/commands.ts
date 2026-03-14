@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file projects canonical UI actions into
+// workspace keyboard command metadata. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import { getUiActionDefinition, listUiActions } from "@/ui-actions/registry";
 import type {
   KeybindingContext,

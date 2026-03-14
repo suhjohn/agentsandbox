@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file defines default workspace bindings,
+// leader keys, and reserved chords. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import type {
   WorkspaceCustomKeybinding,
   WorkspaceKeyChord,

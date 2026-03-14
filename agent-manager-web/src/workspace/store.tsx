@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file owns the workspace reducer and the
+// underlying state transitions reached by many keyboard actions. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { useSyncExternalStore } from "react";
 import { newId } from "./id";

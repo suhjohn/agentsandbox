@@ -1,3 +1,7 @@
+// ACTIONS_AND_KEYBINDINGS_SPEC: This file defines panel types referenced by
+// workspace panel actions and layout changes. Keep
+// docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
+// changes here.
 import type { PanelDefinition } from "./types";
 import { coordinatorPanelDefinition } from "./coordinator";
 import { listAgentsPanelDefinition } from "./list-agents";
