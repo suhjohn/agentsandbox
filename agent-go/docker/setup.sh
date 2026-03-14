@@ -365,13 +365,21 @@ sync_repo_files() {
 }
 
 ensure_workspace_tools_links() {
-  local tools_path="${WORKSPACE_TOOLS_DIR}"
+  local workspace_tools_root="${WORKSPACE_TOOLS_DIR}"
+  local tools_path="${workspace_tools_root}/tools"
   local bundled_tools_path=""
   local image_tools_path=""
   local src_root=""
 
   if [[ ! -d "${AGENT_TOOLS_DIR}" ]] && [[ ! -d "${IMAGE_TOOLS_DIR}" ]]; then
     return 0
+  fi
+
+  if [[ -e "${workspace_tools_root}" ]] && [[ ! -d "${workspace_tools_root}" ]]; then
+    workspace_tools_root="${ROOT_DIR}"
+    WORKSPACE_TOOLS_DIR="${workspace_tools_root}"
+    export WORKSPACE_TOOLS_DIR
+    tools_path="${workspace_tools_root}/tools"
   fi
 
   if [[ -L "${tools_path}" ]]; then
@@ -383,14 +391,15 @@ ensure_workspace_tools_links() {
   fi
 
   if [[ -e "${tools_path}" ]] && [[ ! -d "${tools_path}" ]]; then
-    tools_path="${ROOT_DIR}/tools"
-    WORKSPACE_TOOLS_DIR="${tools_path}"
+    workspace_tools_root="${ROOT_DIR}"
+    WORKSPACE_TOOLS_DIR="${workspace_tools_root}"
     export WORKSPACE_TOOLS_DIR
+    tools_path="${workspace_tools_root}/tools"
   fi
 
   bundled_tools_path="${tools_path}/default"
   image_tools_path="${tools_path}/image"
-  mkdir -p "${tools_path}" "${bundled_tools_path}" "${image_tools_path}" 2>/dev/null || true
+  mkdir -p "${workspace_tools_root}" "${tools_path}" "${bundled_tools_path}" "${image_tools_path}" 2>/dev/null || true
 
   local src_path=""
   if [[ -d "${AGENT_TOOLS_DIR}" ]]; then

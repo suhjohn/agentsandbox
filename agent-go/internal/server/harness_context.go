@@ -91,12 +91,18 @@ func loadSharedAgentsContent(path string) (string, string) {
 }
 
 func effectiveWorkspaceToolsDir(cfg serveConfig) string {
-	candidates := []string{
-		strings.TrimSpace(os.Getenv("WORKSPACE_TOOLS_DIR")),
+	workspaceToolsRoot := strings.TrimSpace(os.Getenv("WORKSPACE_TOOLS_DIR"))
+	candidates := make([]string, 0, 5)
+	if workspaceToolsRoot != "" {
+		candidates = append(candidates, filepath.Join(workspaceToolsRoot, "tools"))
+		candidates = append(candidates, workspaceToolsRoot)
+	}
+	candidates = append(
+		candidates,
 		filepath.Join(strings.TrimSpace(cfg.WorkspacesDir), "tools"),
 		strings.TrimSpace(os.Getenv("AGENT_TOOLS_DIR")),
 		filepath.Join(strings.TrimSpace(os.Getenv("AGENT_GO_REPO_DIR")), "tools"),
-	}
+	)
 	for _, candidate := range candidates {
 		if strings.TrimSpace(candidate) == "" {
 			continue

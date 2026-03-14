@@ -86,6 +86,12 @@ func TestDockerNoVNCSmokeAndBasicAPIs(t *testing.T) {
 	browserToolsCmd := `test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/default/browser-tools/README.md" && test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/default/browser-tools/start.py"`
 	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", browserToolsCmd}, root, nil, false)
 
+	imageToolsSetupCmd := `mkdir -p "${IMAGE_TOOLS_DIR:-/shared/image/tools}/image-test-tool" && printf '# Image Test Tool\n' >"${IMAGE_TOOLS_DIR:-/shared/image/tools}/image-test-tool/README.md" && /opt/agentsandbox/agent-go/docker/setup.sh`
+	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", imageToolsSetupCmd}, root, nil, false)
+
+	imageToolsSymlinkCmd := `EXPECTED_IMAGE_TOOLS_DIR="${IMAGE_TOOLS_DIR:-/shared/image/tools}"; test -d "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/image" && test -L "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/image/image-test-tool" && test -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/image/image-test-tool/README.md" && readlink -f "${WORKSPACES_DIR:-/home/agent/workspaces}/tools/image/image-test-tool" | rg -n "${EXPECTED_IMAGE_TOOLS_DIR}/image-test-tool$" >/dev/null`
+	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", imageToolsSymlinkCmd}, root, nil, false)
+
 	agentsCmd := `CODEX_HOME_PATH="${CODEX_HOME:-${AGENT_HOME:-/home/agent}/.codex}"; test -f "${CODEX_HOME_PATH}/AGENTS.md" && rg -n "agent-go:managed kind=agents-md harness=codex version=2|Tool READMEs|/home/agent/workspaces/tools/default/browser-tools/README.md|# Browser Tools" "${CODEX_HOME_PATH}/AGENTS.md" >/dev/null`
 	runCmd(t, []string{"docker", "exec", containerName, "bash", "-lc", agentsCmd}, root, nil, false)
 
