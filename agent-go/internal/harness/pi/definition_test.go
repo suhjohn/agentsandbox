@@ -12,16 +12,6 @@ import (
 
 func TestExecuteIncludesBundledClientToolsExtensionAndRunIDEnv(t *testing.T) {
 	tmpDir := t.TempDir()
-	repoDir := filepath.Join(tmpDir, "repo")
-	extensionPath := filepath.Join(repoDir, bundledClientToolsExtensionRelativePath)
-	if err := os.MkdirAll(filepath.Dir(extensionPath), 0o755); err != nil {
-		t.Fatalf("MkdirAll extension dir: %v", err)
-	}
-	if err := os.WriteFile(extensionPath, []byte("export default function () {}\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile extension index: %v", err)
-	}
-	t.Setenv("AGENT_GO_REPO_DIR", repoDir)
-
 	argsPath := filepath.Join(tmpDir, "pi-args.txt")
 	runIDPath := filepath.Join(tmpDir, "pi-run-id.txt")
 	fakePiPath := filepath.Join(tmpDir, "fake-pi")
@@ -69,8 +59,13 @@ func TestExecuteIncludesBundledClientToolsExtensionAndRunIDEnv(t *testing.T) {
 		}
 		t.Fatalf("expected arg %q in %v", want, args)
 	}
-	expectArg("-e")
-	expectArg(extensionPath)
+	expectArg("--mode")
+	expectArg("rpc")
+	for _, arg := range args {
+		if arg == "-e" {
+			t.Fatalf("did not expect explicit extension arg in %v", args)
+		}
+	}
 
 	rawRunID, err := os.ReadFile(runIDPath)
 	if err != nil {

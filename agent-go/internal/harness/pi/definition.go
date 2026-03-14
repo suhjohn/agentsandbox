@@ -3,6 +3,7 @@ package pi
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,7 @@ type Harness struct {
 	CLI *PiCLI
 }
 
-const bundledClientToolsExtensionRelativePath = "agent-go/.pi/extensions/client_tools/index.ts"
+const bundledClientToolsExtensionRelativeDir = ".pi/extensions/client_tools"
 
 func NewHarness(cli *PiCLI) *Harness {
 	return &Harness{CLI: cli}
@@ -89,7 +90,6 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 		Mode:       "rpc",
 		Session:    sessionFile,
 		SessionDir: filepath.Dir(sessionFile),
-		Extensions: bundledExtensionPaths(),
 	}
 	if req.Session.Model != nil {
 		opts.Model = strings.TrimSpace(*req.Session.Model)
@@ -156,7 +156,10 @@ func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
 		Version: 2,
 		Content: registry.RenderAgentsMD(runtimeCtx, h.ID()),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return installBundledClientToolsExtension(runtimeCtx.PIDir)
 }
 
 func (h *Harness) resolveModelPattern(pattern string) (string, *string, error) {
@@ -399,15 +402,52 @@ func DefaultSessionFile(runtimeDir, sessionID string) string {
 	return filepath.Join(base, sessionID+".jsonl")
 }
 
-func bundledExtensionPaths() []string {
+func installBundledClientToolsExtension(piDir string) error {
+	sourceDir := bundledClientToolsSourceDir()
+	if sourceDir == "" {
+		return nil
+	}
+	destDir := filepath.Join(strings.TrimSpace(piDir), "agent", "extensions", "client_tools")
+	for _, name := range []string{"index.ts", "package.json"} {
+		sourcePath := filepath.Join(sourceDir, name)
+		destPath := filepath.Join(destDir, name)
+		if err := copyBundledExtensionFile(sourcePath, destPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func bundledClientToolsSourceDir() string {
 	repoDir := strings.TrimSpace(os.Getenv("AGENT_GO_REPO_DIR"))
 	if repoDir == "" {
+		return ""
+	}
+	sourceDir := filepath.Join(repoDir, bundledClientToolsExtensionRelativeDir)
+	info, err := os.Stat(sourceDir)
+	if err != nil || !info.IsDir() {
+		return ""
+	}
+	return sourceDir
+}
+
+func copyBundledExtensionFile(sourcePath, destPath string) error {
+	content, err := os.ReadFile(sourcePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read bundled PI extension %s: %w", sourcePath, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return err
+	}
+	current, err := os.ReadFile(destPath)
+	if err == nil && bytes.Equal(current, content) {
 		return nil
 	}
-	extensionPath := filepath.Join(repoDir, bundledClientToolsExtensionRelativePath)
-	info, err := os.Stat(extensionPath)
-	if err != nil || info.IsDir() {
-		return nil
+	if err != nil && !os.IsNotExist(err) {
+		return err
 	}
-	return []string{extensionPath}
+	return os.WriteFile(destPath, content, 0o644)
 }

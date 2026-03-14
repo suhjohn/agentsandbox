@@ -2324,6 +2324,30 @@ export function SettingsImageDetailPage() {
                               &mdash; loaded into the Codex/PI harness runtime
                               as shared instructions.
                             </li>
+                            <li>
+                              <code className="font-mono text-text-primary">
+                                /shared/image/skills
+                              </code>{" "}
+                              &mdash; shared image-provided skills. Each
+                              top-level entry is linked into the harness home
+                              at{" "}
+                              <code className="font-mono text-text-primary">
+                                /home/agent/.agents/skills
+                              </code>
+                              .
+                            </li>
+                            <li>
+                              <code className="font-mono text-text-primary">
+                                /shared/image/tools
+                              </code>{" "}
+                              &mdash; shared image-provided tools. Each
+                              top-level entry is linked into workspace runtimes
+                              at{" "}
+                              <code className="font-mono text-text-primary">
+                                /home/agent/workspaces/tools/image
+                              </code>
+                              .
+                            </li>
                           </ul>
                         </div>
                       }
