@@ -450,7 +450,7 @@ ensure_workspace_tools_links() {
 }
 
 ensure_workspace_skills_links() {
-  local workspace_skills_root="${WORKSPACES_DIR}/.agents"
+  local workspace_skills_root="${AGENT_HOME}/.agents"
   local skills_path="${workspace_skills_root}/skills"
   local src_root="${IMAGE_SKILLS_DIR}"
   local src_path=""
