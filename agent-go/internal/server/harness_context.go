@@ -36,6 +36,7 @@ func (s *server) setupHarnessRuntime() error {
 func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext {
 	rootDir := envString("ROOT_DIR", filepath.Dir(strings.TrimSpace(cfg.RuntimeDir)))
 	codexHome := envString("CODEX_HOME", filepath.Join(strings.TrimSpace(cfg.AgentHome), ".codex"))
+	agentGoBinaryPath, _ := os.Executable()
 	piDir := strings.TrimSpace(cfg.PIDir)
 	if piDir == "" {
 		piDir = envString("PI_CODING_AGENT_DIR", filepath.Join(strings.TrimSpace(cfg.AgentHome), ".pi"))
@@ -49,6 +50,9 @@ func buildHarnessRuntimeContext(cfg serveConfig) harnessregistry.RuntimeContext 
 		RuntimeDir:                 strings.TrimSpace(cfg.RuntimeDir),
 		AgentHome:                  strings.TrimSpace(cfg.AgentHome),
 		AgentID:                    strings.TrimSpace(cfg.AgentID),
+		AgentGoBinaryPath:          strings.TrimSpace(agentGoBinaryPath),
+		AgentGoBaseURL:             fmt.Sprintf("http://127.0.0.1:%d", cfg.Port),
+		AgentGoInternalToken:       deriveClientToolInternalToken(cfg.SecretSeed, cfg.AgentID),
 		WorkspacesDir:              strings.TrimSpace(cfg.WorkspacesDir),
 		DefaultWorkingDir:          strings.TrimSpace(cfg.DefaultWorkingDir),
 		CodexHome:                  codexHome,

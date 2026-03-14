@@ -1,290 +1,304 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
-import { useAuth } from '../lib/auth'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { UserAvatar } from '@/components/user-avatar'
-import { registerSettingsGeneralRuntimeController } from '@/coordinator-actions/runtime-bridge'
+import { useAuth } from "../lib/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/user-avatar";
+import { registerSettingsGeneralRuntimeController } from "@/frontend-runtime/bridge";
 import {
   SettingsList,
   SettingsPage,
   SettingsPanel,
   SettingsSection,
   SettingsRow,
-  SettingsRowLeft
-} from '@/components/settings'
+  SettingsRowLeft,
+} from "@/components/settings";
 
-type RegionValue = string | readonly string[]
+type RegionValue = string | readonly string[];
 
-function regionToDisplay (value: RegionValue | undefined): string {
-  if (!value) return 'us-west-2'
-  if (typeof value === 'string') return value
-  return value.join(', ')
+function regionToDisplay(value: RegionValue | undefined): string {
+  if (!value) return "us-west-2";
+  if (typeof value === "string") return value;
+  return value.join(", ");
 }
 
-function parseRegionInput (raw: string): RegionValue {
-  const trimmed = raw.trim()
-  if (trimmed.startsWith('[')) {
-    const parsed = JSON.parse(trimmed) as unknown
+function parseRegionInput(raw: string): RegionValue {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[")) {
+    const parsed = JSON.parse(trimmed) as unknown;
     if (
       !Array.isArray(parsed) ||
-      !parsed.every(v => typeof v === 'string' && v.trim().length > 0)
+      !parsed.every((v) => typeof v === "string" && v.trim().length > 0)
     ) {
-      throw new Error('Region JSON must be an array of non-empty strings')
+      throw new Error("Region JSON must be an array of non-empty strings");
     }
-    return parsed as readonly string[]
+    return parsed as readonly string[];
   }
 
-  if (trimmed.includes(',')) {
+  if (trimmed.includes(",")) {
     const parts = trimmed
-      .split(',')
-      .map(p => p.trim())
-      .filter(p => p.length > 0)
-    if (parts.length === 0) throw new Error('Region is required')
-    return parts
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+    if (parts.length === 0) throw new Error("Region is required");
+    return parts;
   }
 
-  if (trimmed.length === 0) throw new Error('Region is required')
-  return trimmed
+  if (trimmed.length === 0) throw new Error("Region is required");
+  return trimmed;
 }
 
-function normalizeRegion (value: RegionValue): string {
-  if (typeof value === 'string') return value.trim()
+function normalizeRegion(value: RegionValue): string {
+  if (typeof value === "string") return value.trim();
   return value
-    .map(v => v.trim())
-    .filter(v => v.length > 0)
-    .join(',')
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0)
+    .join(",");
 }
 
-function toErrorMessage (value: unknown): string {
-  if (value instanceof Error) return value.message
-  if (typeof value === 'object' && value !== null && 'error' in value) {
-    const err = (value as { error?: unknown }).error
-    if (typeof err === 'string' && err.trim().length > 0) return err
+function toErrorMessage(value: unknown): string {
+  if (value instanceof Error) return value.message;
+  if (typeof value === "object" && value !== null && "error" in value) {
+    const err = (value as { error?: unknown }).error;
+    if (typeof err === "string" && err.trim().length > 0) return err;
   }
-  if (typeof value === 'string' && value.trim().length > 0) return value
-  return 'Save failed'
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  return "Save failed";
 }
 
-function normalizeDiffignore (value: readonly string[]): readonly string[] {
-  const out: string[] = []
-  const seen = new Set<string>()
+function normalizeDiffignore(value: readonly string[]): readonly string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
   for (const raw of value) {
-    const normalized = raw.trim().replaceAll('\\', '/')
-    if (normalized.length === 0 || seen.has(normalized)) continue
-    seen.add(normalized)
-    out.push(normalized)
+    const normalized = raw.trim().replaceAll("\\", "/");
+    if (normalized.length === 0 || seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(normalized);
   }
-  return out
+  return out;
 }
 
-function parseDiffignoreInput (raw: string): readonly string[] {
+function parseDiffignoreInput(raw: string): readonly string[] {
   return normalizeDiffignore(
     raw
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
-  )
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+  );
 }
 
-function formatDiffignoreInput (value: readonly string[]): string {
-  return normalizeDiffignore(value).join('\n')
+function formatDiffignoreInput(value: readonly string[]): string {
+  return normalizeDiffignore(value).join("\n");
 }
 
 type GlobalSettingsResponse = {
-  readonly diffignore: readonly string[]
-  readonly defaultCoordinatorImageId: string
-}
+  readonly diffignore: readonly string[];
+  readonly defaultCoordinatorImageId: string;
+};
 
-function parseGlobalSettingsResponse (value: unknown): GlobalSettingsResponse {
-  if (typeof value !== 'object' || value === null) {
-    return { diffignore: [], defaultCoordinatorImageId: '' }
+function parseGlobalSettingsResponse(value: unknown): GlobalSettingsResponse {
+  if (typeof value !== "object" || value === null) {
+    return { diffignore: [], defaultCoordinatorImageId: "" };
   }
-  const rawDiffignore = (value as { diffignore?: unknown }).diffignore
+  const rawDiffignore = (value as { diffignore?: unknown }).diffignore;
   const rawDefaultCoordinatorImageId = (
     value as { defaultCoordinatorImageId?: unknown }
-  ).defaultCoordinatorImageId
+  ).defaultCoordinatorImageId;
 
   return {
     diffignore: Array.isArray(rawDiffignore)
       ? normalizeDiffignore(
-          rawDiffignore.filter((item): item is string => typeof item === 'string')
+          rawDiffignore.filter(
+            (item): item is string => typeof item === "string",
+          ),
         )
       : [],
     defaultCoordinatorImageId:
-      typeof rawDefaultCoordinatorImageId === 'string'
+      typeof rawDefaultCoordinatorImageId === "string"
         ? rawDefaultCoordinatorImageId.trim()
-        : ''
-  }
+        : "",
+  };
 }
 
-export function SettingsGeneralPage () {
-  const auth = useAuth()
-  const queryClient = useQueryClient()
-  const avatarInputRef = useRef<HTMLInputElement | null>(null)
+export function SettingsGeneralPage() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
-  const currentName = auth.user?.name ?? ''
+  const currentName = auth.user?.name ?? "";
   const currentRegionDisplay = regionToDisplay(
-    auth.user?.defaultRegion as RegionValue | undefined
-  )
+    auth.user?.defaultRegion as RegionValue | undefined,
+  );
 
-  const [name, setName] = useState(currentName)
-  const [regionText, setRegionText] = useState(currentRegionDisplay)
-  const [diffignoreText, setDiffignoreText] = useState('')
-  const [defaultCoordinatorImageId, setDefaultCoordinatorImageId] = useState('')
-  const [didEditDiffignore, setDidEditDiffignore] = useState(false)
-  const [didEditDefaultCoordinatorImageId, setDidEditDefaultCoordinatorImageId] = useState(false)
+  const [name, setName] = useState(currentName);
+  const [regionText, setRegionText] = useState(currentRegionDisplay);
+  const [diffignoreText, setDiffignoreText] = useState("");
+  const [defaultCoordinatorImageId, setDefaultCoordinatorImageId] =
+    useState("");
+  const [didEditDiffignore, setDidEditDiffignore] = useState(false);
+  const [
+    didEditDefaultCoordinatorImageId,
+    setDidEditDefaultCoordinatorImageId,
+  ] = useState(false);
 
   const globalSettingsQuery = useQuery({
-    queryKey: ['settings', 'global'],
+    queryKey: ["settings", "global"],
     enabled: Boolean(auth.user),
     staleTime: 60_000,
     queryFn: async () => {
-      const res = await auth.fetchAuthed('/settings/global')
-      const text = await res.text()
-      const body = text.trim().length > 0 ? (JSON.parse(text) as unknown) : null
-      if (!res.ok) throw new Error(toErrorMessage(body))
-      return parseGlobalSettingsResponse(body)
-    }
-  })
+      const res = await auth.fetchAuthed("/settings/global");
+      const text = await res.text();
+      const body =
+        text.trim().length > 0 ? (JSON.parse(text) as unknown) : null;
+      if (!res.ok) throw new Error(toErrorMessage(body));
+      return parseGlobalSettingsResponse(body);
+    },
+  });
 
   useEffect(() => {
-    if (didEditDiffignore) return
-    if (!globalSettingsQuery.data) return
-    setDiffignoreText(formatDiffignoreInput(globalSettingsQuery.data.diffignore))
-  }, [didEditDiffignore, globalSettingsQuery.data])
+    if (didEditDiffignore) return;
+    if (!globalSettingsQuery.data) return;
+    setDiffignoreText(
+      formatDiffignoreInput(globalSettingsQuery.data.diffignore),
+    );
+  }, [didEditDiffignore, globalSettingsQuery.data]);
 
   useEffect(() => {
-    if (didEditDefaultCoordinatorImageId) return
-    if (!globalSettingsQuery.data) return
-    setDefaultCoordinatorImageId(globalSettingsQuery.data.defaultCoordinatorImageId)
-  }, [didEditDefaultCoordinatorImageId, globalSettingsQuery.data])
+    if (didEditDefaultCoordinatorImageId) return;
+    if (!globalSettingsQuery.data) return;
+    setDefaultCoordinatorImageId(
+      globalSettingsQuery.data.defaultCoordinatorImageId,
+    );
+  }, [didEditDefaultCoordinatorImageId, globalSettingsQuery.data]);
 
   const desiredRegion = useMemo(() => {
     try {
-      return parseRegionInput(regionText)
+      return parseRegionInput(regionText);
     } catch {
-      return null
+      return null;
     }
-  }, [regionText])
+  }, [regionText]);
 
   const currentDiffignore = useMemo(
     () => normalizeDiffignore(globalSettingsQuery.data?.diffignore ?? []),
-    [globalSettingsQuery.data]
-  )
+    [globalSettingsQuery.data],
+  );
   const desiredDiffignore = useMemo(
     () => parseDiffignoreInput(diffignoreText),
-    [diffignoreText]
-  )
+    [diffignoreText],
+  );
   const currentDefaultCoordinatorImageId = useMemo(
-    () => globalSettingsQuery.data?.defaultCoordinatorImageId ?? '',
-    [globalSettingsQuery.data]
-  )
+    () => globalSettingsQuery.data?.defaultCoordinatorImageId ?? "",
+    [globalSettingsQuery.data],
+  );
   const desiredDefaultCoordinatorImageId = useMemo(
     () => defaultCoordinatorImageId.trim(),
-    [defaultCoordinatorImageId]
-  )
+    [defaultCoordinatorImageId],
+  );
 
   const isUserDirty = useMemo(() => {
-    if (!auth.user) return false
-    if (name !== currentName) return true
-    if (!desiredRegion) return false
+    if (!auth.user) return false;
+    if (name !== currentName) return true;
+    if (!desiredRegion) return false;
     return (
       normalizeRegion(desiredRegion) !==
       normalizeRegion(parseRegionInput(currentRegionDisplay))
-    )
-  }, [auth.user, currentName, currentRegionDisplay, desiredRegion, name])
+    );
+  }, [auth.user, currentName, currentRegionDisplay, desiredRegion, name]);
 
   const isGlobalDirty = useMemo(() => {
     if (
       formatDiffignoreInput(desiredDiffignore) !==
       formatDiffignoreInput(currentDiffignore)
     ) {
-      return true
+      return true;
     }
-    return desiredDefaultCoordinatorImageId !== currentDefaultCoordinatorImageId
+    return (
+      desiredDefaultCoordinatorImageId !== currentDefaultCoordinatorImageId
+    );
   }, [
     currentDefaultCoordinatorImageId,
     currentDiffignore,
     desiredDefaultCoordinatorImageId,
-    desiredDiffignore
-  ])
+    desiredDiffignore,
+  ]);
 
-  const isDirty = isUserDirty || isGlobalDirty
+  const isDirty = isUserDirty || isGlobalDirty;
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!auth.user) throw new Error('Not logged in')
+      if (!auth.user) throw new Error("Not logged in");
       if (isUserDirty) {
-        if (!desiredRegion) throw new Error('Invalid region')
-        await auth.updateMe({ name, defaultRegion: desiredRegion })
+        if (!desiredRegion) throw new Error("Invalid region");
+        await auth.updateMe({ name, defaultRegion: desiredRegion });
       }
       if (isGlobalDirty) {
-        const res = await auth.fetchAuthed('/settings/global', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await auth.fetchAuthed("/settings/global", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             diffignore: desiredDiffignore,
             defaultCoordinatorImageId:
               desiredDefaultCoordinatorImageId.length > 0
                 ? desiredDefaultCoordinatorImageId
-                : null
-          })
-        })
-        const text = await res.text()
-        const body = text.trim().length > 0 ? (JSON.parse(text) as unknown) : null
-        if (!res.ok) throw new Error(toErrorMessage(body))
+                : null,
+          }),
+        });
+        const text = await res.text();
+        const body =
+          text.trim().length > 0 ? (JSON.parse(text) as unknown) : null;
+        if (!res.ok) throw new Error(toErrorMessage(body));
       }
     },
     onSuccess: async () => {
-      toast.success('Saved')
-      setDidEditDiffignore(false)
-      setDidEditDefaultCoordinatorImageId(false)
+      toast.success("Saved");
+      setDidEditDiffignore(false);
+      setDidEditDefaultCoordinatorImageId(false);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['images'] }),
-        queryClient.invalidateQueries({ queryKey: ['settings', 'global'] })
-      ])
+        queryClient.invalidateQueries({ queryKey: ["images"] }),
+        queryClient.invalidateQueries({ queryKey: ["settings", "global"] }),
+      ]);
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Save failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Save failed";
+      toast.error(msg);
+    },
+  });
 
   const uploadAvatarMutation = useMutation({
     mutationFn: async (file: File) => {
-      await auth.uploadAvatar(file)
+      await auth.uploadAvatar(file);
     },
     onSuccess: () => {
-      toast.success('Avatar updated')
+      toast.success("Avatar updated");
     },
-    onError: error => {
-      toast.error(toErrorMessage(error))
-    }
-  })
+    onError: (error) => {
+      toast.error(toErrorMessage(error));
+    },
+  });
 
   const resetAvatarMutation = useMutation({
     mutationFn: async () => {
-      await auth.resetAvatar()
+      await auth.resetAvatar();
     },
     onSuccess: () => {
-      toast.success('Avatar reset')
+      toast.success("Avatar reset");
     },
-    onError: error => {
-      toast.error(toErrorMessage(error))
-    }
-  })
+    onError: (error) => {
+      toast.error(toErrorMessage(error));
+    },
+  });
 
-  let regionError: string | null = null
+  let regionError: string | null = null;
   try {
-    parseRegionInput(regionText)
+    parseRegionInput(regionText);
   } catch (e) {
-    regionError = e instanceof Error ? e.message : 'Invalid region'
+    regionError = e instanceof Error ? e.message : "Invalid region";
   }
-  const canSave = isDirty && !regionError && !saveMutation.isPending
+  const canSave = isDirty && !regionError && !saveMutation.isPending;
 
   useEffect(() => {
     return registerSettingsGeneralRuntimeController({
@@ -293,30 +307,30 @@ export function SettingsGeneralPage () {
         regionText,
         isDirty,
         canSave,
-        regionError
+        regionError,
       }),
-      setName: async nextName => {
-        setName(nextName)
+      setName: async (nextName) => {
+        setName(nextName);
         return {
           name: nextName,
-          dirty: nextName !== name ? true : isDirty
-        }
+          dirty: nextName !== name ? true : isDirty,
+        };
       },
-      setDefaultRegion: async nextRegionText => {
-        setRegionText(nextRegionText)
+      setDefaultRegion: async (nextRegionText) => {
+        setRegionText(nextRegionText);
         return {
           regionText: nextRegionText,
-          dirty: nextRegionText !== regionText ? true : isDirty
-        }
+          dirty: nextRegionText !== regionText ? true : isDirty,
+        };
       },
       save: async () => {
         if (!canSave) {
-          throw new Error('General settings cannot be saved right now')
+          throw new Error("General settings cannot be saved right now");
         }
-        await saveMutation.mutateAsync()
-        return { saved: true as const }
-      }
-    })
+        await saveMutation.mutateAsync();
+        return { saved: true as const };
+      },
+    });
   }, [
     canSave,
     isDirty,
@@ -325,126 +339,136 @@ export function SettingsGeneralPage () {
     regionText,
     saveMutation,
     setName,
-    setRegionText
-  ])
+    setRegionText,
+  ]);
 
   return (
     <SettingsPage
-      title='General'
-      description='Manage user-level and global defaults.'
+      title="General"
+      description="Manage user-level and global defaults."
       action={
         <Button
-          variant='secondary'
+          variant="secondary"
           disabled={!canSave}
           onClick={() => saveMutation.mutate()}
         >
-          {saveMutation.isPending ? 'Saving...' : 'Save'}
+          {saveMutation.isPending ? "Saving..." : "Save"}
         </Button>
       }
     >
-      <div className='space-y-4'>
+      <div className="space-y-4">
         <SettingsSection
-          title='User'
-          description='Preferences for your user account.'
+          title="User"
+          description="Preferences for your user account."
         >
           <SettingsPanel>
-            <SettingsList className='rounded-none border-0'>
+            <SettingsList className="rounded-none border-0">
               <SettingsRow
-                className='items-start flex-col sm:flex-row'
+                className="items-start flex-col sm:flex-row"
                 left={
                   <SettingsRowLeft
-                    title='Profile image'
-                    description='Upload your own image or fall back to your initials.'
+                    title="Profile image"
+                    description="Upload your own image or fall back to your initials."
                     leading={
                       auth.user ? (
                         <UserAvatar
                           user={auth.user}
-                          className='h-12 w-12'
-                          textClassName='text-lg'
+                          className="h-12 w-12"
+                          textClassName="text-lg"
                         />
                       ) : null
                     }
                   />
                 }
                 right={
-                  <div className='w-full sm:w-[420px] space-y-2'>
+                  <div className="w-full sm:w-[420px] space-y-2">
                     <input
                       ref={avatarInputRef}
-                      type='file'
-                      accept='image/png,image/jpeg,image/webp,image/gif,image/avif'
-                      className='hidden'
-                      onChange={async e => {
-                        const file = e.target.files?.[0]
-                        e.target.value = ''
-                        if (!file) return
-                        await uploadAvatarMutation.mutateAsync(file)
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!file) return;
+                        await uploadAvatarMutation.mutateAsync(file);
                       }}
                     />
-                    <div className='flex flex-wrap gap-2'>
+                    <div className="flex flex-wrap gap-2">
                       <Button
-                        type='button'
-                        variant='secondary'
-                        disabled={uploadAvatarMutation.isPending || resetAvatarMutation.isPending}
+                        type="button"
+                        variant="secondary"
+                        disabled={
+                          uploadAvatarMutation.isPending ||
+                          resetAvatarMutation.isPending
+                        }
                         onClick={() => avatarInputRef.current?.click()}
                       >
-                        {uploadAvatarMutation.isPending ? 'Uploading...' : 'Upload image'}
+                        {uploadAvatarMutation.isPending
+                          ? "Uploading..."
+                          : "Upload image"}
                       </Button>
                       <Button
-                        type='button'
-                        variant='outline'
-                        disabled={uploadAvatarMutation.isPending || resetAvatarMutation.isPending}
+                        type="button"
+                        variant="outline"
+                        disabled={
+                          uploadAvatarMutation.isPending ||
+                          resetAvatarMutation.isPending
+                        }
                         onClick={() => resetAvatarMutation.mutate()}
                       >
-                        {resetAvatarMutation.isPending ? 'Resetting...' : 'Reset to default'}
+                        {resetAvatarMutation.isPending
+                          ? "Resetting..."
+                          : "Reset to default"}
                       </Button>
                     </div>
-                    <div className='text-xs text-text-secondary'>
+                    <div className="text-xs text-text-secondary">
                       PNG, JPEG, WebP, GIF, or AVIF up to 5 MB.
                     </div>
                   </div>
                 }
               />
               <SettingsRow
-                className='items-start sm:items-center flex-col sm:flex-row'
+                className="items-start sm:items-center flex-col sm:flex-row"
                 left={
                   <SettingsRowLeft
-                    title='Display name'
-                    description='Shown across the UI.'
+                    title="Display name"
+                    description="Shown across the UI."
                   />
                 }
                 right={
                   <Input
-                    className='w-full sm:w-[420px]'
+                    className="w-full sm:w-[420px]"
                     value={name}
-                    onChange={e => setName(e.target.value)}
+                    onChange={(e) => setName(e.target.value)}
                   />
                 }
               />
               <SettingsRow
-                className='items-start flex-col sm:flex-row'
+                className="items-start flex-col sm:flex-row"
                 left={
                   <SettingsRowLeft
-                    title='Default region'
+                    title="Default region"
                     description={
                       <>
-                        Single region like{' '}
-                        <span className='font-mono'>us-west-2</span>,
+                        Single region like{" "}
+                        <span className="font-mono">us-west-2</span>,
                         comma-separated, or a JSON array.
                       </>
                     }
                   />
                 }
                 right={
-                  <div className='w-full sm:w-[420px] space-y-1.5'>
+                  <div className="w-full sm:w-[420px] space-y-1.5">
                     <Input
                       value={regionText}
-                      onChange={e => setRegionText(e.target.value)}
+                      onChange={(e) => setRegionText(e.target.value)}
                       placeholder={
                         'us-west-2 or us-west-2,us-east-1 or ["us-west-2","us-east-1"]'
                       }
                     />
                     {regionError ? (
-                      <div className='text-xs text-destructive'>
+                      <div className="text-xs text-destructive">
                         {regionError}
                       </div>
                     ) : null}
@@ -456,40 +480,41 @@ export function SettingsGeneralPage () {
         </SettingsSection>
 
         <SettingsSection
-          title='Global'
-          description='Shared defaults used across workspaces and users.'
+          title="Global"
+          description="Shared defaults used across workspaces and users."
         >
           <SettingsPanel>
-            <SettingsList className='rounded-none border-0'>
+            <SettingsList className="rounded-none border-0">
               <SettingsRow
-                className='items-start sm:items-center flex-col sm:flex-row'
+                className="items-start sm:items-center flex-col sm:flex-row"
                 left={
                   <SettingsRowLeft
-                    title='Default coordinator image'
-                    description='Global fallback image used for coordinator agents.'
+                    title="Default coordinator image"
+                    description="Global fallback image used for coordinator agents."
                   />
                 }
                 right={
-                  <div className='w-full sm:w-[420px] space-y-1.5'>
+                  <div className="w-full sm:w-[420px] space-y-1.5">
                     <Input
                       value={defaultCoordinatorImageId}
-                      onChange={e => {
-                        setDidEditDefaultCoordinatorImageId(true)
-                        setDefaultCoordinatorImageId(e.target.value)
+                      onChange={(e) => {
+                        setDidEditDefaultCoordinatorImageId(true);
+                        setDefaultCoordinatorImageId(e.target.value);
                       }}
-                      placeholder='Leave blank to unset'
+                      placeholder="Leave blank to unset"
                     />
-                    <div className='text-xs text-text-secondary'>
-                      Store an image ID directly. The bootstrap script can create and populate this for you.
+                    <div className="text-xs text-text-secondary">
+                      Store an image ID directly. The bootstrap script can
+                      create and populate this for you.
                     </div>
                   </div>
                 }
               />
               <SettingsRow
-                className='items-start flex-col sm:flex-row'
+                className="items-start flex-col sm:flex-row"
                 left={
                   <SettingsRowLeft
-                    title='Diff ignore'
+                    title="Diff ignore"
                     description={
                       <>
                         One glob pattern per line. Matching files are hidden by
@@ -499,23 +524,23 @@ export function SettingsGeneralPage () {
                   />
                 }
                 right={
-                  <div className='w-full sm:w-[420px] space-y-1.5'>
+                  <div className="w-full sm:w-[420px] space-y-1.5">
                     <Textarea
                       minRows={8}
                       value={diffignoreText}
-                      onChange={e => {
-                        setDidEditDiffignore(true)
-                        setDiffignoreText(e.target.value)
+                      onChange={(e) => {
+                        setDidEditDiffignore(true);
+                        setDiffignoreText(e.target.value);
                       }}
-                      placeholder='**/package-lock.json'
+                      placeholder="**/package-lock.json"
                     />
                     {globalSettingsQuery.isLoading ? (
-                      <div className='text-xs text-text-secondary'>
+                      <div className="text-xs text-text-secondary">
                         Loading global settings...
                       </div>
                     ) : null}
                     {globalSettingsQuery.isError ? (
-                      <div className='text-xs text-destructive'>
+                      <div className="text-xs text-destructive">
                         {toErrorMessage(globalSettingsQuery.error)}
                       </div>
                     ) : null}
@@ -527,5 +552,5 @@ export function SettingsGeneralPage () {
         </SettingsSection>
       </div>
     </SettingsPage>
-  )
+  );
 }

@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowUp,
@@ -10,10 +10,10 @@ import {
   Terminal,
   Key,
   Check,
-  Star
-} from 'lucide-react'
+  Star,
+} from "lucide-react";
 
-import { useAuth } from '../lib/auth'
+import { useAuth } from "../lib/auth";
 import {
   useGetImagesImageId,
   useGetImagesImageIdEnvironmentSecrets,
@@ -30,32 +30,32 @@ import {
   type GetImagesImageIdVariants200DataItem,
   type GetImagesImageIdVariantsVariantIdBuilds200DataItem,
   type GetImagesImageIdEnvironmentSecrets200DataItem,
-  type GetImagesImageId200Visibility
-} from '@/api/generated/agent-manager'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
+  type GetImagesImageId200Visibility,
+} from "@/api/generated/agent-manager";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import {
   VariantCombobox,
-  type VariantOption
-} from '@/components/ui/variant-combobox'
+  type VariantOption,
+} from "@/components/ui/variant-combobox";
 import {
   ImageIdCombobox,
-  type ImageIdOption
-} from '@/components/ui/image-id-combobox'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { parseDotEnv } from '@/lib/dotenv'
-import { TerminalPanel } from '@/components/terminal-panel'
-import { requestTerminalConnect } from '@/lib/terminal-connect'
+  type ImageIdOption,
+} from "@/components/ui/image-id-combobox";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { parseDotEnv } from "@/lib/dotenv";
+import { TerminalPanel } from "@/components/terminal-panel";
+import { requestTerminalConnect } from "@/lib/terminal-connect";
 import {
   SettingsList,
   SettingsPage,
@@ -63,136 +63,136 @@ import {
   SettingsPanelBody,
   SettingsSection,
   SettingsRow,
-  SettingsRowLeft
-} from '@/components/settings'
-import { registerSettingsImageDetailRuntimeController } from '@/coordinator-actions/runtime-bridge'
+  SettingsRowLeft,
+} from "@/components/settings";
+import { registerSettingsImageDetailRuntimeController } from "@/frontend-runtime/bridge";
 
-type Image = GetImagesImageId200
-type ImageVariant = GetImagesImageIdVariants200DataItem
-type ImageVariantBuild = GetImagesImageIdVariantsVariantIdBuilds200DataItem
-type EnvironmentSecretBinding = GetImagesImageIdEnvironmentSecrets200DataItem
-type ImageVisibility = GetImagesImageId200Visibility
-type VariantScope = 'shared' | 'personal'
+type Image = GetImagesImageId200;
+type ImageVariant = GetImagesImageIdVariants200DataItem;
+type ImageVariantBuild = GetImagesImageIdVariantsVariantIdBuilds200DataItem;
+type EnvironmentSecretBinding = GetImagesImageIdEnvironmentSecrets200DataItem;
+type ImageVisibility = GetImagesImageId200Visibility;
+type VariantScope = "shared" | "personal";
 type SetupTerminalConnection = {
-  readonly wsUrl: string
-  readonly authToken: string
-}
+  readonly wsUrl: string;
+  readonly authToken: string;
+};
 
-const DEFAULT_VARIANT_IMAGE_ID = 'ghcr.io/suhjohn/agentsandbox:latest'
+const DEFAULT_VARIANT_IMAGE_ID = "ghcr.io/suhjohn/agentsandbox:latest";
 
-const IMAGE_AUTOSAVE_DEBOUNCE_MS = 1200
-const AUTOSAVE_TOAST_ID = 'settings-image-detail-autosave'
+const IMAGE_AUTOSAVE_DEBOUNCE_MS = 1200;
+const AUTOSAVE_TOAST_ID = "settings-image-detail-autosave";
 
 type ImageDraft = {
-  readonly name: string
-  readonly description: string
-  readonly visibility: ImageVisibility
-}
+  readonly name: string;
+  readonly description: string;
+  readonly visibility: ImageVisibility;
+};
 
-function toDraft (image: Image): ImageDraft {
+function toDraft(image: Image): ImageDraft {
   return {
     name: image.name,
-    description: image.description ?? '',
-    visibility: image.visibility
-  }
+    description: image.description ?? "",
+    visibility: image.visibility,
+  };
 }
 
 type ImagePatch = {
-  readonly name?: string
-  readonly description?: string
-  readonly visibility?: ImageVisibility
-}
+  readonly name?: string;
+  readonly description?: string;
+  readonly visibility?: ImageVisibility;
+};
 
-function buildPatch (initial: ImageDraft, draft: ImageDraft): ImagePatch {
-  const patch: Record<string, unknown> = {}
-  if (draft.name.trim() !== initial.name) patch.name = draft.name.trim()
+function buildPatch(initial: ImageDraft, draft: ImageDraft): ImagePatch {
+  const patch: Record<string, unknown> = {};
+  if (draft.name.trim() !== initial.name) patch.name = draft.name.trim();
   if (draft.description !== initial.description)
-    patch.description = draft.description
+    patch.description = draft.description;
   if (draft.visibility !== initial.visibility)
-    patch.visibility = draft.visibility
+    patch.visibility = draft.visibility;
 
-  return patch as ImagePatch
+  return patch as ImagePatch;
 }
 
-function unwrapImage (value: unknown): Image | null {
-  if (typeof value !== 'object' || value === null) return null
-  const v = value as Record<string, unknown>
-  if (typeof v.id === 'string') return v as Image
-  if (typeof v.data === 'object' && v.data !== null) {
-    const d = v.data as Record<string, unknown>
-    if (typeof d.id === 'string') return d as Image
+function unwrapImage(value: unknown): Image | null {
+  if (typeof value !== "object" || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.id === "string") return v as Image;
+  if (typeof v.data === "object" && v.data !== null) {
+    const d = v.data as Record<string, unknown>;
+    if (typeof d.id === "string") return d as Image;
   }
-  return null
+  return null;
 }
 
-function parseSshPublicKeysDraft (value: string): readonly string[] {
+function parseSshPublicKeysDraft(value: string): readonly string[] {
   return value
     .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => line.length > 0)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
-export function SettingsImageDetailPage () {
-  const auth = useAuth()
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
+export function SettingsImageDetailPage() {
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  const params = useParams({ strict: false }) as { readonly imageId?: string }
-  const imageId = params.imageId ?? ''
+  const params = useParams({ strict: false }) as { readonly imageId?: string };
+  const imageId = params.imageId ?? "";
 
-  const [initial, setInitial] = useState<ImageDraft | null>(null)
-  const [draft, setDraft] = useState<ImageDraft | null>(null)
+  const [initial, setInitial] = useState<ImageDraft | null>(null);
+  const [draft, setDraft] = useState<ImageDraft | null>(null);
   const [buildLogs, setBuildLogs] = useState<
     Array<{
-      readonly source: 'stdout' | 'stderr' | 'status' | 'error'
-      readonly text: string
+      readonly source: "stdout" | "stderr" | "status" | "error";
+      readonly text: string;
     }>
-  >([])
+  >([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    null
-  )
-  const [setupSandboxId, setSetupSandboxId] = useState<string | null>(null)
-  const closeRequestedSetupSandboxIdRef = useRef<string | null>(null)
+    null,
+  );
+  const [setupSandboxId, setSetupSandboxId] = useState<string | null>(null);
+  const closeRequestedSetupSandboxIdRef = useRef<string | null>(null);
   const [setupTerminalConnection, setSetupTerminalConnection] =
-    useState<SetupTerminalConnection | null>(null)
-  const setupTerminalReconnectInFlightRef = useRef(false)
+    useState<SetupTerminalConnection | null>(null);
+  const setupTerminalReconnectInFlightRef = useRef(false);
   const [pendingDeleteVariant, setPendingDeleteVariant] = useState<{
-    readonly variantId: string
-    readonly label: string
-  } | null>(null)
+    readonly variantId: string;
+    readonly label: string;
+  } | null>(null);
   const [showArchiveConfirmDialog, setShowArchiveConfirmDialog] =
-    useState(false)
-  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false)
+    useState(false);
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
   const [environmentModalSecretName, setEnvironmentModalSecretName] =
-    useState('')
-  const [environmentContents, setEnvironmentContents] = useState('')
-  const [environmentDraftTouched, setEnvironmentDraftTouched] = useState(false)
-  const [variantNameDraft, setVariantNameDraft] = useState('')
-  const [extendMode, setExtendMode] = useState<'interactive' | 'api'>(
-    'interactive'
-  )
-  const [sshPublicKeysDraft, setSshPublicKeysDraft] = useState('')
+    useState("");
+  const [environmentContents, setEnvironmentContents] = useState("");
+  const [environmentDraftTouched, setEnvironmentDraftTouched] = useState(false);
+  const [variantNameDraft, setVariantNameDraft] = useState("");
+  const [extendMode, setExtendMode] = useState<"interactive" | "api">(
+    "interactive",
+  );
+  const [sshPublicKeysDraft, setSshPublicKeysDraft] = useState("");
   const [setupAuthorizedPublicKeys, setSetupAuthorizedPublicKeys] = useState<
     readonly string[]
-  >([])
+  >([]);
   const [setupSshInfo, setSetupSshInfo] = useState<{
-    readonly username: string
-    readonly host: string
-    readonly port: number
-    readonly knownHostsLine: string
-  } | null>(null)
+    readonly username: string;
+    readonly host: string;
+    readonly port: number;
+    readonly knownHostsLine: string;
+  } | null>(null);
 
   const imageQuery = useGetImagesImageId(imageId, {
     query: {
       enabled: !!auth.user && imageId.length > 0,
-      refetchOnWindowFocus: false
-    }
-  })
+      refetchOnWindowFocus: false,
+    },
+  });
 
-  const image = useMemo(() => unwrapImage(imageQuery.data), [imageQuery.data])
-  const isArchived = Boolean(image?.deletedAt)
-  const canEdit = Boolean(auth.user && image && !isArchived)
-  const canDeleteArchivedImage = Boolean(auth.user && image && isArchived)
+  const image = useMemo(() => unwrapImage(imageQuery.data), [imageQuery.data]);
+  const isArchived = Boolean(image?.deletedAt);
+  const canEdit = Boolean(auth.user && image && !isArchived);
+  const canDeleteArchivedImage = Boolean(auth.user && image && isArchived);
 
   const environmentSecretsQuery = useGetImagesImageIdEnvironmentSecrets(
     imageId,
@@ -205,10 +205,10 @@ export function SettingsImageDetailPage () {
           !!image &&
           !isArchived,
         refetchOnWindowFocus: false,
-        retry: false
-      }
-    }
-  )
+        retry: false,
+      },
+    },
+  );
   const imageVariantsQuery = useGetImagesImageIdVariants(imageId, {
     query: {
       enabled:
@@ -217,12 +217,12 @@ export function SettingsImageDetailPage () {
         imageQuery.isSuccess &&
         !!image &&
         !isArchived,
-      refetchOnWindowFocus: false
-    }
-  })
+      refetchOnWindowFocus: false,
+    },
+  });
   const variantBuildsQuery = useGetImagesImageIdVariantsVariantIdBuilds(
     imageId,
-    selectedVariantId ?? '',
+    selectedVariantId ?? "",
     { limit: 20 },
     {
       query: {
@@ -233,410 +233,414 @@ export function SettingsImageDetailPage () {
           !!image &&
           !isArchived &&
           !!selectedVariantId,
-        refetchOnWindowFocus: false
-      }
-    }
-  )
+        refetchOnWindowFocus: false,
+      },
+    },
+  );
   const variantBuilds = useMemo(() => {
-    const value = variantBuildsQuery.data?.data
-    return Array.isArray(value) ? (value as readonly ImageVariantBuild[]) : []
-  }, [variantBuildsQuery.data])
+    const value = variantBuildsQuery.data?.data;
+    return Array.isArray(value) ? (value as readonly ImageVariantBuild[]) : [];
+  }, [variantBuildsQuery.data]);
 
   const variants = useMemo(() => {
-    const value = imageVariantsQuery.data?.data
-    return Array.isArray(value) ? (value as readonly ImageVariant[]) : []
-  }, [imageVariantsQuery.data])
+    const value = imageVariantsQuery.data?.data;
+    return Array.isArray(value) ? (value as readonly ImageVariant[]) : [];
+  }, [imageVariantsQuery.data]);
   const visibleVariants = useMemo(() => {
-    const userId = auth.user?.id
-    if (!userId) return variants.filter(v => v.scope === 'shared')
+    const userId = auth.user?.id;
+    if (!userId) return variants.filter((v) => v.scope === "shared");
     return variants.filter(
-      v =>
-        v.scope === 'shared' ||
+      (v) =>
+        v.scope === "shared" ||
         v.ownerUserId === userId ||
-        image?.createdBy === userId
-    )
-  }, [auth.user?.id, image?.createdBy, variants])
+        image?.createdBy === userId,
+    );
+  }, [auth.user?.id, image?.createdBy, variants]);
 
   const variantOptions = useMemo((): readonly VariantOption[] => {
-    return visibleVariants.map(v => ({
+    return visibleVariants.map((v) => ({
       id: v.id,
       name: v.name,
       scope: v.scope as VariantScope,
       ownerUserId: v.ownerUserId ?? null,
       isDefault: v.id === image?.defaultVariantId,
-      isUserDefault: v.id === image?.userDefaultVariantId
-    }))
-  }, [visibleVariants, image?.defaultVariantId, image?.userDefaultVariantId])
+      isUserDefault: v.id === image?.userDefaultVariantId,
+    }));
+  }, [visibleVariants, image?.defaultVariantId, image?.userDefaultVariantId]);
 
   useEffect(() => {
     if (visibleVariants.length === 0) {
-      setSelectedVariantId(null)
-      return
+      setSelectedVariantId(null);
+      return;
     }
     if (
       selectedVariantId &&
-      visibleVariants.some(v => v.id === selectedVariantId)
+      visibleVariants.some((v) => v.id === selectedVariantId)
     ) {
-      return
+      return;
     }
     const preferredId =
-      image?.effectiveDefaultVariantId ?? image?.defaultVariantId
+      image?.effectiveDefaultVariantId ?? image?.defaultVariantId;
     const preferred =
-      preferredId && visibleVariants.some(v => v.id === preferredId)
+      preferredId && visibleVariants.some((v) => v.id === preferredId)
         ? preferredId
-        : visibleVariants[0]?.id ?? null
-    setSelectedVariantId(preferred)
+        : (visibleVariants[0]?.id ?? null);
+    setSelectedVariantId(preferred);
   }, [
     image?.defaultVariantId,
     image?.effectiveDefaultVariantId,
     selectedVariantId,
-    visibleVariants
-  ])
+    visibleVariants,
+  ]);
 
   const selectedVariant = useMemo(
-    () => visibleVariants.find(v => v.id === selectedVariantId) ?? null,
-    [selectedVariantId, visibleVariants]
-  )
+    () => visibleVariants.find((v) => v.id === selectedVariantId) ?? null,
+    [selectedVariantId, visibleVariants],
+  );
   const selectedVariantActiveImageId =
-    typeof selectedVariant?.activeImageId === 'string' &&
+    typeof selectedVariant?.activeImageId === "string" &&
     selectedVariant.activeImageId.trim().length > 0
       ? selectedVariant.activeImageId
-      : undefined
+      : undefined;
   const selectedVariantDraftImageId =
-    typeof selectedVariant?.draftImageId === 'string' &&
+    typeof selectedVariant?.draftImageId === "string" &&
     selectedVariant.draftImageId.trim().length > 0
       ? selectedVariant.draftImageId
-      : selectedVariantActiveImageId
+      : selectedVariantActiveImageId;
 
   const imageIdOptions = useMemo((): readonly ImageIdOption[] => {
     const optionsById = new Map<
       string,
       { id: string; updatedAt: string; labels: string[] }
-    >()
+    >();
     const addOption = (input: {
-      readonly id: string | null | undefined
-      readonly updatedAt: string
-      readonly label?: string
+      readonly id: string | null | undefined;
+      readonly updatedAt: string;
+      readonly label?: string;
     }) => {
-      const id = input.id?.trim() ?? ''
-      if (!id) return
-      const existing = optionsById.get(id)
+      const id = input.id?.trim() ?? "";
+      if (!id) return;
+      const existing = optionsById.get(id);
       if (existing) {
         if (input.label && !existing.labels.includes(input.label)) {
-          existing.labels.push(input.label)
+          existing.labels.push(input.label);
         }
-        return
+        return;
       }
       optionsById.set(id, {
         id,
         updatedAt: input.updatedAt,
-        labels: input.label ? [input.label] : []
-      })
-    }
+        labels: input.label ? [input.label] : [],
+      });
+    };
 
     addOption({
       id: selectedVariant?.activeImageId,
       updatedAt: selectedVariant?.updatedAt ?? new Date().toISOString(),
-      label: 'active'
-    })
+      label: "active",
+    });
     addOption({
       id: selectedVariant?.draftImageId ?? selectedVariant?.activeImageId,
       updatedAt: selectedVariant?.updatedAt ?? new Date().toISOString(),
-      label: 'draft'
-    })
+      label: "draft",
+    });
     addOption({
       id: DEFAULT_VARIANT_IMAGE_ID,
       updatedAt:
         image?.updatedAt ??
         selectedVariant?.updatedAt ??
-        new Date().toISOString()
-    })
+        new Date().toISOString(),
+    });
 
     for (const build of variantBuilds) {
-      if (build.status !== 'succeeded' || !build.outputImageId) continue
+      if (build.status !== "succeeded" || !build.outputImageId) continue;
       addOption({
         id: build.outputImageId,
-        updatedAt: build.startedAt
-      })
+        updatedAt: build.startedAt,
+      });
     }
 
-    return [...optionsById.values()]
+    return [...optionsById.values()];
   }, [
     image?.updatedAt,
     selectedVariant?.activeImageId,
     selectedVariant?.draftImageId,
     selectedVariant?.updatedAt,
-    variantBuilds
-  ])
+    variantBuilds,
+  ]);
 
   const isSelectedVariantUserDefault =
-    selectedVariantId === image?.userDefaultVariantId
+    selectedVariantId === image?.userDefaultVariantId;
   const isSelectedVariantGlobalDefault =
-    selectedVariantId === image?.defaultVariantId
+    selectedVariantId === image?.defaultVariantId;
   const isImageOwner = Boolean(
-    auth.user && image && auth.user.id === image.createdBy
-  )
+    auth.user && image && auth.user.id === image.createdBy,
+  );
   const isDraftAndActiveInSync = Boolean(
     selectedVariant &&
-      selectedVariant.draftImageId &&
-      selectedVariant.activeImageId &&
-      selectedVariant.draftImageId === selectedVariant.activeImageId
-  )
+    selectedVariant.draftImageId &&
+    selectedVariant.activeImageId &&
+    selectedVariant.draftImageId === selectedVariant.activeImageId,
+  );
 
   const canMutateSelectedVariant = useMemo(() => {
-    if (!auth.user || !image || !selectedVariant) return false
-    if (selectedVariant.scope === 'shared') return true
-    if (auth.user.id === image.createdBy) return true
-    return selectedVariant.ownerUserId === auth.user.id
-  }, [auth.user, image, selectedVariant])
+    if (!auth.user || !image || !selectedVariant) return false;
+    if (selectedVariant.scope === "shared") return true;
+    if (auth.user.id === image.createdBy) return true;
+    return selectedVariant.ownerUserId === auth.user.id;
+  }, [auth.user, image, selectedVariant]);
 
   const canPromoteDraft = Boolean(
     canMutateSelectedVariant &&
-      selectedVariant?.draftImageId &&
-      selectedVariant?.activeImageId &&
-      selectedVariant.draftImageId !== selectedVariant.activeImageId
-  )
+    selectedVariant?.draftImageId &&
+    selectedVariant?.activeImageId &&
+    selectedVariant.draftImageId !== selectedVariant.activeImageId,
+  );
 
   const variantMutabilityReason = useMemo((): string | null => {
-    if (!auth.user) return 'Sign in to modify variants'
-    if (!image) return 'Loading...'
-    if (!selectedVariant) return 'Select a variant'
-    if (canMutateSelectedVariant) return null
-    return 'You can only modify your own personal variants'
-  }, [auth.user, canMutateSelectedVariant, image, selectedVariant])
+    if (!auth.user) return "Sign in to modify variants";
+    if (!image) return "Loading...";
+    if (!selectedVariant) return "Select a variant";
+    if (canMutateSelectedVariant) return null;
+    return "You can only modify your own personal variants";
+  }, [auth.user, canMutateSelectedVariant, image, selectedVariant]);
 
   const selectedVariantScope =
-    (selectedVariant?.scope as VariantScope | undefined) ?? null
+    (selectedVariant?.scope as VariantScope | undefined) ?? null;
   const variantNameValidationError = useMemo((): string | null => {
-    if (!selectedVariant) return null
-    if (variantNameDraft.trim().length === 0) return 'Variant name is required.'
-    return null
-  }, [selectedVariant, variantNameDraft])
+    if (!selectedVariant) return null;
+    if (variantNameDraft.trim().length === 0)
+      return "Variant name is required.";
+    return null;
+  }, [selectedVariant, variantNameDraft]);
   const isVariantNameDirty = Boolean(
-    selectedVariant && variantNameDraft.trim() !== selectedVariant.name
-  )
+    selectedVariant && variantNameDraft.trim() !== selectedVariant.name,
+  );
   const canChangeSelectedVariantScope = Boolean(
-    auth.user && image && auth.user.id === image.createdBy && selectedVariant
-  )
+    auth.user && image && auth.user.id === image.createdBy && selectedVariant,
+  );
   const variantScopeChangeReason = useMemo((): string | null => {
-    if (!auth.user) return 'Sign in to change variant visibility'
-    if (!image) return 'Loading...'
-    if (!selectedVariant) return 'Select a variant'
+    if (!auth.user) return "Sign in to change variant visibility";
+    if (!image) return "Loading...";
+    if (!selectedVariant) return "Select a variant";
     if (auth.user.id !== image.createdBy) {
-      return 'Only the image owner can change personal/shared status'
+      return "Only the image owner can change personal/shared status";
     }
-    return null
-  }, [auth.user, image, selectedVariant])
+    return null;
+  }, [auth.user, image, selectedVariant]);
 
   useEffect(() => {
-    setVariantNameDraft(selectedVariant?.name ?? '')
-  }, [selectedVariant?.id, selectedVariant?.name])
+    setVariantNameDraft(selectedVariant?.name ?? "");
+  }, [selectedVariant?.id, selectedVariant?.name]);
 
   const connectSetupSandboxTerminal = useCallback(
     async (sandboxId: string): Promise<SetupTerminalConnection> => {
-      const accessToken = auth.accessToken?.trim() ?? ''
-      if (accessToken.length === 0) throw new Error('Missing access token')
+      const accessToken = auth.accessToken?.trim() ?? "";
+      if (accessToken.length === 0) throw new Error("Missing access token");
       const result = await requestTerminalConnect({
         baseUrl: auth.baseUrl,
         accessToken,
-        targetType: 'setupSandbox',
-        targetId: sandboxId
-      })
-      return { wsUrl: result.wsUrl, authToken: result.authToken }
+        targetType: "setupSandbox",
+        targetId: sandboxId,
+      });
+      return { wsUrl: result.wsUrl, authToken: result.authToken };
     },
-    [auth.accessToken, auth.baseUrl]
-  )
+    [auth.accessToken, auth.baseUrl],
+  );
 
   const environmentSecretBindings = useMemo(() => {
-    const value = environmentSecretsQuery.data?.data
+    const value = environmentSecretsQuery.data?.data;
     return Array.isArray(value)
       ? (value as readonly EnvironmentSecretBinding[])
-      : []
-  }, [environmentSecretsQuery.data])
-  const primaryEnvironmentSecret = environmentSecretBindings[0] ?? null
+      : [];
+  }, [environmentSecretsQuery.data]);
+  const primaryEnvironmentSecret = environmentSecretBindings[0] ?? null;
 
   useEffect(() => {
-    setEnvironmentModalSecretName('')
-    setEnvironmentContents('')
-    setEnvironmentDraftTouched(false)
-  }, [imageId])
+    setEnvironmentModalSecretName("");
+    setEnvironmentContents("");
+    setEnvironmentDraftTouched(false);
+  }, [imageId]);
 
   useEffect(() => {
-    if (environmentDraftTouched) return
+    if (environmentDraftTouched) return;
     setEnvironmentModalSecretName(
-      primaryEnvironmentSecret?.modalSecretName ?? ''
-    )
-  }, [environmentDraftTouched, primaryEnvironmentSecret?.modalSecretName])
+      primaryEnvironmentSecret?.modalSecretName ?? "",
+    );
+  }, [environmentDraftTouched, primaryEnvironmentSecret?.modalSecretName]);
 
   const environmentContentsError = useMemo(() => {
-    if (environmentContents.trim().length === 0) return null
-    const parsed = parseDotEnv(environmentContents)
-    return parsed.error
-  }, [environmentContents])
+    if (environmentContents.trim().length === 0) return null;
+    const parsed = parseDotEnv(environmentContents);
+    return parsed.error;
+  }, [environmentContents]);
 
   useEffect(() => {
-    if (!image) return
-    const next = toDraft(image)
-    setInitial(next)
-    setDraft(next)
-  }, [image?.id])
+    if (!image) return;
+    const next = toDraft(image);
+    setInitial(next);
+    setDraft(next);
+  }, [image?.id]);
   const buildOutput = useMemo(
-    () => buildLogs.map(entry => entry.text).join(''),
-    [buildLogs]
-  )
+    () => buildLogs.map((entry) => entry.text).join(""),
+    [buildLogs],
+  );
 
   const nameValidationError = useMemo(() => {
-    if (!draft) return null
-    if (draft.name.trim().length === 0) return 'Name is required.'
-    return null
-  }, [draft?.name])
+    if (!draft) return null;
+    if (draft.name.trim().length === 0) return "Name is required.";
+    return null;
+  }, [draft?.name]);
 
   const autosaveImageMutation = useMutation({
     mutationFn: async (patch: ImagePatch) =>
       auth.api.updateImage(imageId, patch),
     onMutate: () => {
-      toast.loading('Autosaving…', { id: AUTOSAVE_TOAST_ID })
+      toast.loading("Autosaving…", { id: AUTOSAVE_TOAST_ID });
     },
     onSuccess: async (_, patch) => {
-      setInitial(prev => {
-        if (!prev) return prev
+      setInitial((prev) => {
+        if (!prev) return prev;
         return {
           ...prev,
-          ...(typeof patch.name === 'string' ? { name: patch.name } : {}),
-          ...(Object.prototype.hasOwnProperty.call(patch, 'description')
-            ? { description: patch.description ?? '' }
+          ...(typeof patch.name === "string" ? { name: patch.name } : {}),
+          ...(Object.prototype.hasOwnProperty.call(patch, "description")
+            ? { description: patch.description ?? "" }
             : {}),
-          ...(patch.visibility ? { visibility: patch.visibility } : {})
-        }
-      })
+          ...(patch.visibility ? { visibility: patch.visibility } : {}),
+        };
+      });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
-        })
-      ])
-      toast.success('Saved', { id: AUTOSAVE_TOAST_ID, duration: 1200 })
+          queryKey: getGetImagesImageIdQueryKey(imageId),
+        }),
+      ]);
+      toast.success("Saved", { id: AUTOSAVE_TOAST_ID, duration: 1200 });
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Auto-save failed'
-      toast.error(msg, { id: AUTOSAVE_TOAST_ID })
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Auto-save failed";
+      toast.error(msg, { id: AUTOSAVE_TOAST_ID });
+    },
+  });
 
   const buildStreamMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedVariantId) throw new Error('Select a variant first.')
-      setBuildLogs([])
+      if (!selectedVariantId) throw new Error("Select a variant first.");
+      setBuildLogs([]);
 
       const safeParse = (input: string): unknown => {
         try {
-          return JSON.parse(input) as unknown
+          return JSON.parse(input) as unknown;
         } catch {
-          return null
+          return null;
         }
-      }
+      };
 
       const append = (entry: {
-        readonly source: 'stdout' | 'stderr' | 'status' | 'error'
-        readonly text: string
+        readonly source: "stdout" | "stderr" | "status" | "error";
+        readonly text: string;
       }) => {
-        if (entry.text.trim().length === 0) return
-        setBuildLogs(prev => {
-          const next = [...prev, entry]
-          return next.length > 2000 ? next.slice(next.length - 2000) : next
-        })
-      }
+        if (entry.text.trim().length === 0) return;
+        setBuildLogs((prev) => {
+          const next = [...prev, entry];
+          return next.length > 2000 ? next.slice(next.length - 2000) : next;
+        });
+      };
 
       await auth.api.buildImageStream({
         imageId,
         variantId: selectedVariantId,
-        onEvent: event => {
-          const data = safeParse(event.data)
-          if (event.event === 'log') {
-            if (!data || typeof data !== 'object') return
-            const source = (data as { source?: unknown }).source
-            const text = (data as { text?: unknown }).text
+        onEvent: (event) => {
+          const data = safeParse(event.data);
+          if (event.event === "log") {
+            if (!data || typeof data !== "object") return;
+            const source = (data as { source?: unknown }).source;
+            const text = (data as { text?: unknown }).text;
             if (
-              (source !== 'stdout' && source !== 'stderr') ||
-              typeof text !== 'string'
+              (source !== "stdout" && source !== "stderr") ||
+              typeof text !== "string"
             ) {
-              return
+              return;
             }
-            append({ source, text })
-            return
+            append({ source, text });
+            return;
           }
-          if (event.event === 'status') {
-            if (!data || typeof data !== 'object') return
-            const phase = (data as { phase?: unknown }).phase
-            if (typeof phase !== 'string') return
-            append({ source: 'status', text: `\n[${phase}]\n` })
-            return
+          if (event.event === "status") {
+            if (!data || typeof data !== "object") return;
+            const phase = (data as { phase?: unknown }).phase;
+            if (typeof phase !== "string") return;
+            append({ source: "status", text: `\n[${phase}]\n` });
+            return;
           }
-          if (event.event === 'error') {
-            if (!data || typeof data !== 'object') return
-            const message = (data as { message?: unknown }).message
-            if (typeof message !== 'string') return
-            append({ source: 'error', text: `\n[error] ${message}\n` })
-            toast.error(message)
-            return
+          if (event.event === "error") {
+            if (!data || typeof data !== "object") return;
+            const message = (data as { message?: unknown }).message;
+            if (typeof message !== "string") return;
+            append({ source: "error", text: `\n[error] ${message}\n` });
+            toast.error(message);
+            return;
           }
-          if (event.event === 'result') {
-            if (!data || typeof data !== 'object') return
+          if (event.event === "result") {
+            if (!data || typeof data !== "object") return;
             void queryClient.invalidateQueries({
-              queryKey: getGetImagesQueryKey()
-            })
+              queryKey: getGetImagesQueryKey(),
+            });
             void queryClient.invalidateQueries({
-              queryKey: getGetImagesImageIdQueryKey(imageId)
-            })
+              queryKey: getGetImagesImageIdQueryKey(imageId),
+            });
             void queryClient.invalidateQueries({
-              queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
-            })
+              queryKey: getGetImagesImageIdVariantsQueryKey(imageId),
+            });
             void queryClient.invalidateQueries({
               queryKey: getGetImagesImageIdVariantsVariantIdBuildsQueryKey(
                 imageId,
                 selectedVariantId!,
-                { limit: 20 }
-              )
-            })
-            toast.success('Build complete')
+                { limit: 20 },
+              ),
+            });
+            toast.success("Build complete");
           }
-        }
-      })
+        },
+      });
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Build failed'
-      toast.error(msg)
-      setBuildLogs(prev => [...prev, { source: 'error', text: `\n${msg}\n` }])
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Build failed";
+      toast.error(msg);
+      setBuildLogs((prev) => [
+        ...prev,
+        { source: "error", text: `\n${msg}\n` },
+      ]);
       void queryClient.invalidateQueries({
         queryKey: getGetImagesImageIdVariantsVariantIdBuildsQueryKey(
           imageId,
           selectedVariantId!,
-          { limit: 20 }
-        )
-      })
-    }
-  })
+          { limit: 20 },
+        ),
+      });
+    },
+  });
 
   useEffect(() => {
-    if (!canEdit || !draft || !initial) return
-    if (autosaveImageMutation.isPending) return
-    if (nameValidationError) return
+    if (!canEdit || !draft || !initial) return;
+    if (autosaveImageMutation.isPending) return;
+    if (nameValidationError) return;
 
-    const patch = buildPatch(initial, draft)
-    const metadataPatch: Record<string, unknown> = {}
-    if (typeof patch.name === 'string') metadataPatch.name = patch.name
-    if (Object.prototype.hasOwnProperty.call(patch, 'description')) {
-      metadataPatch.description = patch.description
+    const patch = buildPatch(initial, draft);
+    const metadataPatch: Record<string, unknown> = {};
+    if (typeof patch.name === "string") metadataPatch.name = patch.name;
+    if (Object.prototype.hasOwnProperty.call(patch, "description")) {
+      metadataPatch.description = patch.description;
     }
-    if (patch.visibility) metadataPatch.visibility = patch.visibility
-    if (Object.keys(metadataPatch).length === 0) return
-    const typedMetadataPatch = metadataPatch as ImagePatch
+    if (patch.visibility) metadataPatch.visibility = patch.visibility;
+    if (Object.keys(metadataPatch).length === 0) return;
+    const typedMetadataPatch = metadataPatch as ImagePatch;
 
     const timeout = window.setTimeout(() => {
-      autosaveImageMutation.mutate(typedMetadataPatch)
-    }, IMAGE_AUTOSAVE_DEBOUNCE_MS)
+      autosaveImageMutation.mutate(typedMetadataPatch);
+    }, IMAGE_AUTOSAVE_DEBOUNCE_MS);
 
-    return () => window.clearTimeout(timeout)
+    return () => window.clearTimeout(timeout);
   }, [
     autosaveImageMutation.isPending,
     autosaveImageMutation.mutate,
@@ -647,60 +651,60 @@ export function SettingsImageDetailPage () {
     initial?.description,
     initial?.name,
     initial?.visibility,
-    nameValidationError
-  ])
+    nameValidationError,
+  ]);
 
   const cloneMutation = useMutation({
     mutationFn: async () => auth.api.cloneImage(imageId),
-    onSuccess: async cloned => {
-      toast.success('Cloned')
-      await queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() })
+    onSuccess: async (cloned) => {
+      toast.success("Cloned");
+      await queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() });
       await navigate({
-        to: '/settings/images/$imageId',
-        params: { imageId: cloned.id }
-      })
+        to: "/settings/images/$imageId",
+        params: { imageId: cloned.id },
+      });
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Clone failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Clone failed";
+      toast.error(msg);
+    },
+  });
 
   const upsertEnvironmentSecretBindingMutation =
-    usePutImagesImageIdEnvironmentSecrets()
+    usePutImagesImageIdEnvironmentSecrets();
   const upsertEnvironmentSecretValuesMutation =
-    usePostImagesImageIdModalSecrets()
+    usePostImagesImageIdModalSecrets();
 
   const saveEnvironmentSecretMutation = useMutation({
     mutationFn: async (input: {
-      readonly modalSecretName: string
-      readonly envText: string
-      readonly initialModalSecretName: string | null
+      readonly modalSecretName: string;
+      readonly envText: string;
+      readonly initialModalSecretName: string | null;
     }): Promise<{
-      readonly didSaveBinding: boolean
-      readonly didSaveValues: boolean
+      readonly didSaveBinding: boolean;
+      readonly didSaveValues: boolean;
     }> => {
-      const modalSecretName = input.modalSecretName.trim()
+      const modalSecretName = input.modalSecretName.trim();
       if (modalSecretName.length === 0) {
-        throw new Error('Modal secret name is required')
+        throw new Error("Modal secret name is required");
       }
 
       const shouldSaveBinding =
         !input.initialModalSecretName ||
-        modalSecretName !== input.initialModalSecretName
+        modalSecretName !== input.initialModalSecretName;
       if (shouldSaveBinding) {
         await upsertEnvironmentSecretBindingMutation.mutateAsync({
           imageId,
-          data: { modalSecretName }
-        })
+          data: { modalSecretName },
+        });
       }
 
-      let env: Record<string, string> | null = null
-      const envText = input.envText.trim()
+      let env: Record<string, string> | null = null;
+      const envText = input.envText.trim();
       if (envText.length > 0) {
-        const parsed = parseDotEnv(input.envText)
-        if (parsed.error) throw new Error(parsed.error)
-        env = parsed.env
+        const parsed = parseDotEnv(input.envText);
+        if (parsed.error) throw new Error(parsed.error);
+        env = parsed.env;
       }
 
       if (env) {
@@ -708,85 +712,85 @@ export function SettingsImageDetailPage () {
           imageId,
           data: {
             name: modalSecretName,
-            env
-          }
-        })
+            env,
+          },
+        });
       }
 
       return {
         didSaveBinding: shouldSaveBinding,
-        didSaveValues: env !== null
-      }
+        didSaveValues: env !== null,
+      };
     },
-    onSuccess: async data => {
+    onSuccess: async (data) => {
       if (data.didSaveBinding || data.didSaveValues) {
-        toast.success('Saved')
+        toast.success("Saved");
       }
       await queryClient.invalidateQueries({
-        queryKey: getGetImagesImageIdEnvironmentSecretsQueryKey(imageId)
-      })
+        queryKey: getGetImagesImageIdEnvironmentSecretsQueryKey(imageId),
+      });
       if (data.didSaveValues) {
-        setEnvironmentContents('')
+        setEnvironmentContents("");
       }
-      setEnvironmentDraftTouched(false)
+      setEnvironmentDraftTouched(false);
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Save failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Save failed";
+      toast.error(msg);
+    },
+  });
 
   const archiveMutation = useMutation({
     mutationFn: async () => auth.api.archiveImage(imageId),
     onSuccess: async () => {
-      toast.success('Archived')
+      toast.success("Archived");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
+          queryKey: getGetImagesImageIdQueryKey(imageId),
         }),
-        queryClient.invalidateQueries({ queryKey: ['images'] })
-      ])
+        queryClient.invalidateQueries({ queryKey: ["images"] }),
+      ]);
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Archive failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Archive failed";
+      toast.error(msg);
+    },
+  });
 
   const unarchiveMutation = useMutation({
     mutationFn: async () => auth.api.unarchiveImage(imageId),
     onSuccess: async () => {
-      toast.success('Unarchived')
+      toast.success("Unarchived");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
+          queryKey: getGetImagesImageIdQueryKey(imageId),
         }),
-        queryClient.invalidateQueries({ queryKey: ['images'] })
-      ])
+        queryClient.invalidateQueries({ queryKey: ["images"] }),
+      ]);
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Unarchive failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Unarchive failed";
+      toast.error(msg);
+    },
+  });
 
   const deleteMutation = useMutation({
     mutationFn: async () => auth.api.deleteImage(imageId),
     onSuccess: async () => {
-      toast.success('Deleted')
+      toast.success("Deleted");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: ['images'] })
-      ])
-      await navigate({ to: '/settings/images' })
+        queryClient.invalidateQueries({ queryKey: ["images"] }),
+      ]);
+      await navigate({ to: "/settings/images" });
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Delete failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Delete failed";
+      toast.error(msg);
+    },
+  });
 
   const createVariantMutation = useMutation({
     mutationFn: async () =>
@@ -796,374 +800,374 @@ export function SettingsImageDetailPage () {
           : {}),
         ...(selectedVariantDraftImageId
           ? { draftImageId: selectedVariantDraftImageId }
-          : {})
+          : {}),
       }),
-    onSuccess: async created => {
-      setSelectedVariantId(created.id)
-      toast.success('Variant created')
+    onSuccess: async (created) => {
+      setSelectedVariantId(created.id);
+      toast.success("Variant created");
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
+          queryKey: getGetImagesImageIdVariantsQueryKey(imageId),
         }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
-        })
-      ])
+          queryKey: getGetImagesImageIdQueryKey(imageId),
+        }),
+      ]);
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Create variant failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Create variant failed";
+      toast.error(msg);
+    },
+  });
 
   const updateVariantMutation = useMutation({
     mutationFn: async (input: {
-      readonly scope?: VariantScope
-      readonly name?: string
-      readonly activeImageId?: string
-      readonly draftImageId?: string
+      readonly scope?: VariantScope;
+      readonly name?: string;
+      readonly activeImageId?: string;
+      readonly draftImageId?: string;
     }) => {
-      if (!selectedVariantId) throw new Error('Select a variant first.')
-      return auth.api.updateImageVariant(imageId, selectedVariantId, input)
+      if (!selectedVariantId) throw new Error("Select a variant first.");
+      return auth.api.updateImageVariant(imageId, selectedVariantId, input);
     },
-    onSuccess: async updated => {
-      setVariantNameDraft(updated.name)
-      toast.success('Variant updated')
+    onSuccess: async (updated) => {
+      setVariantNameDraft(updated.name);
+      toast.success("Variant updated");
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
+          queryKey: getGetImagesImageIdVariantsQueryKey(imageId),
         }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
-        })
-      ])
+          queryKey: getGetImagesImageIdQueryKey(imageId),
+        }),
+      ]);
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Update variant failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Update variant failed";
+      toast.error(msg);
+    },
+  });
 
   const promoteDraftMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedVariantId) throw new Error('Select a variant first.')
+      if (!selectedVariantId) throw new Error("Select a variant first.");
       if (!selectedVariant?.draftImageId) {
-        throw new Error('No draft image to promote.')
+        throw new Error("No draft image to promote.");
       }
       return auth.api.updateImageVariant(imageId, selectedVariantId, {
-        activeImageId: selectedVariant.draftImageId
-      })
+        activeImageId: selectedVariant.draftImageId,
+      });
     },
     onSuccess: async () => {
-      toast.success('Draft promoted to active')
+      toast.success("Draft promoted to active");
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
+          queryKey: getGetImagesImageIdVariantsQueryKey(imageId),
         }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
-        })
-      ])
+          queryKey: getGetImagesImageIdQueryKey(imageId),
+        }),
+      ]);
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Promote failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Promote failed";
+      toast.error(msg);
+    },
+  });
 
   const deleteVariantMutation = useMutation({
     mutationFn: async (input: { readonly variantId: string }) =>
       auth.api.deleteImageVariant(imageId, input.variantId),
     onSuccess: async (_, input) => {
-      toast.success('Variant deleted')
-      setPendingDeleteVariant(prev =>
-        prev?.variantId === input.variantId ? null : prev
-      )
-      setSelectedVariantId(prev => (prev === input.variantId ? null : prev))
+      toast.success("Variant deleted");
+      setPendingDeleteVariant((prev) =>
+        prev?.variantId === input.variantId ? null : prev,
+      );
+      setSelectedVariantId((prev) => (prev === input.variantId ? null : prev));
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
+          queryKey: getGetImagesImageIdVariantsQueryKey(imageId),
         }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
+          queryKey: getGetImagesImageIdQueryKey(imageId),
         }),
-        queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() })
-      ])
+        queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
+      ]);
     },
-    onError: err => {
-      const msg = err instanceof Error ? err.message : 'Delete variant failed'
-      toast.error(msg)
-    }
-  })
+    onError: (err) => {
+      const msg = err instanceof Error ? err.message : "Delete variant failed";
+      toast.error(msg);
+    },
+  });
 
   const setUserDefaultVariantMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedVariantId) throw new Error('Select a variant first.')
-      return auth.api.setUserImageDefaultVariant(imageId, selectedVariantId)
+      if (!selectedVariantId) throw new Error("Select a variant first.");
+      return auth.api.setUserImageDefaultVariant(imageId, selectedVariantId);
     },
     onSuccess: async () => {
-      toast.success('Your default variant was updated')
+      toast.success("Your default variant was updated");
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
+          queryKey: getGetImagesImageIdQueryKey(imageId),
         }),
         queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
-        })
-      ])
+          queryKey: getGetImagesImageIdVariantsQueryKey(imageId),
+        }),
+      ]);
     },
-    onError: err => {
+    onError: (err) => {
       const msg =
         err instanceof Error
           ? err.message
-          : 'Failed to set your default variant'
-      toast.error(msg)
-    }
-  })
+          : "Failed to set your default variant";
+      toast.error(msg);
+    },
+  });
 
   const setImageDefaultVariantMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedVariantId) throw new Error('Select a variant first.')
-      return auth.api.setImageDefaultVariant(imageId, selectedVariantId)
+      if (!selectedVariantId) throw new Error("Select a variant first.");
+      return auth.api.setImageDefaultVariant(imageId, selectedVariantId);
     },
     onSuccess: async () => {
-      toast.success('Image default variant updated')
+      toast.success("Image default variant updated");
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
+          queryKey: getGetImagesImageIdQueryKey(imageId),
         }),
         queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
-        })
-      ])
+          queryKey: getGetImagesImageIdVariantsQueryKey(imageId),
+        }),
+      ]);
     },
-    onError: err => {
+    onError: (err) => {
       const msg =
-        err instanceof Error ? err.message : 'Failed to set image default'
-      toast.error(msg)
-    }
-  })
+        err instanceof Error ? err.message : "Failed to set image default";
+      toast.error(msg);
+    },
+  });
 
   const clearUserDefaultVariantMutation = useMutation({
     mutationFn: async () => auth.api.clearUserImageDefaultVariant(imageId),
     onSuccess: async () => {
-      toast.success('Cleared your default')
+      toast.success("Cleared your default");
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
+          queryKey: getGetImagesImageIdQueryKey(imageId),
         }),
         queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
-        })
-      ])
+          queryKey: getGetImagesImageIdVariantsQueryKey(imageId),
+        }),
+      ]);
     },
-    onError: err => {
+    onError: (err) => {
       const msg =
-        err instanceof Error ? err.message : 'Failed to clear your default'
-      toast.error(msg)
-    }
-  })
+        err instanceof Error ? err.message : "Failed to clear your default";
+      toast.error(msg);
+    },
+  });
 
   const applySetupSandboxSshState = useCallback(
     (input: {
-      readonly authorizedPublicKeys: readonly string[]
+      readonly authorizedPublicKeys: readonly string[];
       readonly ssh: {
-        readonly username: string
-        readonly host: string
-        readonly port: number
-        readonly knownHostsLine: string
-      } | null
+        readonly username: string;
+        readonly host: string;
+        readonly port: number;
+        readonly knownHostsLine: string;
+      } | null;
     }) => {
-      setSetupAuthorizedPublicKeys([...input.authorizedPublicKeys])
+      setSetupAuthorizedPublicKeys([...input.authorizedPublicKeys]);
       if (input.ssh) {
         setSetupSshInfo({
           username: input.ssh.username,
           host: input.ssh.host,
           port: input.ssh.port,
-          knownHostsLine: input.ssh.knownHostsLine
-        })
+          knownHostsLine: input.ssh.knownHostsLine,
+        });
       } else {
-        setSetupSshInfo(null)
+        setSetupSshInfo(null);
       }
     },
-    []
-  )
+    [],
+  );
 
   const createSetupSandboxMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedVariantId) throw new Error('Select a variant first.')
+      if (!selectedVariantId) throw new Error("Select a variant first.");
       return auth.api.createImageSetupSandbox({
         imageId,
-        variantId: selectedVariantId
-      })
+        variantId: selectedVariantId,
+      });
     },
-    onSuccess: async result => {
-      setSetupSandboxId(result.sandboxId)
+    onSuccess: async (result) => {
+      setSetupSandboxId(result.sandboxId);
       applySetupSandboxSshState({
         authorizedPublicKeys: result.authorizedPublicKeys,
-        ssh: result.ssh
-      })
+        ssh: result.ssh,
+      });
       try {
         const terminalConnection = await connectSetupSandboxTerminal(
-          result.sandboxId
-        )
-        setSetupTerminalConnection(terminalConnection)
+          result.sandboxId,
+        );
+        setSetupTerminalConnection(terminalConnection);
       } catch (err) {
         const msg =
           err instanceof Error
             ? err.message
-            : 'Failed to initialize terminal connection'
-        toast.error(msg)
-        setSetupTerminalConnection(null)
+            : "Failed to initialize terminal connection";
+        toast.error(msg);
+        setSetupTerminalConnection(null);
       }
-      toast.success('Setup sandbox ready')
+      toast.success("Setup sandbox ready");
     },
-    onError: err => {
+    onError: (err) => {
       const msg =
-        err instanceof Error ? err.message : 'Failed to create setup sandbox'
-      toast.error(msg)
-    }
-  })
+        err instanceof Error ? err.message : "Failed to create setup sandbox";
+      toast.error(msg);
+    },
+  });
 
   const upsertSetupSandboxSshMutation = useMutation({
     mutationFn: async () => {
-      if (!setupSandboxId) throw new Error('Start a setup sandbox first.')
-      const sshPublicKeys = parseSshPublicKeysDraft(sshPublicKeysDraft)
+      if (!setupSandboxId) throw new Error("Start a setup sandbox first.");
+      const sshPublicKeys = parseSshPublicKeysDraft(sshPublicKeysDraft);
       if (sshPublicKeys.length === 0) {
-        throw new Error('Enter at least one SSH public key.')
+        throw new Error("Enter at least one SSH public key.");
       }
       return auth.api.upsertImageSetupSandboxSsh({
         imageId,
         sandboxId: setupSandboxId,
-        sshPublicKeys
-      })
+        sshPublicKeys,
+      });
     },
-    onSuccess: result => {
-      applySetupSandboxSshState(result)
-      setSshPublicKeysDraft('')
+    onSuccess: (result) => {
+      applySetupSandboxSshState(result);
+      setSshPublicKeysDraft("");
       toast.success(
-        result.ssh ? 'SSH access updated' : 'SSH public keys updated'
-      )
+        result.ssh ? "SSH access updated" : "SSH public keys updated",
+      );
     },
-    onError: err => {
+    onError: (err) => {
       const msg =
         err instanceof Error
           ? err.message
-          : 'Failed to configure setup sandbox SSH'
-      toast.error(msg)
-    }
-  })
+          : "Failed to configure setup sandbox SSH";
+      toast.error(msg);
+    },
+  });
 
   const closeSetupSandboxMutation = useMutation({
     mutationFn: async () => {
-      if (!setupSandboxId) throw new Error('Start a setup sandbox first.')
-      closeRequestedSetupSandboxIdRef.current = setupSandboxId
+      if (!setupSandboxId) throw new Error("Start a setup sandbox first.");
+      closeRequestedSetupSandboxIdRef.current = setupSandboxId;
       return auth.api.closeImageSetupSandbox({
         imageId,
-        sandboxId: setupSandboxId
-      })
+        sandboxId: setupSandboxId,
+      });
     },
     onSuccess: async () => {
-      setSetupSandboxId(null)
-      setSetupTerminalConnection(null)
-      setSetupAuthorizedPublicKeys([])
-      setSshPublicKeysDraft('')
-      setSetupSshInfo(null)
-      toast.success('Draft image updated')
+      setSetupSandboxId(null);
+      setSetupTerminalConnection(null);
+      setSetupAuthorizedPublicKeys([]);
+      setSshPublicKeysDraft("");
+      setSetupSshInfo(null);
+      toast.success("Draft image updated");
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdQueryKey(imageId)
+          queryKey: getGetImagesImageIdQueryKey(imageId),
         }),
         queryClient.invalidateQueries({ queryKey: getGetImagesQueryKey() }),
         queryClient.invalidateQueries({
-          queryKey: getGetImagesImageIdVariantsQueryKey(imageId)
+          queryKey: getGetImagesImageIdVariantsQueryKey(imageId),
         }),
         queryClient.invalidateQueries({
           queryKey: getGetImagesImageIdVariantsVariantIdBuildsQueryKey(
             imageId,
-            selectedVariantId ?? '',
-            { limit: 20 }
-          )
-        })
-      ])
+            selectedVariantId ?? "",
+            { limit: 20 },
+          ),
+        }),
+      ]);
     },
-    onError: err => {
-      closeRequestedSetupSandboxIdRef.current = null
+    onError: (err) => {
+      closeRequestedSetupSandboxIdRef.current = null;
       const msg =
-        err instanceof Error ? err.message : 'Failed to close setup sandbox'
-      toast.error(msg)
-    }
-  })
+        err instanceof Error ? err.message : "Failed to close setup sandbox";
+      toast.error(msg);
+    },
+  });
 
   const reconnectSetupSandboxTerminal = useCallback(() => {
-    if (!setupSandboxId) return
-    if (closeSetupSandboxMutation.isPending) return
-    if (setupTerminalReconnectInFlightRef.current) return
-    setupTerminalReconnectInFlightRef.current = true
+    if (!setupSandboxId) return;
+    if (closeSetupSandboxMutation.isPending) return;
+    if (setupTerminalReconnectInFlightRef.current) return;
+    setupTerminalReconnectInFlightRef.current = true;
     void connectSetupSandboxTerminal(setupSandboxId)
-      .then(terminalConnection => {
-        setSetupTerminalConnection(terminalConnection)
+      .then((terminalConnection) => {
+        setSetupTerminalConnection(terminalConnection);
       })
-      .catch(err => {
+      .catch((err) => {
         const msg =
           err instanceof Error
             ? err.message
-            : 'Failed to re-establish terminal connection'
-        toast.error(msg)
-        setSetupTerminalConnection(null)
+            : "Failed to re-establish terminal connection";
+        toast.error(msg);
+        setSetupTerminalConnection(null);
       })
       .finally(() => {
-        setupTerminalReconnectInFlightRef.current = false
-      })
+        setupTerminalReconnectInFlightRef.current = false;
+      });
   }, [
     connectSetupSandboxTerminal,
     closeSetupSandboxMutation.isPending,
-    setupSandboxId
-  ])
+    setupSandboxId,
+  ]);
 
   const onCopy = useCallback(async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(text)
-      toast.success(`Copied ${label}`)
+      await navigator.clipboard.writeText(text);
+      toast.success(`Copied ${label}`);
     } catch {
-      toast.error('Copy failed')
+      toast.error("Copy failed");
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
     if (!setupSandboxId) {
-      closeRequestedSetupSandboxIdRef.current = null
-      setSetupTerminalConnection(null)
-      return
+      closeRequestedSetupSandboxIdRef.current = null;
+      setSetupTerminalConnection(null);
+      return;
     }
-    if (setupTerminalConnection) return
+    if (setupTerminalConnection) return;
     void connectSetupSandboxTerminal(setupSandboxId)
-      .then(terminalConnection => {
-        setSetupTerminalConnection(terminalConnection)
+      .then((terminalConnection) => {
+        setSetupTerminalConnection(terminalConnection);
       })
-      .catch(err => {
+      .catch((err) => {
         const msg =
           err instanceof Error
             ? err.message
-            : 'Failed to initialize terminal connection'
-        toast.error(msg)
-        setSetupTerminalConnection(null)
-      })
-  }, [connectSetupSandboxTerminal, setupSandboxId, setupTerminalConnection])
+            : "Failed to initialize terminal connection";
+        toast.error(msg);
+        setSetupTerminalConnection(null);
+      });
+  }, [connectSetupSandboxTerminal, setupSandboxId, setupTerminalConnection]);
 
   useEffect(() => {
     return () => {
-      if (!setupSandboxId) return
-      if (closeRequestedSetupSandboxIdRef.current === setupSandboxId) return
+      if (!setupSandboxId) return;
+      if (closeRequestedSetupSandboxIdRef.current === setupSandboxId) return;
       void auth.api.closeImageSetupSandbox({
         imageId,
-        sandboxId: setupSandboxId
-      })
-    }
-  }, [auth.api, imageId, setupSandboxId])
+        sandboxId: setupSandboxId,
+      });
+    };
+  }, [auth.api, imageId, setupSandboxId]);
 
   const isBusy =
     buildStreamMutation.isPending ||
@@ -1180,11 +1184,11 @@ export function SettingsImageDetailPage () {
     closeSetupSandboxMutation.isPending ||
     archiveMutation.isPending ||
     unarchiveMutation.isPending ||
-    deleteMutation.isPending
+    deleteMutation.isPending;
   const hasDirtyDraft =
     initial && draft
       ? Object.keys(buildPatch(initial, draft)).length > 0
-      : false
+      : false;
 
   useEffect(() => {
     return registerSettingsImageDetailRuntimeController({
@@ -1195,77 +1199,78 @@ export function SettingsImageDetailPage () {
         isArchived,
         isBusy,
         hasDirtyDraft,
-        isBuildRunning: buildStreamMutation.isPending
+        isBuildRunning: buildStreamMutation.isPending,
       }),
-      setName: async name => {
-        if (!draft) throw new Error('Image detail draft is not ready')
-        setDraft(prev => (prev ? { ...prev, name } : prev))
-        return { name, dirty: true as const }
+      setName: async (name) => {
+        if (!draft) throw new Error("Image detail draft is not ready");
+        setDraft((prev) => (prev ? { ...prev, name } : prev));
+        return { name, dirty: true as const };
       },
-      setDescription: async description => {
-        if (!draft) throw new Error('Image detail draft is not ready')
-        setDraft(prev => (prev ? { ...prev, description } : prev))
-        return { description, dirty: true as const }
+      setDescription: async (description) => {
+        if (!draft) throw new Error("Image detail draft is not ready");
+        setDraft((prev) => (prev ? { ...prev, description } : prev));
+        return { description, dirty: true as const };
       },
       save: async () => {
         if (!initial || !draft) {
-          throw new Error('Image detail draft is not ready')
+          throw new Error("Image detail draft is not ready");
         }
-        if (nameValidationError) throw new Error(nameValidationError)
-        const patch = buildPatch(initial, draft)
+        if (nameValidationError) throw new Error(nameValidationError);
+        const patch = buildPatch(initial, draft);
         if (Object.keys(patch).length === 0) {
-          throw new Error('No image detail changes to save')
+          throw new Error("No image detail changes to save");
         }
 
-        const metadataPatch: Record<string, unknown> = {}
-        if (typeof patch.name === 'string') metadataPatch.name = patch.name
-        if (Object.prototype.hasOwnProperty.call(patch, 'description')) {
-          metadataPatch.description = patch.description
+        const metadataPatch: Record<string, unknown> = {};
+        if (typeof patch.name === "string") metadataPatch.name = patch.name;
+        if (Object.prototype.hasOwnProperty.call(patch, "description")) {
+          metadataPatch.description = patch.description;
         }
-        if (patch.visibility) metadataPatch.visibility = patch.visibility
+        if (patch.visibility) metadataPatch.visibility = patch.visibility;
 
         if (Object.keys(metadataPatch).length > 0) {
-          await autosaveImageMutation.mutateAsync(metadataPatch as ImagePatch)
+          await autosaveImageMutation.mutateAsync(metadataPatch as ImagePatch);
         }
-        return { saved: true as const }
+        return { saved: true as const };
       },
       revert: async () => {
-        if (!initial) throw new Error('Image detail initial state is not ready')
-        setDraft(initial)
-        return { reverted: true as const, dirty: false as const }
+        if (!initial)
+          throw new Error("Image detail initial state is not ready");
+        setDraft(initial);
+        return { reverted: true as const, dirty: false as const };
       },
       clone: async () => {
-        const cloned = await cloneMutation.mutateAsync()
+        const cloned = await cloneMutation.mutateAsync();
         return {
           cloned: true as const,
           newImageId: cloned.id,
-          navigated: true as const
-        }
+          navigated: true as const,
+        };
       },
       startBuild: async () => {
-        if (!selectedVariantId) throw new Error('Select a variant first')
+        if (!selectedVariantId) throw new Error("Select a variant first");
         if (buildStreamMutation.isPending)
-          throw new Error('Build already running')
-        buildStreamMutation.mutate()
-        return { buildStarted: true as const }
+          throw new Error("Build already running");
+        buildStreamMutation.mutate();
+        return { buildStarted: true as const };
       },
       stopBuild: async () => {
         throw new Error(
-          'Stopping image builds from the settings UI is not supported'
-        )
+          "Stopping image builds from the settings UI is not supported",
+        );
       },
       archive: async () => {
-        await archiveMutation.mutateAsync()
+        await archiveMutation.mutateAsync();
         return {
           archived: true as const,
-          routePath: globalThis.window.location.pathname
-        }
+          routePath: globalThis.window.location.pathname,
+        };
       },
       delete: async () => {
-        await deleteMutation.mutateAsync()
-        return { deleted: true as const, redirectedTo: '/settings/images' }
-      }
-    })
+        await deleteMutation.mutateAsync();
+        return { deleted: true as const, redirectedTo: "/settings/images" };
+      },
+    });
   }, [
     archiveMutation,
     autosaveImageMutation,
@@ -1281,115 +1286,115 @@ export function SettingsImageDetailPage () {
     isArchived,
     isBusy,
     nameValidationError,
-    selectedVariantId
-  ])
+    selectedVariantId,
+  ]);
 
   if (!auth.user) {
     return (
-      <SettingsPage title='Image settings'>
+      <SettingsPage title="Image settings">
         <SettingsPanel>
-          <SettingsPanelBody className='space-y-3 text-sm text-text-secondary'>
+          <SettingsPanelBody className="space-y-3 text-sm text-text-secondary">
             Log in to view and edit images.
             <div>
-              <Link to='/login' className='underline'>
+              <Link to="/login" className="underline">
                 Go to login
               </Link>
             </div>
           </SettingsPanelBody>
         </SettingsPanel>
       </SettingsPage>
-    )
+    );
   }
 
-  const draftValue = draft ?? null
-  const selectedActiveImageId = selectedVariant?.activeImageId ?? null
+  const draftValue = draft ?? null;
+  const selectedActiveImageId = selectedVariant?.activeImageId ?? null;
   const selectedDraftImageId =
-    selectedVariant?.draftImageId ?? selectedVariant?.activeImageId ?? null
+    selectedVariant?.draftImageId ?? selectedVariant?.activeImageId ?? null;
 
   const pageTitle = (
-    <div className='flex items-center gap-2 min-w-0'>
-      <Button variant='ghost' size='icon' className='h-9 w-9' asChild>
-        <Link to='/settings/images' title='Back to images'>
-          <ArrowLeft className='h-4 w-4' />
+    <div className="flex items-center gap-2 min-w-0">
+      <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
+        <Link to="/settings/images" title="Back to images">
+          <ArrowLeft className="h-4 w-4" />
         </Link>
       </Button>
-      <div className='min-w-0'>
-        <div className='text-xs text-text-tertiary'>Image</div>
-        <div className='text-base font-semibold truncate'>
-          {imageQuery.isLoading ? 'Loading...' : image?.name ?? imageId}
+      <div className="min-w-0">
+        <div className="text-xs text-text-tertiary">Image</div>
+        <div className="text-base font-semibold truncate">
+          {imageQuery.isLoading ? "Loading..." : (image?.name ?? imageId)}
         </div>
       </div>
     </div>
-  )
+  );
 
   const pageActions = (
-    <div className='flex items-center gap-2 flex-wrap justify-end'>
+    <div className="flex items-center gap-2 flex-wrap justify-end">
       <Button
-        variant='secondary'
+        variant="secondary"
         disabled={!image || isBusy || isArchived}
         onClick={() => cloneMutation.mutate()}
-        title='Clone image'
+        title="Clone image"
       >
         {cloneMutation.isPending ? (
-          <Loader2 className='h-4 w-4 animate-spin' />
+          <Loader2 className="h-4 w-4 animate-spin" />
         ) : null}
         Clone
       </Button>
     </div>
-  )
+  );
 
   const archivedPageActions = (
-    <div className='flex items-center gap-2 flex-wrap justify-end'>
+    <div className="flex items-center gap-2 flex-wrap justify-end">
       <Button
-        variant='secondary'
+        variant="secondary"
         disabled={!canDeleteArchivedImage || isBusy}
         onClick={() => unarchiveMutation.mutate()}
       >
         {unarchiveMutation.isPending ? (
-          <Loader2 className='h-4 w-4 animate-spin' />
+          <Loader2 className="h-4 w-4 animate-spin" />
         ) : null}
         Unarchive
       </Button>
       <Button
-        variant='ghost'
-        className='text-destructive'
+        variant="ghost"
+        className="text-destructive"
         disabled={!canDeleteArchivedImage || isBusy}
         onClick={() => setShowDeleteConfirmDialog(true)}
       >
         Delete
       </Button>
     </div>
-  )
+  );
 
   if (isArchived && image) {
     return (
       <SettingsPage title={pageTitle} action={archivedPageActions}>
         {imageQuery.isError ? (
-          <div className='border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
+          <div className="border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {imageQuery.error instanceof Error
               ? imageQuery.error.message
-              : 'Failed to load image'}
+              : "Failed to load image"}
           </div>
         ) : null}
 
-        <div className='flex flex-col gap-4'>
+        <div className="flex flex-col gap-4">
           <SettingsSection
-            title='Archived view'
-            description='This image is archived. Unarchive to make it active again, or delete it permanently.'
+            title="Archived view"
+            description="This image is archived. Unarchive to make it active again, or delete it permanently."
           >
             <SettingsPanel>
-              <SettingsPanelBody className='space-y-2 text-sm text-text-secondary'>
+              <SettingsPanelBody className="space-y-2 text-sm text-text-secondary">
                 <div>
-                  <span className='text-text-tertiary'>Name: </span>
+                  <span className="text-text-tertiary">Name: </span>
                   {image.name}
                 </div>
                 <div>
-                  <span className='text-text-tertiary'>Image ID: </span>
-                  <span className='font-mono'>{image.id}</span>
+                  <span className="text-text-tertiary">Image ID: </span>
+                  <span className="font-mono">{image.id}</span>
                 </div>
                 <div>
-                  <span className='text-text-tertiary'>Archived at: </span>
-                  {image.deletedAt ?? 'Unknown'}
+                  <span className="text-text-tertiary">Archived at: </span>
+                  {image.deletedAt ?? "Unknown"}
                 </div>
               </SettingsPanelBody>
             </SettingsPanel>
@@ -1410,21 +1415,21 @@ export function SettingsImageDetailPage () {
             </DialogHeader>
             <DialogFooter>
               <Button
-                variant='outline'
+                variant="outline"
                 onClick={() => setShowDeleteConfirmDialog(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant='destructive'
+                variant="destructive"
                 onClick={() => {
-                  setShowDeleteConfirmDialog(false)
-                  deleteMutation.mutate()
+                  setShowDeleteConfirmDialog(false);
+                  deleteMutation.mutate();
                 }}
                 disabled={deleteMutation.isPending}
               >
                 {deleteMutation.isPending ? (
-                  <Loader2 className='h-4 w-4 animate-spin' />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
                 Delete
               </Button>
@@ -1432,7 +1437,7 @@ export function SettingsImageDetailPage () {
           </DialogContent>
         </Dialog>
       </SettingsPage>
-    )
+    );
   }
 
   return (
@@ -1451,21 +1456,21 @@ export function SettingsImageDetailPage () {
           </DialogHeader>
           <DialogFooter>
             <Button
-              variant='outline'
+              variant="outline"
               onClick={() => setShowArchiveConfirmDialog(false)}
             >
               Cancel
             </Button>
             <Button
-              variant='destructive'
+              variant="destructive"
               onClick={() => {
-                setShowArchiveConfirmDialog(false)
-                archiveMutation.mutate()
+                setShowArchiveConfirmDialog(false);
+                archiveMutation.mutate();
               }}
               disabled={archiveMutation.isPending}
             >
               {archiveMutation.isPending ? (
-                <Loader2 className='h-4 w-4 animate-spin' />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : null}
               Archive
             </Button>
@@ -1473,47 +1478,47 @@ export function SettingsImageDetailPage () {
         </DialogContent>
       </Dialog>
       {nameValidationError ? (
-        <div className='border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
+        <div className="border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {nameValidationError}
         </div>
       ) : null}
 
       {imageQuery.isError ? (
-        <div className='border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
+        <div className="border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {imageQuery.error instanceof Error
             ? imageQuery.error.message
-            : 'Failed to load image'}
+            : "Failed to load image"}
         </div>
       ) : null}
 
-      <div className='flex flex-col gap-4'>
+      <div className="flex flex-col gap-4">
         {/* A. Overview */}
-        <SettingsSection title='Overview'>
+        <SettingsSection title="Overview">
           <SettingsPanel>
-            <SettingsList className='rounded-none border-0'>
+            <SettingsList className="rounded-none border-0">
               <SettingsRow
                 disabled={!canEdit}
-                className='items-start sm:items-center flex-col sm:flex-row'
+                className="items-start sm:items-center flex-col sm:flex-row"
                 left={
                   <SettingsRowLeft
-                    title='Name'
-                    description='Human-friendly name shown in lists.'
+                    title="Name"
+                    description="Human-friendly name shown in lists."
                   />
                 }
                 right={
-                  <div className='w-full sm:w-[420px]'>
+                  <div className="w-full sm:w-[420px]">
                     {draftValue ? (
                       <Input
                         value={draftValue.name}
-                        onChange={e =>
-                          setDraft(prev =>
-                            prev ? { ...prev, name: e.target.value } : prev
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, name: e.target.value } : prev,
                           )
                         }
                         disabled={!canEdit || isBusy}
                       />
                     ) : (
-                      <div className='border border-border bg-surface-2 px-3 py-2 text-text-secondary'>
+                      <div className="border border-border bg-surface-2 px-3 py-2 text-text-secondary">
                         -
                       </div>
                     )}
@@ -1522,32 +1527,32 @@ export function SettingsImageDetailPage () {
               />
               <SettingsRow
                 disabled={!canEdit}
-                className='items-start flex-col sm:flex-row'
+                className="items-start flex-col sm:flex-row"
                 left={
                   <SettingsRowLeft
-                    title='Description'
-                    description='Optional long-form description.'
+                    title="Description"
+                    description="Optional long-form description."
                   />
                 }
                 right={
-                  <div className='w-full sm:w-[420px]'>
+                  <div className="w-full sm:w-[420px]">
                     {draftValue ? (
                       <Textarea
                         value={draftValue.description}
-                        onChange={e =>
-                          setDraft(prev =>
+                        onChange={(e) =>
+                          setDraft((prev) =>
                             prev
                               ? { ...prev, description: e.target.value }
-                              : prev
+                              : prev,
                           )
                         }
                         disabled={!canEdit || isBusy}
                         minRows={3}
                         maxRows={10}
-                        placeholder='Add a description (optional)'
+                        placeholder="Add a description (optional)"
                       />
                     ) : (
-                      <div className='border border-border bg-surface-2 px-3 py-2 text-text-secondary'>
+                      <div className="border border-border bg-surface-2 px-3 py-2 text-text-secondary">
                         -
                       </div>
                     )}
@@ -1559,30 +1564,30 @@ export function SettingsImageDetailPage () {
         </SettingsSection>
 
         <SettingsSection
-          title='Secret environment'
-          description='Set a Modal secret name and contents for full-stack environment variables.'
+          title="Secret environment"
+          description="Set a Modal secret name and contents for full-stack environment variables."
         >
           <SettingsPanel>
-            <SettingsList className='rounded-none border-0'>
+            <SettingsList className="rounded-none border-0">
               <SettingsRow
                 disabled={!canEdit || isBusy}
-                className='items-start sm:items-center flex-col sm:flex-row'
+                className="items-start sm:items-center flex-col sm:flex-row"
                 left={
                   <SettingsRowLeft
-                    title='Modal secret name'
-                    description='Name of the Modal secret loaded into the full environment.'
+                    title="Modal secret name"
+                    description="Name of the Modal secret loaded into the full environment."
                   />
                 }
                 right={
-                  <div className='w-full sm:w-[420px]'>
+                  <div className="w-full sm:w-[420px]">
                     <Input
                       value={environmentModalSecretName}
-                      onChange={e => {
-                        setEnvironmentDraftTouched(true)
-                        setEnvironmentModalSecretName(e.target.value)
+                      onChange={(e) => {
+                        setEnvironmentDraftTouched(true);
+                        setEnvironmentModalSecretName(e.target.value);
                       }}
                       disabled={!canEdit || isBusy}
-                      placeholder='modal-secret-name'
+                      placeholder="modal-secret-name"
                     />
                   </div>
                 }
@@ -1590,20 +1595,20 @@ export function SettingsImageDetailPage () {
 
               <SettingsRow
                 disabled={!canEdit || isBusy}
-                className='items-start flex-col sm:flex-row'
+                className="items-start flex-col sm:flex-row"
                 left={
                   <SettingsRowLeft
-                    title='Contents'
-                    description='Key-value pairs written to Modal. Clears after saving.'
+                    title="Contents"
+                    description="Key-value pairs written to Modal. Clears after saving."
                   />
                 }
                 right={
-                  <div className='w-full sm:w-[420px]'>
+                  <div className="w-full sm:w-[420px]">
                     <Textarea
                       value={environmentContents}
-                      onChange={e => {
-                        setEnvironmentDraftTouched(true)
-                        setEnvironmentContents(e.target.value)
+                      onChange={(e) => {
+                        setEnvironmentDraftTouched(true);
+                        setEnvironmentContents(e.target.value);
                       }}
                       disabled={!canEdit || isBusy}
                       minRows={6}
@@ -1611,7 +1616,7 @@ export function SettingsImageDetailPage () {
                       aria-invalid={Boolean(environmentContentsError)}
                     />
                     {environmentContentsError ? (
-                      <div className='text-xs text-destructive'>
+                      <div className="text-xs text-destructive">
                         {environmentContentsError}
                       </div>
                     ) : null}
@@ -1619,11 +1624,11 @@ export function SettingsImageDetailPage () {
                 }
               />
             </SettingsList>
-            <div className='flex items-center justify-end gap-2 flex-wrap px-4 py-3'>
+            <div className="flex items-center justify-end gap-2 flex-wrap px-4 py-3">
               <Button
-                type='button'
-                variant='secondary'
-                size='sm'
+                type="button"
+                variant="secondary"
+                size="sm"
                 disabled={
                   !canEdit ||
                   isBusy ||
@@ -1631,19 +1636,19 @@ export function SettingsImageDetailPage () {
                   environmentContentsError !== null ||
                   (environmentContents.trim().length === 0 &&
                     environmentModalSecretName.trim() ===
-                      (primaryEnvironmentSecret?.modalSecretName ?? ''))
+                      (primaryEnvironmentSecret?.modalSecretName ?? ""))
                 }
                 onClick={() => {
                   void saveEnvironmentSecretMutation.mutateAsync({
                     modalSecretName: environmentModalSecretName,
                     envText: environmentContents,
                     initialModalSecretName:
-                      primaryEnvironmentSecret?.modalSecretName ?? null
-                  })
+                      primaryEnvironmentSecret?.modalSecretName ?? null,
+                  });
                 }}
               >
                 {saveEnvironmentSecretMutation.isPending ? (
-                  <Loader2 className='h-4 w-4 animate-spin' />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
                 Save
               </Button>
@@ -1652,64 +1657,64 @@ export function SettingsImageDetailPage () {
         </SettingsSection>
 
         <SettingsSection
-          title='Image Variants'
-          description='Under the same image, you may want slightly different configurations that may require interactivity (e.g. perform Codex auth per user). Variants share the same setup / run script via a volume.'
+          title="Image Variants"
+          description="Under the same image, you may want slightly different configurations that may require interactivity (e.g. perform Codex auth per user). Variants share the same setup / run script via a volume."
         >
           <VariantCombobox
-            className='min-w-48 max-w-64'
+            className="min-w-48 max-w-64"
             value={selectedVariantId}
             onChange={setSelectedVariantId}
             variants={variantOptions}
             currentUserId={auth.user?.id ?? null}
             disabled={!canEdit || isBusy}
             onDelete={(variantId, variantName) => {
-              setPendingDeleteVariant({ variantId, label: variantName })
+              setPendingDeleteVariant({ variantId, label: variantName });
             }}
             onCreate={() => createVariantMutation.mutate()}
             canCreate={canEdit && !isBusy}
-            canDelete={variant => canEdit && !isBusy && !variant.isDefault}
+            canDelete={(variant) => canEdit && !isBusy && !variant.isDefault}
           />
           <SettingsPanel>
             <Dialog
               open={pendingDeleteVariant !== null}
-              onOpenChange={open => {
-                if (open) return
-                setPendingDeleteVariant(null)
+              onOpenChange={(open) => {
+                if (open) return;
+                setPendingDeleteVariant(null);
               }}
             >
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Delete image variant?</DialogTitle>
                   <DialogDescription>
-                    This removes the variant{' '}
-                    <span className='font-mono'>
-                      {pendingDeleteVariant?.label ?? ''}
+                    This removes the variant{" "}
+                    <span className="font-mono">
+                      {pendingDeleteVariant?.label ?? ""}
                     </span>
                     .
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
                   <Button
-                    type='button'
-                    variant='secondary'
+                    type="button"
+                    variant="secondary"
                     disabled={isBusy}
                     onClick={() => setPendingDeleteVariant(null)}
                   >
                     Cancel
                   </Button>
                   <Button
-                    type='button'
-                    variant='destructive'
+                    type="button"
+                    variant="destructive"
                     disabled={!pendingDeleteVariant || isBusy}
                     onClick={() => {
-                      if (!pendingDeleteVariant) return
+                      if (!pendingDeleteVariant) return;
                       deleteVariantMutation.mutate({
-                        variantId: pendingDeleteVariant.variantId
-                      })
+                        variantId: pendingDeleteVariant.variantId,
+                      });
                     }}
                   >
                     {deleteVariantMutation.isPending ? (
-                      <Loader2 className='h-4 w-4 animate-spin' />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : null}
                     Delete
                   </Button>
@@ -1718,98 +1723,98 @@ export function SettingsImageDetailPage () {
             </Dialog>
 
             {/* Variant Settings */}
-            <div className='border-b border-border px-4 py-3'>
-              <div className='flex items-center justify-between gap-4 flex-wrap'>
-                <div className='flex items-center gap-3 min-w-0 flex-1'>
+            <div className="border-b border-border px-4 py-3">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div
-                    className='min-w-0 flex-1 max-w-[240px]'
+                    className="min-w-0 flex-1 max-w-[240px]"
                     title={
                       !canMutateSelectedVariant
-                        ? variantMutabilityReason ?? undefined
+                        ? (variantMutabilityReason ?? undefined)
                         : undefined
                     }
                   >
                     <Input
                       value={variantNameDraft}
                       disabled={!canMutateSelectedVariant || isBusy}
-                      onChange={event =>
+                      onChange={(event) =>
                         setVariantNameDraft(event.target.value)
                       }
-                      placeholder='Variant name'
+                      placeholder="Variant name"
                       aria-invalid={Boolean(variantNameValidationError)}
-                      className='h-8 text-sm'
+                      className="h-8 text-sm"
                     />
                   </div>
                   {isVariantNameDirty && !variantNameValidationError && (
                     <Button
-                      variant='secondary'
-                      size='sm'
+                      variant="secondary"
+                      size="sm"
                       disabled={!canMutateSelectedVariant || isBusy}
                       onClick={() => {
                         void updateVariantMutation.mutateAsync({
-                          name: variantNameDraft.trim()
-                        })
+                          name: variantNameDraft.trim(),
+                        });
                       }}
                     >
                       Save
                     </Button>
                   )}
                   <ToggleGroup
-                    type='single'
+                    type="single"
                     value={selectedVariantScope ?? undefined}
-                    onValueChange={value => {
+                    onValueChange={(value) => {
                       if (value) {
                         void updateVariantMutation.mutateAsync({
-                          scope: value as VariantScope
-                        })
+                          scope: value as VariantScope,
+                        });
                       }
                     }}
                     disabled={!canChangeSelectedVariantScope || isBusy}
-                    size='sm'
+                    size="sm"
                     title={
                       !canChangeSelectedVariantScope
-                        ? variantScopeChangeReason ?? undefined
+                        ? (variantScopeChangeReason ?? undefined)
                         : undefined
                     }
                   >
-                    <ToggleGroupItem value='personal'>Personal</ToggleGroupItem>
-                    <ToggleGroupItem value='shared'>Shared</ToggleGroupItem>
+                    <ToggleGroupItem value="personal">Personal</ToggleGroupItem>
+                    <ToggleGroupItem value="shared">Shared</ToggleGroupItem>
                   </ToggleGroup>
                 </div>
-                <div className='flex items-center gap-2'>
+                <div className="flex items-center gap-2">
                   <Button
-                    variant='ghost'
-                    size='sm'
-                    className='gap-1.5'
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5"
                     disabled={isBusy || !selectedVariantId}
                     onClick={() => {
                       if (isSelectedVariantUserDefault) {
-                        clearUserDefaultVariantMutation.mutate()
+                        clearUserDefaultVariantMutation.mutate();
                       } else {
-                        setUserDefaultVariantMutation.mutate()
+                        setUserDefaultVariantMutation.mutate();
                       }
                     }}
                     title={
                       isSelectedVariantUserDefault
-                        ? 'Click to unpin (follow image default)'
-                        : 'Click to pin as my default'
+                        ? "Click to unpin (follow image default)"
+                        : "Click to pin as my default"
                     }
                   >
                     <Star
                       className={
                         isSelectedVariantUserDefault
-                          ? 'h-3.5 w-3.5 text-blue-500 fill-blue-500'
-                          : 'h-3.5 w-3.5 text-blue-500'
+                          ? "h-3.5 w-3.5 text-blue-500 fill-blue-500"
+                          : "h-3.5 w-3.5 text-blue-500"
                       }
                     />
                     {isSelectedVariantUserDefault
-                      ? 'My default'
-                      : 'Set as my default'}
+                      ? "My default"
+                      : "Set as my default"}
                   </Button>
                   <Button
-                    variant='ghost'
-                    size='sm'
-                    className='gap-1.5'
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5"
                     disabled={
                       isBusy ||
                       !selectedVariantId ||
@@ -1818,53 +1823,53 @@ export function SettingsImageDetailPage () {
                     onClick={() => setImageDefaultVariantMutation.mutate()}
                     title={
                       isSelectedVariantGlobalDefault
-                        ? 'This is the image default'
-                        : 'Set as image default'
+                        ? "This is the image default"
+                        : "Set as image default"
                     }
                   >
                     <Star
                       className={
                         isSelectedVariantGlobalDefault
-                          ? 'h-3.5 w-3.5 text-yellow-500 fill-yellow-500'
-                          : 'h-3.5 w-3.5 text-yellow-500'
+                          ? "h-3.5 w-3.5 text-yellow-500 fill-yellow-500"
+                          : "h-3.5 w-3.5 text-yellow-500"
                       }
                     />
                     {isSelectedVariantGlobalDefault
-                      ? 'Image default'
-                      : 'Set as image default'}
+                      ? "Image default"
+                      : "Set as image default"}
                   </Button>
                   {selectedVariant?.id && (
                     <Button
-                      variant='ghost'
-                      size='icon'
-                      className='h-7 w-7'
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
                       onClick={() =>
-                        void onCopy(selectedVariant.id, 'variant id')
+                        void onCopy(selectedVariant.id, "variant id")
                       }
                       title={`Copy variant ID: ${selectedVariant.id}`}
                     >
-                      <Copy className='h-3.5 w-3.5' />
+                      <Copy className="h-3.5 w-3.5" />
                     </Button>
                   )}
                 </div>
               </div>
               {variantNameValidationError && (
-                <div className='mt-1 text-xs text-destructive'>
+                <div className="mt-1 text-xs text-destructive">
                   {variantNameValidationError}
                 </div>
               )}
             </div>
 
             {/* Image Workflow */}
-            <div className='border-b border-border px-4 py-4'>
-              <div className='flex flex-col sm:flex-row items-stretch sm:items-center gap-3'>
+            <div className="border-b border-border px-4 py-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 {/* Draft */}
-                <div className='flex-1 min-w-0'>
-                  <div className='text-xs text-text-tertiary mb-1.5'>Draft</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-text-tertiary mb-1.5">Draft</div>
                   <div
                     title={
                       !canMutateSelectedVariant
-                        ? variantMutabilityReason ?? undefined
+                        ? (variantMutabilityReason ?? undefined)
                         : undefined
                     }
                   >
@@ -1872,38 +1877,38 @@ export function SettingsImageDetailPage () {
                       value={selectedDraftImageId}
                       options={imageIdOptions}
                       disabled={!canMutateSelectedVariant || isBusy}
-                      placeholder='No draft image'
-                      className='w-full'
-                      onCopy={id => void onCopy(id, 'draft image id')}
-                      onChange={value => {
+                      placeholder="No draft image"
+                      className="w-full"
+                      onCopy={(id) => void onCopy(id, "draft image id")}
+                      onChange={(value) => {
                         void updateVariantMutation.mutateAsync({
-                          draftImageId: value
-                        })
+                          draftImageId: value,
+                        });
                       }}
                     />
                   </div>
                 </div>
 
                 {/* Promote Button */}
-                <div className='flex items-center justify-center sm:pt-5'>
+                <div className="flex items-center justify-center sm:pt-5">
                   {isDraftAndActiveInSync ? (
-                    <div className='flex items-center gap-1.5 text-xs text-text-tertiary px-3 py-1.5 rounded bg-surface-2'>
-                      <Check className='h-3.5 w-3.5' />
+                    <div className="flex items-center gap-1.5 text-xs text-text-tertiary px-3 py-1.5 rounded bg-surface-2">
+                      <Check className="h-3.5 w-3.5" />
                       In sync
                     </div>
                   ) : (
                     <Button
-                      variant='secondary'
-                      size='sm'
+                      variant="secondary"
+                      size="sm"
                       disabled={!canPromoteDraft || isBusy}
                       onClick={() => promoteDraftMutation.mutate()}
-                      title='Copy draft image ID to active'
-                      className='gap-1.5'
+                      title="Copy draft image ID to active"
+                      className="gap-1.5"
                     >
                       {promoteDraftMutation.isPending ? (
-                        <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <ArrowUp className='h-3.5 w-3.5 rotate-90' />
+                        <ArrowUp className="h-3.5 w-3.5 rotate-90" />
                       )}
                       Promote
                     </Button>
@@ -1911,17 +1916,17 @@ export function SettingsImageDetailPage () {
                 </div>
 
                 {/* Active */}
-                <div className='flex-1 min-w-0'>
-                  <div className='text-xs text-text-tertiary mb-1.5'>
-                    Active{' '}
-                    <span className='text-text-quaternary'>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-text-tertiary mb-1.5">
+                    Active{" "}
+                    <span className="text-text-quaternary">
                       (used by new sandboxes)
                     </span>
                   </div>
                   <div
                     title={
                       !canMutateSelectedVariant
-                        ? variantMutabilityReason ?? undefined
+                        ? (variantMutabilityReason ?? undefined)
                         : undefined
                     }
                   >
@@ -1929,13 +1934,13 @@ export function SettingsImageDetailPage () {
                       value={selectedActiveImageId}
                       options={imageIdOptions}
                       disabled={!canMutateSelectedVariant || isBusy}
-                      placeholder='No active image'
-                      className='w-full'
-                      onCopy={id => void onCopy(id, 'active image id')}
-                      onChange={value => {
+                      placeholder="No active image"
+                      className="w-full"
+                      onCopy={(id) => void onCopy(id, "active image id")}
+                      onChange={(value) => {
                         void updateVariantMutation.mutateAsync({
-                          activeImageId: value
-                        })
+                          activeImageId: value,
+                        });
                       }}
                     />
                   </div>
@@ -1945,38 +1950,38 @@ export function SettingsImageDetailPage () {
 
             {/* Customize */}
             <div>
-              <div className='px-4 py-3'>
-                <div className='flex items-center justify-between'>
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between">
                   <div>
-                    <div className='text-sm font-medium text-text-primary'>
+                    <div className="text-sm font-medium text-text-primary">
                       Customize
                     </div>
-                    <div className='text-xs text-text-tertiary'>
+                    <div className="text-xs text-text-tertiary">
                       Open a terminal to edit the current draft variant
                       directly. Closing the terminal snapshots the filesystem
                       and updates the draft to the new image id.
                     </div>
                   </div>
                   {!setupSandboxId && (
-                    <div className='inline-flex rounded-md border border-border bg-surface-2 p-1'>
+                    <div className="inline-flex rounded-md border border-border bg-surface-2 p-1">
                       <Button
-                        type='button'
+                        type="button"
                         variant={
-                          extendMode === 'interactive' ? 'secondary' : 'ghost'
+                          extendMode === "interactive" ? "secondary" : "ghost"
                         }
-                        size='sm'
-                        className='h-8'
-                        onClick={() => setExtendMode('interactive')}
+                        size="sm"
+                        className="h-8"
+                        onClick={() => setExtendMode("interactive")}
                       >
-                        <Terminal className='h-3.5 w-3.5 mr-1.5' />
+                        <Terminal className="h-3.5 w-3.5 mr-1.5" />
                         Interactive
                       </Button>
                       <Button
-                        type='button'
-                        variant={extendMode === 'api' ? 'secondary' : 'ghost'}
-                        size='sm'
-                        className='h-8'
-                        onClick={() => setExtendMode('api')}
+                        type="button"
+                        variant={extendMode === "api" ? "secondary" : "ghost"}
+                        size="sm"
+                        className="h-8"
+                        onClick={() => setExtendMode("api")}
                       >
                         API
                       </Button>
@@ -1984,117 +1989,117 @@ export function SettingsImageDetailPage () {
                   )}
                 </div>
                 {/* Action Buttons */}
-                <div className='mt-3 flex items-center gap-2'>
-                  {!setupSandboxId && extendMode !== 'api' ? (
+                <div className="mt-3 flex items-center gap-2">
+                  {!setupSandboxId && extendMode !== "api" ? (
                     <Button
-                      variant='secondary'
+                      variant="secondary"
                       disabled={!canEdit || isBusy || !selectedVariantId}
                       onClick={() => {
-                        createSetupSandboxMutation.mutate()
+                        createSetupSandboxMutation.mutate();
                       }}
                     >
                       {createSetupSandboxMutation.isPending ? (
-                        <Loader2 className='h-4 w-4 animate-spin' />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : null}
                       Open Terminal
                     </Button>
                   ) : setupSandboxId ? (
                     <Button
-                      variant='secondary'
+                      variant="secondary"
                       disabled={!canEdit || isBusy}
                       onClick={() => closeSetupSandboxMutation.mutate()}
                     >
                       {closeSetupSandboxMutation.isPending ? (
-                        <Loader2 className='h-4 w-4 animate-spin' />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : null}
                       Close and Save
                     </Button>
                   ) : null}
                 </div>
 
-                {!setupSandboxId && extendMode === 'api' && (
-                  <div className='mt-3 space-y-2 text-xs text-text-secondary'>
-                    <div className='font-medium text-text-secondary'>
+                {!setupSandboxId && extendMode === "api" && (
+                  <div className="mt-3 space-y-2 text-xs text-text-secondary">
+                    <div className="font-medium text-text-secondary">
                       API reference for agents
                     </div>
                     <p>
-                      <span className='font-mono text-text-primary'>
+                      <span className="font-mono text-text-primary">
                         POST /images/:imageId/setup-sandbox
-                      </span>{' '}
-                      with{' '}
-                      <span className='font-mono text-text-primary'>
+                      </span>{" "}
+                      with{" "}
+                      <span className="font-mono text-text-primary">
                         {`{ variantId }`}
                       </span>
                     </p>
                     <p>
-                      Add SSH keys later with{' '}
-                      <span className='font-mono text-text-primary'>
+                      Add SSH keys later with{" "}
+                      <span className="font-mono text-text-primary">
                         {`POST /images/:imageId/setup-sandbox/:sandboxId/ssh`}
-                      </span>{' '}
-                      and{' '}
-                      <span className='font-mono text-text-primary'>
+                      </span>{" "}
+                      and{" "}
+                      <span className="font-mono text-text-primary">
                         {`{ sshPublicKeys[] }`}
                       </span>
                     </p>
                     <p>
-                      Returns{' '}
-                      <span className='font-mono text-text-primary'>
+                      Returns{" "}
+                      <span className="font-mono text-text-primary">
                         {`{ sandboxId, ssh, authorizedPublicKeys[] }`}
                       </span>
                     </p>
                     <p>
-                      <span className='font-mono text-text-primary'>
+                      <span className="font-mono text-text-primary">
                         DELETE /images/:imageId/setup-sandbox/:sandboxId
-                      </span>{' '}
+                      </span>{" "}
                       to close and persist changes.
                     </p>
                   </div>
                 )}
 
                 {setupSandboxId && (
-                  <div className='mt-3 space-y-3'>
+                  <div className="mt-3 space-y-3">
                     <div>
-                      <div className='text-xs font-medium text-text-secondary'>
+                      <div className="text-xs font-medium text-text-secondary">
                         SSH Access
                       </div>
-                      <div className='mt-1 text-xs text-text-tertiary'>
+                      <div className="mt-1 text-xs text-text-tertiary">
                         Browser terminal access is already live for this setup
                         sandbox. Add public keys only if you also want SSH/SCP.
                       </div>
                     </div>
-                    <div className='rounded-md bg-surface-2 px-3 py-2'>
-                      <div className='text-xs text-text-tertiary mb-1'>
+                    <div className="rounded-md bg-surface-2 px-3 py-2">
+                      <div className="text-xs text-text-tertiary mb-1">
                         Authorized public keys:
                       </div>
                       {setupAuthorizedPublicKeys.length > 0 ? (
-                        <pre className='whitespace-pre-wrap break-all text-xs font-mono text-text-primary'>
-                          {setupAuthorizedPublicKeys.join('\n')}
+                        <pre className="whitespace-pre-wrap break-all text-xs font-mono text-text-primary">
+                          {setupAuthorizedPublicKeys.join("\n")}
                         </pre>
                       ) : (
-                        <div className='text-xs text-text-tertiary'>
+                        <div className="text-xs text-text-tertiary">
                           No SSH public keys added yet.
                         </div>
                       )}
                     </div>
                     <div>
-                      <label className='block text-xs font-medium text-text-secondary mb-1.5'>
+                      <label className="block text-xs font-medium text-text-secondary mb-1.5">
                         Add SSH Public Keys
                       </label>
                       <Textarea
                         value={sshPublicKeysDraft}
-                        onChange={e => setSshPublicKeysDraft(e.target.value)}
-                        placeholder='ssh-ed25519 AAAA... one key per line'
-                        className='font-mono text-xs h-24 resize-none'
+                        onChange={(e) => setSshPublicKeysDraft(e.target.value)}
+                        placeholder="ssh-ed25519 AAAA... one key per line"
+                        className="font-mono text-xs h-24 resize-none"
                         disabled={!canEdit || isBusy}
                       />
-                      <div className='mt-1 text-xs text-text-tertiary'>
+                      <div className="mt-1 text-xs text-text-tertiary">
                         Paste one key per line. New keys are merged with the
                         current authorized key list for this sandbox.
                       </div>
                     </div>
-                    <div className='flex items-center gap-2'>
+                    <div className="flex items-center gap-2">
                       <Button
-                        variant='secondary'
+                        variant="secondary"
                         disabled={
                           !canEdit ||
                           isBusy ||
@@ -2104,112 +2109,112 @@ export function SettingsImageDetailPage () {
                         onClick={() => upsertSetupSandboxSshMutation.mutate()}
                       >
                         {upsertSetupSandboxSshMutation.isPending ? (
-                          <Loader2 className='h-4 w-4 animate-spin' />
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Key className='h-4 w-4' />
+                          <Key className="h-4 w-4" />
                         )}
-                        {setupSshInfo ? 'Add SSH Keys' : 'Enable SSH'}
+                        {setupSshInfo ? "Add SSH Keys" : "Enable SSH"}
                       </Button>
                     </div>
                   </div>
                 )}
 
                 {setupSandboxId && setupSshInfo && (
-                  <div className='mt-3 space-y-2'>
-                    <div className='text-xs font-medium text-text-secondary'>
+                  <div className="mt-3 space-y-2">
+                    <div className="text-xs font-medium text-text-secondary">
                       SSH Connection
                     </div>
-                    <div className='text-xs text-text-tertiary'>
-                      If you generated a new key for this sandbox, plain{' '}
-                      <code className='font-mono text-text-primary'>
+                    <div className="text-xs text-text-tertiary">
+                      If you generated a new key for this sandbox, plain{" "}
+                      <code className="font-mono text-text-primary">
                         ssh host
-                      </code>{' '}
+                      </code>{" "}
                       may fail unless that matching private key is already
-                      loaded into your SSH agent. Use{' '}
-                      <code className='font-mono text-text-primary'>
+                      loaded into your SSH agent. Use{" "}
+                      <code className="font-mono text-text-primary">
                         -i /path/to/private_key
-                      </code>{' '}
+                      </code>{" "}
                       or a matching SSH config entry.
                     </div>
-                    <div className='rounded-md bg-surface-2 px-3 py-2'>
-                      <div className='text-xs text-text-tertiary mb-1'>
+                    <div className="rounded-md bg-surface-2 px-3 py-2">
+                      <div className="text-xs text-text-tertiary mb-1">
                         Connect via SSH:
                       </div>
-                      <div className='flex items-center gap-2'>
-                        <code className='flex-1 text-xs font-mono text-text-primary break-all'>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-xs font-mono text-text-primary break-all">
                           ssh -p {setupSshInfo.port} {setupSshInfo.username}@
                           {setupSshInfo.host}
                         </code>
                         <Button
-                          variant='ghost'
-                          size='icon'
-                          className='h-6 w-6 shrink-0'
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
                           onClick={() =>
                             void onCopy(
                               `ssh -p ${setupSshInfo.port} ${setupSshInfo.username}@${setupSshInfo.host}`,
-                              'SSH command'
+                              "SSH command",
                             )
                           }
                         >
-                          <Copy className='h-3.5 w-3.5' />
+                          <Copy className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
-                    <div className='rounded-md bg-surface-2 px-3 py-2'>
-                      <div className='text-xs text-text-tertiary mb-1'>
+                    <div className="rounded-md bg-surface-2 px-3 py-2">
+                      <div className="text-xs text-text-tertiary mb-1">
                         Copy files via SCP:
                       </div>
-                      <div className='flex items-center gap-2'>
-                        <code className='flex-1 text-xs font-mono text-text-primary break-all'>
-                          scp -P {setupSshInfo.port} ./file{' '}
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-xs font-mono text-text-primary break-all">
+                          scp -P {setupSshInfo.port} ./file{" "}
                           {setupSshInfo.username}@{setupSshInfo.host}
                           :/home/agent/
                         </code>
                         <Button
-                          variant='ghost'
-                          size='icon'
-                          className='h-6 w-6 shrink-0'
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
                           onClick={() =>
                             void onCopy(
                               `scp -P ${setupSshInfo.port} ./file ${setupSshInfo.username}@${setupSshInfo.host}:/home/agent/`,
-                              'SCP command'
+                              "SCP command",
                             )
                           }
                         >
-                          <Copy className='h-3.5 w-3.5' />
+                          <Copy className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
-                    <div className='rounded-md bg-surface-2 px-3 py-2'>
-                      <div className='text-xs text-text-tertiary mb-1'>
+                    <div className="rounded-md bg-surface-2 px-3 py-2">
+                      <div className="text-xs text-text-tertiary mb-1">
                         Run a bash command:
                       </div>
-                      <div className='flex items-center gap-2'>
-                        <code className='flex-1 text-xs font-mono text-text-primary break-all'>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-xs font-mono text-text-primary break-all">
                           ssh -p {setupSshInfo.port} {setupSshInfo.username}@
                           {setupSshInfo.host} -- bash -lc 'ls -la /home/agent'
                         </code>
                         <Button
-                          variant='ghost'
-                          size='icon'
-                          className='h-6 w-6 shrink-0'
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
                           onClick={() =>
                             void onCopy(
                               `ssh -p ${setupSshInfo.port} ${setupSshInfo.username}@${setupSshInfo.host} -- bash -lc 'ls -la /home/agent'`,
-                              'SSH bash command'
+                              "SSH bash command",
                             )
                           }
                         >
-                          <Copy className='h-3.5 w-3.5' />
+                          <Copy className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
-                    <div className='rounded-md bg-surface-2 px-3 py-2'>
-                      <div className='text-xs text-text-tertiary mb-1'>
+                    <div className="rounded-md bg-surface-2 px-3 py-2">
+                      <div className="text-xs text-text-tertiary mb-1">
                         Write a file via shell:
                       </div>
-                      <div className='flex items-center gap-2'>
-                        <code className='flex-1 text-xs font-mono text-text-primary break-all'>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-xs font-mono text-text-primary break-all">
                           ssh -p {setupSshInfo.port} {setupSshInfo.username}@
                           {setupSshInfo.host} -- bash -lc "cat &gt;
                           /shared/image/hooks/build.sh &lt;&lt;'EOF'
@@ -2221,40 +2226,40 @@ export function SettingsImageDetailPage () {
                           EOF"
                         </code>
                         <Button
-                          variant='ghost'
-                          size='icon'
-                          className='h-6 w-6 shrink-0'
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
                           onClick={() =>
                             void onCopy(
                               `ssh -p ${setupSshInfo.port} ${setupSshInfo.username}@${setupSshInfo.host} -- bash -lc "cat > /shared/image/hooks/build.sh <<'EOF'\nset -euo pipefail\necho hello\nEOF"`,
-                              'SSH file write command'
+                              "SSH file write command",
                             )
                           }
                         >
-                          <Copy className='h-3.5 w-3.5' />
+                          <Copy className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
-                    <div className='rounded-md bg-surface-2 px-3 py-2'>
-                      <div className='text-xs text-text-tertiary mb-1'>
+                    <div className="rounded-md bg-surface-2 px-3 py-2">
+                      <div className="text-xs text-text-tertiary mb-1">
                         Known hosts line (add to ~/.ssh/known_hosts):
                       </div>
-                      <div className='flex items-center gap-2'>
-                        <code className='flex-1 text-xs font-mono text-text-primary break-all'>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-xs font-mono text-text-primary break-all">
                           {setupSshInfo.knownHostsLine}
                         </code>
                         <Button
-                          variant='ghost'
-                          size='icon'
-                          className='h-6 w-6 shrink-0'
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
                           onClick={() =>
                             void onCopy(
                               setupSshInfo.knownHostsLine,
-                              'known hosts line'
+                              "known hosts line",
                             )
                           }
                         >
-                          <Copy className='h-3.5 w-3.5' />
+                          <Copy className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
@@ -2264,7 +2269,7 @@ export function SettingsImageDetailPage () {
 
               {/* Browser Terminal - shown when sandbox active in browser mode */}
               {setupSandboxId && setupTerminalConnection ? (
-                <div className='p-2 h-[320px] w-full'>
+                <div className="p-2 h-[320px] w-full">
                   <TerminalPanel
                     wsUrl={setupTerminalConnection.wsUrl}
                     wsAuthToken={setupTerminalConnection.authToken}
@@ -2273,49 +2278,49 @@ export function SettingsImageDetailPage () {
                 </div>
               ) : null}
 
-              <div className='border-t border-border'>
+              <div className="border-t border-border">
                 <SettingsRow
                   left={
                     <SettingsRowLeft
-                      title='Shared image volume'
-                      descriptionClassName='line-clamp-none'
+                      title="Shared image volume"
+                      descriptionClassName="line-clamp-none"
                       description={
-                        <div className='pt-2 flex flex-col gap-2'>
-                          <p className='text-xs text-primary'>
+                        <div className="pt-2 flex flex-col gap-2">
+                          <p className="text-xs text-primary">
                             Write your repository cloning, dependency
                             installation, initial setup and build commands in
                             the shared image directory. The same build script is
                             used for all variants and versions of the image.
                           </p>
-                          <ul className='space-y-1.5 list-none p-0 m-0'>
+                          <ul className="space-y-1.5 list-none p-0 m-0">
                             <li>
-                              <code className='font-mono text-text-primary'>
+                              <code className="font-mono text-text-primary">
                                 /shared/image
-                              </code>{' '}
+                              </code>{" "}
                               &mdash; the mounted per-image Modal volume. Hook
                               edits persist immediately without waiting for a
                               setup sandbox snapshot.
                             </li>
                             <li>
-                              <code className='font-mono text-text-primary'>
+                              <code className="font-mono text-text-primary">
                                 /shared/image/hooks/build.sh
-                              </code>{' '}
+                              </code>{" "}
                               &mdash; runs during image builds when set (every
                               30 minutes). Shared across all variants. Use the
                               Run build row below to execute it now for the
                               selected variant.
                             </li>
                             <li>
-                              <code className='font-mono text-text-primary'>
+                              <code className="font-mono text-text-primary">
                                 /shared/image/hooks/start.sh
-                              </code>{' '}
+                              </code>{" "}
                               &mdash; runs before agent-server starts in new
                               agent sandboxes.
                             </li>
                             <li>
-                              <code className='font-mono text-text-primary'>
+                              <code className="font-mono text-text-primary">
                                 /shared/image/AGENTS.md
-                              </code>{' '}
+                              </code>{" "}
                               &mdash; loaded into the Codex/PI harness runtime
                               as shared instructions.
                             </li>
@@ -2325,27 +2330,27 @@ export function SettingsImageDetailPage () {
                     />
                   }
                 />
-                <div className='border-t border-border' />
+                <div className="border-t border-border" />
                 <SettingsRow
                   disabled={
                     !canMutateSelectedVariant ||
                     !selectedVariantId ||
                     buildStreamMutation.isPending
                   }
-                  className='items-start sm:items-center flex-col sm:flex-row'
+                  className="items-start sm:items-center flex-col sm:flex-row"
                   left={
                     <SettingsRowLeft
-                      title='Run build'
+                      title="Run build"
                       description={
                         selectedVariant
                           ? `Trigger POST /images/:imageId/build for "${selectedVariant.name}". This runs /shared/image/hooks/build.sh when present and streams logs below.`
-                          : 'Select a variant, then trigger POST /images/:imageId/build. This runs /shared/image/hooks/build.sh when present and streams logs below.'
+                          : "Select a variant, then trigger POST /images/:imageId/build. This runs /shared/image/hooks/build.sh when present and streams logs below."
                       }
                     />
                   }
                   right={
                     <Button
-                      variant='secondary'
+                      variant="secondary"
                       disabled={
                         !canMutateSelectedVariant ||
                         !selectedVariantId ||
@@ -2354,7 +2359,7 @@ export function SettingsImageDetailPage () {
                       onClick={() => buildStreamMutation.mutate()}
                     >
                       {buildStreamMutation.isPending ? (
-                        <Loader2 className='h-4 w-4 animate-spin' />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : null}
                       Run build
                     </Button>
@@ -2363,13 +2368,13 @@ export function SettingsImageDetailPage () {
               </div>
             </div>
             {buildLogs.length > 0 ? (
-              <div className='border-t border-border px-3 py-2'>
-                <div className='flex items-center justify-between mb-2'>
-                  <span className='text-xs text-text-tertiary'>
+              <div className="border-t border-border px-3 py-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-text-tertiary">
                     Build output
                   </span>
                 </div>
-                <pre className='max-h-[240px] overflow-auto whitespace-pre-wrap text-xs font-mono text-text-secondary'>
+                <pre className="max-h-[240px] overflow-auto whitespace-pre-wrap text-xs font-mono text-text-secondary">
                   {buildOutput}
                 </pre>
               </div>
@@ -2379,24 +2384,24 @@ export function SettingsImageDetailPage () {
 
         {/* E. Lifecycle */}
         <SettingsSection
-          title='Lifecycle'
-          description='Archive removes this image from active use. You can unarchive it later.'
+          title="Lifecycle"
+          description="Archive removes this image from active use. You can unarchive it later."
         >
           <SettingsPanel>
-            <SettingsList className='rounded-none border-0'>
+            <SettingsList className="rounded-none border-0">
               {!isArchived ? (
                 <SettingsRow
                   disabled={!canEdit || !image || isBusy}
-                  className='items-start sm:items-center flex-col sm:flex-row'
+                  className="items-start sm:items-center flex-col sm:flex-row"
                   left={
                     <SettingsRowLeft
-                      title='Archive image'
-                      description='Archive this image and remove it from active use.'
+                      title="Archive image"
+                      description="Archive this image and remove it from active use."
                     />
                   }
                   right={
                     <Button
-                      variant='ghost'
+                      variant="ghost"
                       disabled={!canEdit || !image || isBusy}
                       onClick={() => setShowArchiveConfirmDialog(true)}
                     >
@@ -2423,21 +2428,21 @@ export function SettingsImageDetailPage () {
             </DialogHeader>
             <DialogFooter>
               <Button
-                variant='outline'
+                variant="outline"
                 onClick={() => setShowDeleteConfirmDialog(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant='destructive'
+                variant="destructive"
                 onClick={() => {
-                  setShowDeleteConfirmDialog(false)
-                  deleteMutation.mutate()
+                  setShowDeleteConfirmDialog(false);
+                  deleteMutation.mutate();
                 }}
                 disabled={deleteMutation.isPending}
               >
                 {deleteMutation.isPending ? (
-                  <Loader2 className='h-4 w-4 animate-spin' />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : null}
                 Delete
               </Button>
@@ -2446,5 +2451,5 @@ export function SettingsImageDetailPage () {
         </Dialog>
       </div>
     </SettingsPage>
-  )
+  );
 }

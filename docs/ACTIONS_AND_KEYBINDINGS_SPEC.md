@@ -14,7 +14,7 @@ The workspace keyboard system is intentionally split into layers:
   mode transitions, persistence, and conflict detection.
 - `ui-actions/*` defines the canonical action catalog and the public execution
   contract for commands.
-- `coordinator-actions/*bridge*` exposes imperative runtime controllers that UI
+- `frontend-runtime/*` exposes imperative runtime controllers that UI
   actions call into.
 - `workspace/store.tsx` owns the real workspace state transitions.
 - Some actions are implemented as transient UI effects or DOM events rather than
@@ -290,8 +290,8 @@ Specific consequences:
 
 Files:
 
-- `agent-manager-web/src/coordinator-actions/runtime-bridge.ts`
-- `agent-manager-web/src/coordinator-actions/workspace-bridge.tsx`
+- `agent-manager-web/src/frontend-runtime/bridge.ts`
+- `agent-manager-web/src/frontend-runtime/workspace-bridge.tsx`
 
 Responsibilities:
 
@@ -342,7 +342,7 @@ keydown
   -> executeUiAction({ actionId: "pane.split.right" })
   -> ui-actions/actions/workspace-layout.ts
   -> ctx.workspaceController.splitFocusedPane("row")
-  -> coordinator-actions/workspace-bridge.tsx
+  -> frontend-runtime/workspace-bridge.tsx
   -> store.dispatch({ type: "leaf/split", ... })
   -> workspace/store.tsx reducer case "leaf/split"
   -> workspace state updates
@@ -462,7 +462,7 @@ Usually update all relevant layers:
 5. Add a default binding in
    `agent-manager-web/src/workspace/keybindings/defaults.ts` if desired.
 6. If the action is reducer-backed, implement the runtime controller method in
-   `agent-manager-web/src/coordinator-actions/workspace-bridge.tsx`.
+   `agent-manager-web/src/frontend-runtime/workspace-bridge.tsx`.
 7. If needed, add or update reducer cases in
    `agent-manager-web/src/workspace/store.tsx`.
 8. Update this document.
@@ -478,7 +478,7 @@ Usually update all relevant layers:
 
 - Prefer changing:
   - `ui-actions/actions/*`
-  - `coordinator-actions/workspace-bridge.tsx`
+  - `frontend-runtime/workspace-bridge.tsx`
   - `workspace/store.tsx`
   - `workspace/layout.ts`
 - Do not treat `workspace/keybindings/*` as the place that owns pane/window
@@ -574,8 +574,8 @@ Canonical action system:
 
 Runtime bridge:
 
-- `agent-manager-web/src/coordinator-actions/runtime-bridge.ts`
-- `agent-manager-web/src/coordinator-actions/workspace-bridge.tsx`
+- `agent-manager-web/src/frontend-runtime/bridge.ts`
+- `agent-manager-web/src/frontend-runtime/workspace-bridge.tsx`
 
 Workspace state implementation:
 

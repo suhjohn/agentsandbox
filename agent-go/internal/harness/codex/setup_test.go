@@ -16,14 +16,17 @@ func TestSetupRuntimeSeedsAgentsAndAuthFiles(t *testing.T) {
 	h := NewHarness(nil)
 	err := h.SetupRuntime(registry.SetupContext{
 		RuntimeContext: registry.RuntimeContext{
-			RootDir:          filepath.Join(tmpDir, "runtime-root"),
-			AgentHome:        tmpDir,
-			AgentID:          "agent-123",
-			CodexHome:        codexHome,
-			PIDir:            filepath.Join(tmpDir, ".pi"),
-			ToolsDir:         filepath.Join(tmpDir, "tools"),
-			BundledToolsDir:  filepath.Join(tmpDir, "tools", "default"),
-			SharedAgentsPath: filepath.Join(tmpDir, "shared", "image", "AGENTS.md"),
+			RootDir:              filepath.Join(tmpDir, "runtime-root"),
+			AgentHome:            tmpDir,
+			AgentID:              "agent-123",
+			AgentGoBinaryPath:    filepath.Join(tmpDir, "bin", "agent-go"),
+			AgentGoBaseURL:       "http://127.0.0.1:3131",
+			AgentGoInternalToken: "internal-token",
+			CodexHome:            codexHome,
+			PIDir:                filepath.Join(tmpDir, ".pi"),
+			ToolsDir:             filepath.Join(tmpDir, "tools"),
+			BundledToolsDir:      filepath.Join(tmpDir, "tools", "default"),
+			SharedAgentsPath:     filepath.Join(tmpDir, "shared", "image", "AGENTS.md"),
 			SharedAgentsContent: strings.TrimSpace(`
 # Shared Personality
 You are a happy person.
@@ -82,5 +85,20 @@ You are a happy person.
 	}
 	if !strings.Contains(authText, `"OPENAI_API_KEY":"sk-test"`) {
 		t.Fatalf("expected OPENAI_API_KEY, got %q", authText)
+	}
+
+	configRaw, err := os.ReadFile(filepath.Join(codexHome, "config.toml"))
+	if err != nil {
+		t.Fatalf("ReadFile config.toml: %v", err)
+	}
+	configText := string(configRaw)
+	if !strings.Contains(configText, "[mcp_servers.agent_go_client_tools]") {
+		t.Fatalf("expected client-tools MCP config, got %q", configText)
+	}
+	if !strings.Contains(configText, `args = ["client-tool-mcp"]`) {
+		t.Fatalf("expected client-tool-mcp args, got %q", configText)
+	}
+	if !strings.Contains(configText, `AGENT_GO_INTERNAL_BASE_URL = "http://127.0.0.1:3131"`) {
+		t.Fatalf("expected internal base URL, got %q", configText)
 	}
 }

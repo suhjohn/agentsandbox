@@ -16,8 +16,10 @@ import type {
 type ChatControllerKind = "page" | "dialog";
 
 let dialogOpen = false;
-let dialogController: { readonly id: number; readonly value: DialogRuntimeController } | null =
-  null;
+let dialogController: {
+  readonly id: number;
+  readonly value: DialogRuntimeController;
+} | null = null;
 let workspaceController: {
   readonly id: number;
   readonly value: WorkspaceRuntimeController;
@@ -44,7 +46,10 @@ let settingsImageDetailController: {
 } | null = null;
 
 const chatControllers: Partial<
-  Record<ChatControllerKind, { readonly id: number; readonly value: ChatRuntimeController }>
+  Record<
+    ChatControllerKind,
+    { readonly id: number; readonly value: ChatRuntimeController }
+  >
 > = {};
 
 let nextRegistrationId = 1;
@@ -89,7 +94,8 @@ export function registerSessionsSidePanelRuntimeController(
   const id = nextId();
   sessionsSidePanelController = { id, value: controller };
   return () => {
-    if (sessionsSidePanelController?.id === id) sessionsSidePanelController = null;
+    if (sessionsSidePanelController?.id === id)
+      sessionsSidePanelController = null;
   };
 }
 
@@ -99,7 +105,8 @@ export function registerWorkspaceKeyboardRuntimeController(
   const id = nextId();
   workspaceKeyboardController = { id, value: controller };
   return () => {
-    if (workspaceKeyboardController?.id === id) workspaceKeyboardController = null;
+    if (workspaceKeyboardController?.id === id)
+      workspaceKeyboardController = null;
   };
 }
 
@@ -141,7 +148,8 @@ export function registerSettingsImageDetailRuntimeController(
   const id = nextId();
   settingsImageDetailController = { id, value: controller };
   return () => {
-    if (settingsImageDetailController?.id === id) settingsImageDetailController = null;
+    if (settingsImageDetailController?.id === id)
+      settingsImageDetailController = null;
   };
 }
 

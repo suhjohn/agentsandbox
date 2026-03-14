@@ -26,6 +26,25 @@ type RunResult struct {
 	Text              string
 }
 
+type ClientToolRequestInput struct {
+	ToolName string
+	Args     any
+	UserID   string
+	DeviceID string
+}
+
+type ClientToolError struct {
+	Code      string
+	Message   string
+	Retryable bool
+}
+
+type ClientToolResponse struct {
+	OK     bool
+	Result any
+	Error  *ClientToolError
+}
+
 type ToolReadme struct {
 	Path    string
 	Content string
@@ -36,7 +55,10 @@ type ExecuteRequest struct {
 	Input                    []Input
 	DefaultWorkingDir        string
 	RuntimeDir               string
+	RunID                    string
+	UserID                   string
 	EmitEvent                func(map[string]any)
+	RequestClientTool        func(context.Context, ClientToolRequestInput) (ClientToolResponse, error)
 	PersistExternalSessionID func(string)
 }
 
@@ -45,6 +67,9 @@ type RuntimeContext struct {
 	RuntimeDir                 string
 	AgentHome                  string
 	AgentID                    string
+	AgentGoBinaryPath          string
+	AgentGoBaseURL             string
+	AgentGoInternalToken       string
 	WorkspacesDir              string
 	DefaultWorkingDir          string
 	CodexHome                  string

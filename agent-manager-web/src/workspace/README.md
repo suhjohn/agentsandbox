@@ -65,7 +65,7 @@ This document describes how pane and panel behavior flows through the workspace 
   - The top-bar coordinator button tooltip shows the reserved global shortcut `Option/Alt+Space`.
   - Open: the left-side panel is rendered with an overlay resize handle on its right edge (visual bar appears on hover, no extra layout width).
 - Coordinator runtime bridge:
-  - `WorkspaceView` registers a sessions-side-panel runtime controller in `coordinator-actions/runtime-bridge.ts`.
+  - `WorkspaceView` registers a sessions-side-panel runtime controller in `frontend-runtime/bridge.ts`.
   - Semantic actions can open/close the side panel and mutate filter/group-by state without selector clicks.
   - Exposed semantic actions: `workspace.sessions_panel.open`, `workspace.sessions_panel.close`, `workspace.sessions_panel.set_filters`, `workspace.sessions_panel.set_group_by`.
 - Panel content:
@@ -126,7 +126,7 @@ All UI interactions dispatch actions to `workspace/store.tsx` reducer:
   - key bindings list (`workspace-keybindings-dialog.tsx`)
   - workspace palette items (`workspace-command-palette.tsx`)
   - settings editor (`/settings/keybindings`, `routes/settings-keybindings.tsx`)
-  - coordinator execution (`agent-manager-web/src/coordinator-actions/executor.ts`)
+  - client-tool execution (`agent-manager-web/src/client-tools/executor.ts`)
 - Effective overrides are selected as: non-empty account `workspaceKeybindings` (when present), otherwise localStorage overrides for that user.
 - Keybinding overrides are action-oriented: bindings store `actionId` + optional `params` instead of `commandId` + `args`.
 - `window.select_index` remains the canonical example of a pre-bound parameterized workspace action.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"agent-go/internal/harness/registry"
@@ -51,6 +52,16 @@ func (h *Harness) PrepareStartRun(req registry.StartRunRequest) (registry.StartR
 }
 
 func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (registry.RunResult, error) {
+	cli := h.CLI
+	if cli == nil {
+		cli = NewCodexCLI()
+	}
+	runCLI := *cli
+	runCLI.Env = append([]string(nil), cli.Env...)
+	if strings.TrimSpace(req.RunID) != "" {
+		runCLI.Env = append(runCLI.Env, "AGENT_GO_CLIENT_TOOL_RUN_ID="+strings.TrimSpace(req.RunID))
+	}
+
 	prompt := registry.PromptFromInputs(req.Input)
 	model := ""
 	if req.Session.Model != nil && strings.TrimSpace(*req.Session.Model) != "" {
@@ -69,7 +80,7 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 	seenExternalSessionID := ""
 
 	resultText := strings.Builder{}
-	args := h.CLI.ExecArgs(CodexExecOptions{
+	args := runCLI.ExecArgs(CodexExecOptions{
 		CodexRootOptions: CodexRootOptions{
 			CodexGlobalOptions: CodexGlobalOptions{Config: config},
 			Prompt:             prompt,
@@ -82,7 +93,7 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 		JSON:             true,
 	})
 	if resumeSessionID != "" {
-		args = h.CLI.ExecResumeArgs(CodexResumeOptions{
+		args = runCLI.ExecResumeArgs(CodexResumeOptions{
 			CodexGlobalOptions: CodexGlobalOptions{Config: config},
 		})
 		if model != "" {
@@ -100,7 +111,7 @@ func (h *Harness) Execute(ctx context.Context, req registry.ExecuteRequest) (reg
 		}
 	}
 
-	_, err := h.CLI.RunJSONL(ctx, args, nil, func(evt CodexJSONLEvent) {
+	_, err := runCLI.RunJSONL(ctx, args, nil, func(evt CodexJSONLEvent) {
 		if id := externalSessionIDFromEvent(evt.Value); id != "" {
 			seenExternalSessionID = id
 			if req.PersistExternalSessionID != nil {
@@ -158,7 +169,67 @@ func (h *Harness) SetupRuntime(ctx registry.SetupContext) error {
 			return err
 		}
 	}
+	if err := ensureClientToolMCPConfig(runtimeCtx); err != nil {
+		return err
+	}
 	return ensureAuthJSON(runtimeCtx.CodexHome, ctx.OpenAIAPIKey)
+}
+
+const (
+	managedMCPConfigStart = "# agent-go:managed:start client-tool-mcp"
+	managedMCPConfigEnd   = "# agent-go:managed:end client-tool-mcp"
+)
+
+func ensureClientToolMCPConfig(runtimeCtx registry.RuntimeContext) error {
+	codexHome := strings.TrimSpace(runtimeCtx.CodexHome)
+	if codexHome == "" {
+		return nil
+	}
+	binaryPath := strings.TrimSpace(runtimeCtx.AgentGoBinaryPath)
+	baseURL := strings.TrimSpace(runtimeCtx.AgentGoBaseURL)
+	token := strings.TrimSpace(runtimeCtx.AgentGoInternalToken)
+	if binaryPath == "" || baseURL == "" || token == "" {
+		return nil
+	}
+
+	configPath := filepath.Join(codexHome, "config.toml")
+	managedBlock := strings.Join([]string{
+		managedMCPConfigStart,
+		"[mcp_servers.agent_go_client_tools]",
+		"command = " + strconv.Quote(binaryPath),
+		`args = ["client-tool-mcp"]`,
+		"",
+		"[mcp_servers.agent_go_client_tools.env]",
+		"AGENT_GO_INTERNAL_BASE_URL = " + strconv.Quote(baseURL),
+		"AGENT_GO_INTERNAL_TOKEN = " + strconv.Quote(token),
+		managedMCPConfigEnd,
+		"",
+	}, "\n")
+
+	existingRaw, err := os.ReadFile(configPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	existing := strings.TrimRight(string(existingRaw), "\n")
+	start := strings.Index(existing, managedMCPConfigStart)
+	end := strings.Index(existing, managedMCPConfigEnd)
+	switch {
+	case start >= 0 && end > start:
+		end += len(managedMCPConfigEnd)
+		existing = strings.TrimSpace(existing[:start] + existing[end:])
+	case start >= 0 || end >= 0:
+		existing = strings.TrimSpace(existing)
+	}
+
+	next := managedBlock
+	if existing != "" {
+		next = existing + "\n\n" + managedBlock
+	}
+
+	if err := os.MkdirAll(codexHome, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(configPath, []byte(next), 0o644)
 }
 
 func ensureAuthJSON(codexHome, openaiAPIKey string) error {

@@ -55,21 +55,21 @@ const (
 )
 
 type serveConfig struct {
-	Port                    int
-	AgentID                 string
-	DatabasePath            string
-	SecretSeed              string
-	AgentManagerAPIKey      string
-	DefaultModel            string
-	DefaultReasoningEffort  string
-	OpenAIAPIKey            string
-	PIDir                   string
-	AgentHome               string
-	WorkspacesDir           string
-	RuntimeDir              string
-	DefaultWorkingDir       string
-	CORSAllowedOrigins      []string
-	AgentManagerBaseURL     string
+	Port                   int
+	AgentID                string
+	DatabasePath           string
+	SecretSeed             string
+	AgentManagerAPIKey     string
+	DefaultModel           string
+	DefaultReasoningEffort string
+	OpenAIAPIKey           string
+	PIDir                  string
+	AgentHome              string
+	WorkspacesDir          string
+	RuntimeDir             string
+	DefaultWorkingDir      string
+	CORSAllowedOrigins     []string
+	AgentManagerBaseURL    string
 }
 
 func fail(status int, message string) error {
@@ -90,14 +90,17 @@ func runServe(args []string) error {
 
 	httpClient := &http.Client{Timeout: 90 * time.Second}
 	app := &server{
-		cfg:      cfg,
-		store:    store,
-		state:    sessionstate.New(),
-		http:     httpClient,
-		codex:    NewCodexCLI(),
-		pi:       NewPiCLI(),
-		runCtx:   context.Background(),
+		cfg:    cfg,
+		store:  store,
+		state:  sessionstate.New(),
+		http:   httpClient,
+		codex:  NewCodexCLI(),
+		pi:     NewPiCLI(),
+		runCtx: context.Background(),
 	}
+	app.clientTools = newClientToolManager(func(runID, event string, data any) {
+		app.state.PushRunEvent(runID, event, data)
+	})
 	runCtx, runCancel := context.WithCancel(context.Background())
 	app.runCtx = runCtx
 	app.codex.Dir = cfg.DefaultWorkingDir
@@ -139,6 +142,7 @@ func runServe(args []string) error {
 		signal.Notify(stopSignals, os.Interrupt, syscall.SIGTERM)
 		<-stopSignals
 		runCancel()
+		app.clientTools.CancelAll("server_shutdown")
 		app.state.CloseAllStreams()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -172,6 +176,11 @@ func newServerRouter(app *server) http.Handler {
 	router.Get("/session/{id}/message/{runId}/stream", app.wrap(app.handleRunStream))
 	router.Post("/session/{id}/stop", app.wrap(app.handleStopRun))
 	router.Delete("/session/{id}", app.wrap(app.handleDeleteSession))
+	router.Post("/client-tools/register", app.wrap(app.handleClientToolRegister))
+	router.Post("/client-tools/unregister", app.wrap(app.handleClientToolUnregister))
+	router.Post("/client-tools/respond", app.wrap(app.handleClientToolRespond))
+	router.Post("/client-tools/cancel", app.wrap(app.handleClientToolCancel))
+	router.Post("/internal/client-tools/request", app.wrap(app.handleInternalClientToolRequest))
 
 	router.Get("/workspaces", app.wrap(app.handleListWorkspaces))
 	router.Get("/workspaces/{name}/diff", app.wrap(app.handleWorkspaceDiff))
@@ -376,15 +385,16 @@ func isLocalhostOrigin(origin string) bool {
 }
 
 type server struct {
-	cfg       serveConfig
-	store     *store
-	state     *sessionstate.State
-	http      *http.Client
-	codex     *CodexCLI
-	pi        *PiCLI
-	harnesses *harnessregistry.Registry
-	outbox    *eventOutbox
-	runCtx    context.Context
+	cfg         serveConfig
+	store       *store
+	state       *sessionstate.State
+	http        *http.Client
+	codex       *CodexCLI
+	pi          *PiCLI
+	harnesses   *harnessregistry.Registry
+	outbox      *eventOutbox
+	runCtx      context.Context
+	clientTools *clientToolManager
 }
 
 type appHandler func(http.ResponseWriter, *http.Request) error
@@ -887,12 +897,12 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) error {
 	for key, value := range prep.ResponseFields {
 		resp[key] = value
 	}
-	go s.executeRunAsync(runContext, sessionID, runID, session, normalized)
+	go s.executeRunAsync(runContext, sessionID, runID, auth.UserID, session, normalized)
 	writeJSON(w, http.StatusOK, resp)
 	return nil
 }
 
-func (s *server) executeRunAsync(parent context.Context, sessionID, runID string, session *sessionRecord, input []normalizedInput) {
+func (s *server) executeRunAsync(parent context.Context, sessionID, runID, userID string, session *sessionRecord, input []normalizedInput) {
 	ctx, cancel := context.WithCancel(parent)
 	s.state.BindRunCancel(sessionID, cancel)
 	defer cancel()
@@ -931,7 +941,7 @@ func (s *server) executeRunAsync(parent context.Context, sessionID, runID string
 		s.state.PushRunEvent(runID, eventNameForMessage(msg), msg)
 	}
 
-	result, err := s.executeModelRun(ctx, session, input, pushProviderEvent)
+	result, err := s.executeModelRun(ctx, runID, userID, session, input, pushProviderEvent)
 	if err != nil {
 		pushError(err.Error())
 	} else {
@@ -964,6 +974,9 @@ func (s *server) executeRunAsync(parent context.Context, sessionID, runID string
 	s.queueManagerSnapshot(sessionID)
 	s.state.PushSessionEvent(sessionID, "status", map[string]any{"isRunning": false})
 	s.state.PushRunEvent(runID, "status", map[string]any{"isRunning": false})
+	if s.clientTools != nil {
+		s.clientTools.CancelRun(runID, "run_finished")
+	}
 	s.state.EndRunStream(runID)
 }
 
@@ -972,28 +985,28 @@ type modelRunResult struct {
 	Text              string
 }
 
-func (s *server) executeModelRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
+func (s *server) executeModelRun(ctx context.Context, runID, userID string, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
 	def, err := s.harnessDefinition(session.Harness)
 	if err != nil {
 		return modelRunResult{}, err
 	}
-	return s.executeHarnessRun(ctx, def, session, input, onEvent)
+	return s.executeHarnessRun(ctx, runID, userID, def, session, input, onEvent)
 }
 
-func (s *server) executeCodexCLIRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
+func (s *server) executeCodexCLIRun(ctx context.Context, runID, userID string, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
 	def, err := s.harnessDefinition("codex")
 	if err != nil {
 		return modelRunResult{}, err
 	}
-	return s.executeHarnessRun(ctx, def, session, input, onEvent)
+	return s.executeHarnessRun(ctx, runID, userID, def, session, input, onEvent)
 }
 
-func (s *server) executePiCLIRun(ctx context.Context, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
+func (s *server) executePiCLIRun(ctx context.Context, runID, userID string, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
 	def, err := s.harnessDefinition("pi")
 	if err != nil {
 		return modelRunResult{}, err
 	}
-	return s.executeHarnessRun(ctx, def, session, input, onEvent)
+	return s.executeHarnessRun(ctx, runID, userID, def, session, input, onEvent)
 }
 
 func stringPtrsEqual(a, b *string) bool {
@@ -1003,7 +1016,7 @@ func stringPtrsEqual(a, b *string) bool {
 	return strings.TrimSpace(*a) == strings.TrimSpace(*b)
 }
 
-func (s *server) executeHarnessRun(ctx context.Context, def harnessregistry.Definition, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
+func (s *server) executeHarnessRun(ctx context.Context, runID, userID string, def harnessregistry.Definition, session *sessionRecord, input []normalizedInput, onEvent func(map[string]any)) (modelRunResult, error) {
 	persistedExternalSessionID := ""
 	if session.ExternalSessionID != nil {
 		persistedExternalSessionID = strings.TrimSpace(*session.ExternalSessionID)
@@ -1013,7 +1026,27 @@ func (s *server) executeHarnessRun(ctx context.Context, def harnessregistry.Defi
 		Input:             toHarnessInputs(input),
 		DefaultWorkingDir: s.cfg.DefaultWorkingDir,
 		RuntimeDir:        s.cfg.RuntimeDir,
+		RunID:             strings.TrimSpace(runID),
+		UserID:            strings.TrimSpace(userID),
 		EmitEvent:         onEvent,
+		RequestClientTool: func(requestCtx context.Context, input harnessregistry.ClientToolRequestInput) (harnessregistry.ClientToolResponse, error) {
+			if s.clientTools == nil {
+				return harnessregistry.ClientToolResponse{}, fmt.Errorf("client tool manager unavailable")
+			}
+			result, err := s.clientTools.Request(
+				requestCtx,
+				runID,
+				input.UserID,
+				input.DeviceID,
+				input.ToolName,
+				input.Args,
+			)
+			return harnessregistry.ClientToolResponse{
+				OK:     result.OK,
+				Result: result.Result,
+				Error:  toHarnessClientToolError(result.Error),
+			}, err
+		},
 		PersistExternalSessionID: func(value string) {
 			next := strings.TrimSpace(value)
 			if next == "" || next == persistedExternalSessionID {
@@ -1273,6 +1306,103 @@ func (s *server) handleDeleteSession(w http.ResponseWriter, r *http.Request) err
 		"sessionId": sessionID,
 		"message":   "Session deleted successfully",
 	})
+	return nil
+}
+
+func (s *server) handleClientToolRegister(w http.ResponseWriter, r *http.Request) error {
+	auth, err := s.requireAuth(r)
+	if err != nil {
+		return err
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	var payload clientToolRegistrationPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return fail(http.StatusBadRequest, "Invalid JSON body")
+	}
+	if err := s.clientTools.Register(auth, payload); err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return nil
+}
+
+func (s *server) handleClientToolUnregister(w http.ResponseWriter, r *http.Request) error {
+	auth, err := s.requireAuth(r)
+	if err != nil {
+		return err
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	var payload clientToolUnregisterPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return fail(http.StatusBadRequest, "Invalid JSON body")
+	}
+	if err := s.clientTools.Unregister(auth, payload); err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return nil
+}
+
+func (s *server) handleClientToolRespond(w http.ResponseWriter, r *http.Request) error {
+	auth, err := s.requireAuth(r)
+	if err != nil {
+		return err
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	var payload clientToolRespondPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return fail(http.StatusBadRequest, "Invalid JSON body")
+	}
+	if err := s.clientTools.Respond(auth, payload); err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return nil
+}
+
+func (s *server) handleClientToolCancel(w http.ResponseWriter, r *http.Request) error {
+	auth, err := s.requireAuth(r)
+	if err != nil {
+		return err
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	var payload clientToolCancelPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return fail(http.StatusBadRequest, "Invalid JSON body")
+	}
+	if normalizeUserID(payload.UserID) != normalizeUserID(auth.UserID) {
+		return fail(http.StatusForbidden, "Authenticated user does not match cancel userId")
+	}
+	s.clientTools.Cancel("", payload.RequestID, strings.TrimSpace(payload.Reason))
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return nil
+}
+
+func (s *server) handleInternalClientToolRequest(w http.ResponseWriter, r *http.Request) error {
+	if s.clientTools == nil {
+		return fail(http.StatusServiceUnavailable, "Client tool manager unavailable")
+	}
+	if readBearerToken(r.Header.Get("X-Internal-Agent-Auth")) != deriveClientToolInternalToken(s.cfg.SecretSeed, s.cfg.AgentID) {
+		return fail(http.StatusUnauthorized, "Unauthorized")
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	var payload internalClientToolRequestPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return fail(http.StatusBadRequest, "Invalid JSON body")
+	}
+	result, err := s.clientTools.Request(
+		r.Context(),
+		payload.RunID,
+		payload.UserID,
+		payload.DeviceID,
+		payload.ToolName,
+		payload.Args,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusOK, toClientToolCallErrorResult(err))
+		return nil
+	}
+	writeJSON(w, http.StatusOK, result)
 	return nil
 }
 

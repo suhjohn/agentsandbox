@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getUiActionDescriptor } from "../../../../shared/ui-actions-contract";
 import type { UiActionDefinition } from "../types";
-import { setCoordinatorDialogOpen } from "@/coordinator-actions/runtime-bridge";
+import { setCoordinatorDialogOpen } from "@/frontend-runtime/bridge";
 
 const NAV_ALIAS = [
   "chat",
@@ -14,36 +14,38 @@ const NAV_ALIAS = [
 ] as const;
 type NavAlias = (typeof NAV_ALIAS)[number];
 
-const navGoSchema = z.object({
-  to: z.string().trim().optional(),
-  path: z.string().trim().optional(),
-  params: z.record(z.string(), z.unknown()).optional(),
-  search: z.record(z.string(), z.unknown()).optional(),
-  hash: z.string().trim().optional(),
-  replace: z.boolean().optional(),
-}).superRefine((value, ctx) => {
-  const to = typeof value.to === "string" ? value.to.trim() : "";
-  const path = typeof value.path === "string" ? value.path.trim() : "";
-  const target = to.length > 0 ? to : path;
+const navGoSchema = z
+  .object({
+    to: z.string().trim().optional(),
+    path: z.string().trim().optional(),
+    params: z.record(z.string(), z.unknown()).optional(),
+    search: z.record(z.string(), z.unknown()).optional(),
+    hash: z.string().trim().optional(),
+    replace: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    const to = typeof value.to === "string" ? value.to.trim() : "";
+    const path = typeof value.path === "string" ? value.path.trim() : "";
+    const target = to.length > 0 ? to : path;
 
-  if (target.length === 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Provide either `to` or `path`.",
-    });
-    return;
-  }
+    if (target.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide either `to` or `path`.",
+      });
+      return;
+    }
 
-  const isAlias = target in navToPath;
-  const isAbsolutePath = target.startsWith("/");
-  if (!isAlias && !isAbsolutePath) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message:
-        "Invalid navigation target. Use a known alias or an absolute path starting with '/'.",
-    });
-  }
-});
+    const isAlias = target in navToPath;
+    const isAbsolutePath = target.startsWith("/");
+    if (!isAlias && !isAbsolutePath) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Invalid navigation target. Use a known alias or an absolute path starting with '/'.",
+      });
+    }
+  });
 
 const navToPath = {
   chat: "/chat",
@@ -116,7 +118,9 @@ export const coordinatorOpenDialogAction: UiActionDefinition<
       : { ok: false, reason: "NOT_AUTHENTICATED" },
   run: async () => {
     setCoordinatorDialogOpen(true);
-    globalThis.window.dispatchEvent(new Event("agent-manager-web:open-coordinator"));
+    globalThis.window.dispatchEvent(
+      new Event("agent-manager-web:open-coordinator"),
+    );
     return { chatDialogOpen: true as const };
   },
 };
@@ -133,12 +137,12 @@ export const coordinatorCloseDialogAction: UiActionDefinition<
     properties: {},
   },
   canRun: (ctx) =>
-    ctx.chatDialogOpen
-      ? { ok: true }
-      : { ok: false, reason: "DIALOG_CLOSED" },
+    ctx.chatDialogOpen ? { ok: true } : { ok: false, reason: "DIALOG_CLOSED" },
   run: async () => {
     setCoordinatorDialogOpen(false);
-    globalThis.window.dispatchEvent(new Event("agent-manager-web:close-coordinator"));
+    globalThis.window.dispatchEvent(
+      new Event("agent-manager-web:close-coordinator"),
+    );
     return { chatDialogOpen: false as const };
   },
 };

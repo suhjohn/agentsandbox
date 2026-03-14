@@ -52,17 +52,24 @@ export function toUiActionError(input: {
 }
 
 export function clampTimeout(timeoutMs: number | undefined): number {
-  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs)) return 10_000;
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs))
+    return 10_000;
   return Math.max(1_000, Math.min(60_000, Math.floor(timeoutMs)));
 }
 
-export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+export async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
   let timer: number | null = null;
   try {
     return await Promise.race([
       promise,
       new Promise<T>((_resolve, reject) => {
-        timer = window.setTimeout(() => reject(new UiActionTimeoutError(timeoutMs)), timeoutMs);
+        timer = window.setTimeout(
+          () => reject(new UiActionTimeoutError(timeoutMs)),
+          timeoutMs,
+        );
       }),
     ]);
   } finally {
@@ -92,7 +99,8 @@ export async function executeUiAction(input: {
       retryable: false,
     });
   }
-  const actionVersion = typeof input.actionVersion === "number" ? input.actionVersion : 1;
+  const actionVersion =
+    typeof input.actionVersion === "number" ? input.actionVersion : 1;
   if (actionVersion !== action.version) {
     throw toUiActionError({
       code: "ACTION_INVALID_PARAMS",
@@ -114,7 +122,8 @@ export async function executeUiAction(input: {
   if (!availability.ok) {
     throw toUiActionError({
       code: "ACTION_UNAVAILABLE",
-      message: availability.details ?? `Action unavailable: ${availability.reason}`,
+      message:
+        availability.details ?? `Action unavailable: ${availability.reason}`,
       retryable: false,
       reason: availability.reason,
     });
@@ -128,7 +137,11 @@ export async function executeUiAction(input: {
 
 export function listAvailableUiActionsForContext(input: {
   readonly context: UiExecutionContext;
-  readonly surface?: keyof UiExecutionContext["snapshot"] | "keyboard" | "palette" | "coordinator";
+  readonly surface?:
+    | keyof UiExecutionContext["snapshot"]
+    | "keyboard"
+    | "palette"
+    | "coordinator";
 }) {
   const requestedSurface =
     input.surface === "keyboard" ||
@@ -146,7 +159,10 @@ export function listAvailableUiActionsForContext(input: {
         const available = actionDefinition.canRun(input.context.snapshot);
         return {
           id: actionDefinition.id,
+          title: actionDefinition.title,
           version: actionDefinition.version,
+          category: actionDefinition.category,
+          surfaces: actionDefinition.surfaces,
           available: available.ok,
           reason: available.ok ? undefined : available.reason,
           description: actionDefinition.description,

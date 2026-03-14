@@ -19,7 +19,7 @@ import {
   getWorkspaceKeyboardRuntimeController,
   getWorkspaceRuntimeController,
   isCoordinatorDialogOpen,
-} from "@/coordinator-actions/runtime-bridge";
+} from "@/frontend-runtime/bridge";
 
 function getRoutePath(): string {
   if (typeof window === "undefined") return "/";
@@ -34,14 +34,17 @@ function readActiveImageId(routePath: string): string | null {
   return imageId.length > 0 ? decodeURIComponent(imageId) : null;
 }
 
-export function getUiContextSnapshot(auth: AuthContextValue): UiContextSnapshot {
+export function getUiContextSnapshot(
+  auth: AuthContextValue,
+): UiContextSnapshot {
   const routePath = getRoutePath();
   const workspace = getWorkspaceRuntimeController()?.getSnapshot();
   const sessionsPanel = getSessionsSidePanelRuntimeController()?.getSnapshot();
   const chat = getActiveChatRuntimeController();
   const settingsGeneral = getSettingsGeneralRuntimeController()?.getSnapshot();
   const settingsImages = getSettingsImagesRuntimeController()?.getSnapshot();
-  const settingsImageDetail = getSettingsImageDetailRuntimeController()?.getSnapshot();
+  const settingsImageDetail =
+    getSettingsImageDetailRuntimeController()?.getSnapshot();
 
   return {
     isAuthenticated: !!auth.user,

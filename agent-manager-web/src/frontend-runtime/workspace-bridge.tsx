@@ -3,13 +3,16 @@
 // docs/ACTIONS_AND_KEYBINDINGS_SPEC.md in sync with any additions or behavior
 // changes here.
 import { useEffect } from "react";
-import { registerWorkspaceRuntimeController } from "./runtime-bridge";
+import { registerWorkspaceRuntimeController } from "./bridge";
 import type {
   WorkspaceLayoutNodeSnapshot,
   WorkspacePanelStateSnapshot,
   WorkspaceStateSnapshot,
 } from "./types";
-import { listAgentDetailTabs, type AgentDetailPanelConfig } from "@/workspace/panels/agent-detail";
+import {
+  listAgentDetailTabs,
+  type AgentDetailPanelConfig,
+} from "@/workspace/panels/agent-detail";
 import { listPanelDefinitions } from "@/workspace/panels/registry";
 import { useWorkspaceStore } from "@/workspace/store";
 import { clampRatio, findLeafNode, listLeafIds } from "@/workspace/layout";
@@ -66,7 +69,9 @@ function agentIdToAgentSessionId(agentId: string): string {
 
 function clampSessionLimit(value: unknown): number {
   const n =
-    typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 20;
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.round(value)
+      : 20;
   return Math.max(1, Math.min(50, n));
 }
 
@@ -148,7 +153,10 @@ function normalizeAgentDetailPatchObject(
   return out;
 }
 
-function getPathToLeaf(root: LayoutNode, leafId: string): readonly PathStep[] | null {
+function getPathToLeaf(
+  root: LayoutNode,
+  leafId: string,
+): readonly PathStep[] | null {
   const steps: PathStep[] = [];
 
   function walk(node: LayoutNode): boolean {
@@ -201,7 +209,9 @@ function summarizePanelConfig(
         agentId: asStringOrEmpty(record.agentId),
         agentName: asStringOrEmpty(record.agentName),
         activeTab:
-          typeof record.activeTab === "string" ? record.activeTab : "session_list",
+          typeof record.activeTab === "string"
+            ? record.activeTab
+            : "session_list",
         sessionId: asStringOrEmpty(record.sessionId),
         sessionTitle: asStringOrEmpty(record.sessionTitle),
         diffBasis: record.diffBasis === "baseline" ? "baseline" : "repo_head",
@@ -209,15 +219,11 @@ function summarizePanelConfig(
       };
     case "agent_list":
       return {
-        status:
-          typeof record.status === "string" ? record.status : "all",
-        archived:
-          typeof record.archived === "string" ? record.archived : "all",
-        noImage:
-          typeof record.noImage === "string" ? record.noImage : "all",
+        status: typeof record.status === "string" ? record.status : "all",
+        archived: typeof record.archived === "string" ? record.archived : "all",
+        noImage: typeof record.noImage === "string" ? record.noImage : "all",
         imageId: asStringOrEmpty(record.imageId),
-        groupBy:
-          typeof record.groupBy === "string" ? record.groupBy : "none",
+        groupBy: typeof record.groupBy === "string" ? record.groupBy : "none",
         limit:
           typeof record.limit === "number" && Number.isFinite(record.limit)
             ? Math.round(record.limit)
@@ -237,7 +243,9 @@ function summarizePanelConfig(
   }
 }
 
-function listPanelStates(activeWindow: WindowState): WorkspacePanelStateSnapshot[] {
+function listPanelStates(
+  activeWindow: WindowState,
+): WorkspacePanelStateSnapshot[] {
   return listLeafIds(activeWindow.root)
     .map((leafId) => {
       const leaf = findLeafNode(activeWindow.root, leafId);
@@ -287,10 +295,14 @@ function resolvePaneLeafIdFromInput(input: {
   }
   if (leafProvided) {
     const leaf = findLeafNode(input.activeWindow.root, leafCandidate);
-    if (!leaf) throw new Error(`${input.side} leaf not found: ${leafCandidate}`);
+    if (!leaf)
+      throw new Error(`${input.side} leaf not found: ${leafCandidate}`);
     return leaf.id;
   }
-  const leafId = findLeafIdByPanelInstanceId(input.activeWindow, panelCandidate);
+  const leafId = findLeafIdByPanelInstanceId(
+    input.activeWindow,
+    panelCandidate,
+  );
   if (!leafId) {
     throw new Error(
       `${input.side} panel instance not found: ${panelCandidate}`,
@@ -311,7 +323,9 @@ export function CoordinatorWorkspaceBridge() {
           ? Object.values(activeWindow.panelsById).map((panel) => panel.type)
           : [];
         const workspaceWindowCount = Object.keys(state.windowsById).length;
-        const workspaceLeafCount = activeWindow ? listLeafIds(activeWindow.root).length : 0;
+        const workspaceLeafCount = activeWindow
+          ? listLeafIds(activeWindow.root).length
+          : 0;
         return {
           workspaceReady: activeWindow !== null,
           workspaceWindowCount,
@@ -366,7 +380,10 @@ export function CoordinatorWorkspaceBridge() {
               "panelInstanceId is required for target=panel_instance",
             );
           }
-          targetLeafId = findLeafIdByPanelInstanceId(activeWindow, providedPanelId);
+          targetLeafId = findLeafIdByPanelInstanceId(
+            activeWindow,
+            providedPanelId,
+          );
           if (!targetLeafId) {
             throw new Error(`Panel instance not found: ${providedPanelId}`);
           }
@@ -378,7 +395,8 @@ export function CoordinatorWorkspaceBridge() {
         });
 
         const afterState = store.getState();
-        const afterWindow = afterState.windowsById[afterState.activeWindowId] ?? null;
+        const afterWindow =
+          afterState.windowsById[afterState.activeWindowId] ?? null;
         const focusedLeafId = afterWindow?.focusedLeafId ?? null;
         if (!afterWindow || !focusedLeafId) {
           throw new Error("Failed to focus workspace pane");
@@ -421,7 +439,8 @@ export function CoordinatorWorkspaceBridge() {
         });
 
         const afterState = store.getState();
-        const afterWindow = afterState.windowsById[afterState.activeWindowId] ?? null;
+        const afterWindow =
+          afterState.windowsById[afterState.activeWindowId] ?? null;
         if (!afterWindow) throw new Error("Workspace is not ready");
         const movedLeaf = findLeafNode(afterWindow.root, fromLeafId);
         if (!movedLeaf) throw new Error("Pane move did not resolve in layout");
@@ -458,7 +477,10 @@ export function CoordinatorWorkspaceBridge() {
               "panelInstanceId is required for target=panel_instance",
             );
           }
-          targetLeafId = findLeafIdByPanelInstanceId(activeWindow, providedPanelId);
+          targetLeafId = findLeafIdByPanelInstanceId(
+            activeWindow,
+            providedPanelId,
+          );
           if (!targetLeafId) {
             throw new Error(`Panel instance not found: ${providedPanelId}`);
           }
@@ -479,10 +501,13 @@ export function CoordinatorWorkspaceBridge() {
         });
 
         const afterState = store.getState();
-        const afterWindow = afterState.windowsById[afterState.activeWindowId] ?? null;
+        const afterWindow =
+          afterState.windowsById[afterState.activeWindowId] ?? null;
         if (!afterWindow) throw new Error("Workspace is not ready");
         if (findLeafNode(afterWindow.root, targetLeafId)) {
-          throw new Error("Workspace pane close did not remove the target pane");
+          throw new Error(
+            "Workspace pane close did not remove the target pane",
+          );
         }
 
         return {
@@ -551,7 +576,9 @@ export function CoordinatorWorkspaceBridge() {
         if (input.target === "panel_instance") {
           const providedId = (input.panelInstanceId ?? "").trim();
           if (providedId.length === 0) {
-            throw new Error("panelInstanceId is required for target=panel_instance");
+            throw new Error(
+              "panelInstanceId is required for target=panel_instance",
+            );
           }
           panelInstanceId = providedId;
         } else if (input.target === "focused") {
@@ -705,7 +732,11 @@ export function CoordinatorWorkspaceBridge() {
         if (!activeWindow || !focusedLeafId) {
           throw new Error("Workspace is not ready");
         }
-        store.dispatch({ type: "leaf/split", leafId: focusedLeafId, dir: direction });
+        store.dispatch({
+          type: "leaf/split",
+          leafId: focusedLeafId,
+          dir: direction,
+        });
         return { split: true as const };
       },
       splitWindowFull: async (direction: "row" | "col") => {
@@ -719,7 +750,9 @@ export function CoordinatorWorkspaceBridge() {
         const state = store.getState();
         const activeWindow = state.windowsById[state.activeWindowId] ?? null;
         if (!activeWindow) throw new Error("Workspace is not ready");
-        store.dispatch({ type: direction === "next" ? "pane/focus-next" : "pane/focus-prev" });
+        store.dispatch({
+          type: direction === "next" ? "pane/focus-next" : "pane/focus-prev",
+        });
         return { focused: true as const };
       },
       focusDirection: async (direction: "left" | "right" | "up" | "down") => {
@@ -743,7 +776,9 @@ export function CoordinatorWorkspaceBridge() {
         const state = store.getState();
         const activeWindow = state.windowsById[state.activeWindowId] ?? null;
         if (!activeWindow) throw new Error("Workspace is not ready");
-        store.dispatch({ type: direction === "next" ? "pane/swap-next" : "pane/swap-prev" });
+        store.dispatch({
+          type: direction === "next" ? "pane/swap-next" : "pane/swap-prev",
+        });
         return { swapped: true as const };
       },
       rotatePanes: async () => {
@@ -763,7 +798,10 @@ export function CoordinatorWorkspaceBridge() {
         store.dispatch({ type: "pane/break-to-window" });
         return { broken: true as const };
       },
-      resizeDirection: async (direction: "left" | "right" | "up" | "down", amount: number) => {
+      resizeDirection: async (
+        direction: "left" | "right" | "up" | "down",
+        amount: number,
+      ) => {
         const state = store.getState();
         const activeWindow = state.windowsById[state.activeWindowId] ?? null;
         const focusedLeafId = activeWindow?.focusedLeafId ?? null;
@@ -782,11 +820,14 @@ export function CoordinatorWorkspaceBridge() {
         }
         const focusedLeaf = findLeafNode(activeWindow.root, focusedLeafId);
         const focusedPanel = focusedLeaf
-          ? activeWindow.panelsById[focusedLeaf.panelInstanceId] ?? null
+          ? (activeWindow.panelsById[focusedLeaf.panelInstanceId] ?? null)
           : null;
-        if (!focusedPanel) throw new Error("Focused workspace pane is unavailable");
+        if (!focusedPanel)
+          throw new Error("Focused workspace pane is unavailable");
 
-        const panelTypes = listPanelDefinitions().map((definition) => definition.type);
+        const panelTypes = listPanelDefinitions().map(
+          (definition) => definition.type,
+        );
         const currentIndex = panelTypes.indexOf(focusedPanel.type);
         const nextIndex = cycleIndex(currentIndex, panelTypes.length, delta);
         const nextType = panelTypes[nextIndex];
@@ -809,7 +850,7 @@ export function CoordinatorWorkspaceBridge() {
         }
         const focusedLeaf = findLeafNode(activeWindow.root, focusedLeafId);
         const focusedPanel = focusedLeaf
-          ? activeWindow.panelsById[focusedLeaf.panelInstanceId] ?? null
+          ? (activeWindow.panelsById[focusedLeaf.panelInstanceId] ?? null)
           : null;
         if (!focusedPanel || focusedPanel.type !== "agent_detail") {
           return { changed: false as const };
@@ -856,7 +897,10 @@ export function CoordinatorWorkspaceBridge() {
         } else if (target === "last") {
           store.dispatch({ type: "window/activate-last" });
         } else {
-          store.dispatch({ type: "window/activate-index", index: target.index });
+          store.dispatch({
+            type: "window/activate-index",
+            index: target.index,
+          });
         }
         return { activated: true as const };
       },

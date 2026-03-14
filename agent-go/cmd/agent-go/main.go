@@ -22,6 +22,8 @@ func runMain(args []string) error {
 	switch args[0] {
 	case "serve":
 		return server.RunServe(args[1:])
+	case "client-tool-mcp":
+		return server.RunClientToolMCP(args[1:])
 	case "openvscode-proxy":
 		return openvscodeproxy.Run(args[1:])
 	case "help", "--help", "-h":
@@ -37,10 +39,12 @@ func printUsage() {
 
 Usage:
   agent-go serve [flags]
+  agent-go client-tool-mcp [flags]
   agent-go openvscode-proxy [flags]
 
 Commands:
   serve             Run Go server implementing agent APIs.
+  client-tool-mcp   Run stdio MCP server exposing client_tool_request.
   openvscode-proxy  Run OpenVSCode reverse proxy.
 
 If no command is provided, runs 'serve'.`)

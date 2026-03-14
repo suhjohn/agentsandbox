@@ -1,279 +1,284 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, List, Plus, Terminal } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { toast } from 'sonner'
-import { useAuth } from '../lib/auth'
-import type { Agent, AgentManagerApiClient } from '../lib/api'
-import { SandboxLoader } from './loader'
-import { TerminalPanel } from './terminal-panel'
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bot, List, Plus, Terminal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { useAuth } from "../lib/auth";
+import type { Agent, AgentManagerApiClient } from "../lib/api";
+import { SandboxLoader } from "./loader";
+import { TerminalPanel } from "./terminal-panel";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle
-} from './ui/dialog'
-import { Button } from './ui/button'
+  DialogTitle,
+} from "./ui/dialog";
+import { Button } from "./ui/button";
 import {
   getChatRuntimeController,
   getActiveChatRuntimeController,
-  registerDialogRuntimeController
-} from '@/coordinator-actions/runtime-bridge'
+  registerDialogRuntimeController,
+} from "@/frontend-runtime/bridge";
 import {
   AgentSessionPanel,
-  type AgentSessionPanelConfig
-} from '@/workspace/panels/agent-session'
-import type { PanelRuntime } from '@/workspace/panels/types'
-import { requestTerminalConnectAuthed } from '@/lib/terminal-connect'
+  type AgentSessionPanelConfig,
+} from "@/workspace/panels/agent-session";
+import type { PanelRuntime } from "@/workspace/panels/types";
+import { requestTerminalConnectAuthed } from "@/lib/terminal-connect";
 
-type DialogMode = 'conversation' | 'sessions'
+type DialogMode = "conversation" | "sessions";
 type ManagerSessionRecord = Awaited<
-  ReturnType<AgentManagerApiClient['listSessions']>
->['data'][number]
+  ReturnType<AgentManagerApiClient["listSessions"]>
+>["data"][number];
 
 type GlobalSettingsResponse = {
-  readonly defaultCoordinatorImageId: string
-}
+  readonly defaultCoordinatorImageId: string;
+};
 
 const DIALOG_RUNTIME: PanelRuntime = {
-  leafId: 'coordinator-dialog',
+  leafId: "coordinator-dialog",
   now: () => Date.now(),
   replaceSelf: () => {},
-  openPanel: () => {}
-}
+  openPanel: () => {},
+};
 
-function toErrorMessage (value: unknown): string {
-  if (value instanceof Error) return value.message
-  if (typeof value === 'object' && value !== null && 'error' in value) {
-    const err = (value as { error?: unknown }).error
-    if (typeof err === 'string' && err.trim().length > 0) return err
+function toErrorMessage(value: unknown): string {
+  if (value instanceof Error) return value.message;
+  if (typeof value === "object" && value !== null && "error" in value) {
+    const err = (value as { error?: unknown }).error;
+    if (typeof err === "string" && err.trim().length > 0) return err;
   }
-  if (typeof value === 'string' && value.trim().length > 0) return value
-  return 'Something went wrong.'
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  return "Something went wrong.";
 }
 
-function selectCoordinatorAgent (
+function selectCoordinatorAgent(
   agents: readonly Agent[],
-  agentId: string
+  agentId: string,
 ): Agent | null {
-  const targetAgentId = agentId.trim()
+  const targetAgentId = agentId.trim();
   if (targetAgentId.length > 0) {
-    const selected = agents.find(agent => agent.id === targetAgentId)
-    if (selected) return selected
+    const selected = agents.find((agent) => agent.id === targetAgentId);
+    if (selected) return selected;
   }
-  return agents[0] ?? null
+  return agents[0] ?? null;
 }
 
-function parseGlobalSettingsResponse (value: unknown): GlobalSettingsResponse {
-  if (typeof value !== 'object' || value === null) {
-    return { defaultCoordinatorImageId: '' }
+function parseGlobalSettingsResponse(value: unknown): GlobalSettingsResponse {
+  if (typeof value !== "object" || value === null) {
+    return { defaultCoordinatorImageId: "" };
   }
   const raw = (value as { defaultCoordinatorImageId?: unknown })
-    .defaultCoordinatorImageId
+    .defaultCoordinatorImageId;
   return {
     defaultCoordinatorImageId:
-      typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : ''
-  }
+      typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : "",
+  };
 }
 
-async function fetchGlobalSettings (
-  fetchAuthed: (path: string, init?: RequestInit) => Promise<Response>
+async function fetchGlobalSettings(
+  fetchAuthed: (path: string, init?: RequestInit) => Promise<Response>,
 ): Promise<GlobalSettingsResponse> {
-  const res = await fetchAuthed('/settings/global')
-  const text = await res.text()
-  const body = text.trim().length > 0 ? (JSON.parse(text) as unknown) : null
+  const res = await fetchAuthed("/settings/global");
+  const text = await res.text();
+  const body = text.trim().length > 0 ? (JSON.parse(text) as unknown) : null;
   if (!res.ok) {
-    throw new Error(toErrorMessage(body))
+    throw new Error(toErrorMessage(body));
   }
-  return parseGlobalSettingsResponse(body)
+  return parseGlobalSettingsResponse(body);
 }
 
-export function CoordinatorSessionDialog (props: {
-  readonly open: boolean
-  readonly onOpenChange: (open: boolean) => void
+export function CoordinatorSessionDialog(props: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
 }) {
-  const auth = useAuth()
-  const queryClient = useQueryClient()
-  const [mode, setMode] = useState<DialogMode>('conversation')
-  const [isDraftingNewSession, setIsDraftingNewSession] = useState(false)
-  const [isTerminalOpen, setIsTerminalOpen] = useState(false)
-  const [conversationViewKey, setConversationViewKey] = useState(0)
+  const auth = useAuth();
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState<DialogMode>("conversation");
+  const [isDraftingNewSession, setIsDraftingNewSession] = useState(false);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [conversationViewKey, setConversationViewKey] = useState(0);
   const [sessionConfig, setSessionConfig] = useState<AgentSessionPanelConfig>({
-    agentId: '',
-    agentName: '',
-    sessionId: '',
-    sessionTitle: '',
+    agentId: "",
+    agentName: "",
+    sessionId: "",
+    sessionTitle: "",
     sessionModel: undefined,
     sessionModelReasoningEffort: undefined,
-    sessionHarness: undefined
-  })
+    sessionHarness: undefined,
+  });
 
   const globalSettingsQuery = useQuery({
-    queryKey: ['settings', 'global'],
+    queryKey: ["settings", "global"],
     enabled: props.open && !!auth.user && !auth.isBootstrapping,
     staleTime: 60_000,
-    queryFn: async () => fetchGlobalSettings(auth.fetchAuthed)
-  })
+    queryFn: async () => fetchGlobalSettings(auth.fetchAuthed),
+  });
 
   const coordinatorAgentsQuery = useQuery({
-    queryKey: ['coordinatorAgents', auth.user?.id ?? null],
+    queryKey: ["coordinatorAgents", auth.user?.id ?? null],
     queryFn: () =>
       auth.api.listAgents({
         createdBy: auth.user?.id,
-        type: 'coordinator',
+        type: "coordinator",
         archived: false,
-        limit: 50
+        limit: 50,
       }),
-    enabled: props.open && !!auth.user && !auth.isBootstrapping
-  })
+    enabled: props.open && !!auth.user && !auth.isBootstrapping,
+  });
 
-  const coordinatorAgents = coordinatorAgentsQuery.data?.data ?? []
+  const coordinatorAgents = coordinatorAgentsQuery.data?.data ?? [];
   const selectedAgent = useMemo(
     () => selectCoordinatorAgent(coordinatorAgents, sessionConfig.agentId),
-    [coordinatorAgents, sessionConfig.agentId]
-  )
-  const selectedAgentId = selectedAgent?.id ?? ''
+    [coordinatorAgents, sessionConfig.agentId],
+  );
+  const selectedAgentId = selectedAgent?.id ?? "";
 
   const sessionsQuery = useQuery({
-    queryKey: ['/session', 'coordinator-dialog', selectedAgentId, 'false'],
+    queryKey: ["/session", "coordinator-dialog", selectedAgentId, "false"],
     queryFn: () =>
       auth.api.listSessions({
         agentId: selectedAgentId,
-        archived: 'false',
-        limit: 50
+        archived: "false",
+        limit: 50,
       }),
     enabled:
       props.open &&
       !!auth.user &&
       !auth.isBootstrapping &&
-      selectedAgentId.length > 0
-  })
+      selectedAgentId.length > 0,
+  });
 
-  const sessions = sessionsQuery.data?.data ?? []
-  const selectedSessionId = sessionConfig.sessionId.trim()
+  const sessions = sessionsQuery.data?.data ?? [];
+  const selectedSessionId = sessionConfig.sessionId.trim();
   const selectedSession = useMemo(
-    () => sessions.find(session => session.id === selectedSessionId) ?? null,
-    [selectedSessionId, sessions]
-  )
+    () => sessions.find((session) => session.id === selectedSessionId) ?? null,
+    [selectedSessionId, sessions],
+  );
   const activeSessionId =
     selectedSessionId.length > 0
       ? selectedSessionId
       : isDraftingNewSession
-      ? ''
-      : sessions[0]?.id ?? ''
+        ? ""
+        : (sessions[0]?.id ?? "");
 
   const startDraftSession = useCallback((title?: string): void => {
-    setSessionConfig(prev => ({
+    setSessionConfig((prev) => ({
       ...prev,
-      sessionId: '',
-      sessionTitle: title?.trim() ?? ''
-    }))
-    setIsDraftingNewSession(true)
-    setMode('conversation')
-    setConversationViewKey(prev => prev + 1)
-  }, [])
+      sessionId: "",
+      sessionTitle: title?.trim() ?? "",
+    }));
+    setIsDraftingNewSession(true);
+    setMode("conversation");
+    setConversationViewKey((prev) => prev + 1);
+  }, []);
 
   const createCoordinatorAgentMutation = useMutation({
     mutationFn: async () => {
-      if (!auth.user) throw new Error('Not logged in')
+      if (!auth.user) throw new Error("Not logged in");
 
       const settings =
-        globalSettingsQuery.data ?? (await fetchGlobalSettings(auth.fetchAuthed))
-      const defaultImageId = settings.defaultCoordinatorImageId.trim()
+        globalSettingsQuery.data ??
+        (await fetchGlobalSettings(auth.fetchAuthed));
+      const defaultImageId = settings.defaultCoordinatorImageId.trim();
       if (defaultImageId.length === 0) {
         throw new Error(
-          'No global default coordinator image configured. Set one in Settings > General.'
-        )
+          "No global default coordinator image configured. Set one in Settings > General.",
+        );
       }
 
       return await auth.api.createAgent({
         imageId: defaultImageId,
-        type: 'coordinator',
-        visibility: 'private'
-      })
+        type: "coordinator",
+        visibility: "private",
+      });
     },
-    onSuccess: agent => {
-      const queryKey = ['coordinatorAgents', auth.user?.id ?? null]
-      queryClient.setQueryData(queryKey, prev => {
-        const fallback = { data: [agent] as readonly Agent[], nextCursor: null }
-        if (typeof prev !== 'object' || prev === null) return fallback
+    onSuccess: (agent) => {
+      const queryKey = ["coordinatorAgents", auth.user?.id ?? null];
+      queryClient.setQueryData(queryKey, (prev) => {
+        const fallback = {
+          data: [agent] as readonly Agent[],
+          nextCursor: null,
+        };
+        if (typeof prev !== "object" || prev === null) return fallback;
 
-        const data = (prev as { data?: unknown }).data
-        if (!Array.isArray(data)) return fallback
-        if (data.some(item => (item as Agent | null)?.id === agent.id)) return prev
+        const data = (prev as { data?: unknown }).data;
+        if (!Array.isArray(data)) return fallback;
+        if (data.some((item) => (item as Agent | null)?.id === agent.id))
+          return prev;
 
-        return { ...(prev as object), data: [agent, ...data] }
-      })
+        return { ...(prev as object), data: [agent, ...data] };
+      });
 
-      setSessionConfig(prev => ({
+      setSessionConfig((prev) => ({
         ...prev,
         agentId: agent.id,
-        agentName: agent.name?.trim() ?? ''
-      }))
-      startDraftSession()
-      toast.success('Coordinator agent created')
+        agentName: agent.name?.trim() ?? "",
+      }));
+      startDraftSession();
+      toast.success("Coordinator agent created");
     },
-    onError: error => {
-      toast.error(toErrorMessage(error))
-    }
-  })
+    onError: (error) => {
+      toast.error(toErrorMessage(error));
+    },
+  });
 
   const setConfig = useCallback(
     (
-      updater: (prev: AgentSessionPanelConfig) => AgentSessionPanelConfig
+      updater: (prev: AgentSessionPanelConfig) => AgentSessionPanelConfig,
     ): void => {
-      setSessionConfig(prev => {
-        const next = updater(prev)
-        const prevSessionId = prev.sessionId.trim()
-        const nextSessionId = next.sessionId.trim()
+      setSessionConfig((prev) => {
+        const next = updater(prev);
+        const prevSessionId = prev.sessionId.trim();
+        const nextSessionId = next.sessionId.trim();
 
         if (nextSessionId !== prevSessionId) {
-          setIsDraftingNewSession(nextSessionId.length === 0)
+          setIsDraftingNewSession(nextSessionId.length === 0);
           if (!(prevSessionId.length === 0 && nextSessionId.length > 0)) {
-            setConversationViewKey(current => current + 1)
+            setConversationViewKey((current) => current + 1);
           }
           if (prevSessionId.length === 0 && nextSessionId.length > 0) {
-            void queryClient.invalidateQueries({ queryKey: ['/session'] })
+            void queryClient.invalidateQueries({ queryKey: ["/session"] });
           }
         }
 
-        return next
-      })
+        return next;
+      });
     },
-    [queryClient]
-  )
+    [queryClient],
+  );
 
   useEffect(() => {
-    if (!props.open) return
+    if (!props.open) return;
 
-    const nextAgent = selectedAgent
-    setSessionConfig(prev => {
-      const prevAgentId = prev.agentId.trim()
-      const nextAgentId = nextAgent?.id ?? ''
-      const nextAgentName = nextAgent?.name?.trim() ?? ''
+    const nextAgent = selectedAgent;
+    setSessionConfig((prev) => {
+      const prevAgentId = prev.agentId.trim();
+      const nextAgentId = nextAgent?.id ?? "";
+      const nextAgentName = nextAgent?.name?.trim() ?? "";
 
       if (
         prevAgentId === nextAgentId &&
-        (prev.agentName?.trim() ?? '') === nextAgentName
+        (prev.agentName?.trim() ?? "") === nextAgentName
       ) {
-        return prev
+        return prev;
       }
 
       if (nextAgentId.length === 0) {
         if (
           prevAgentId.length === 0 &&
-          (prev.agentName?.trim() ?? '').length === 0 &&
+          (prev.agentName?.trim() ?? "").length === 0 &&
           prev.sessionId.trim().length === 0
         ) {
-          return prev
+          return prev;
         }
         return {
           ...prev,
-          agentId: '',
-          agentName: '',
-          sessionId: '',
-          sessionTitle: ''
-        }
+          agentId: "",
+          agentName: "",
+          sessionId: "",
+          sessionTitle: "",
+        };
       }
 
       return {
@@ -282,147 +287,144 @@ export function CoordinatorSessionDialog (props: {
         agentName: nextAgentName,
         ...(prevAgentId === nextAgentId
           ? {}
-          : { sessionId: '', sessionTitle: '' })
-      }
-    })
-  }, [props.open, selectedAgent])
+          : { sessionId: "", sessionTitle: "" }),
+      };
+    });
+  }, [props.open, selectedAgent]);
 
   useEffect(() => {
     if (!props.open || selectedAgentId.length === 0 || isDraftingNewSession)
-      return
-    if (sessionsQuery.isLoading) return
+      return;
+    if (sessionsQuery.isLoading) return;
 
     const nextSession =
       selectedSessionId.length > 0
-        ? sessions.find(session => session.id === selectedSessionId) ?? null
-        : sessions[0] ?? null
+        ? (sessions.find((session) => session.id === selectedSessionId) ?? null)
+        : (sessions[0] ?? null);
 
     if (selectedSessionId.length > 0 && !nextSession) {
-      return
+      return;
     }
 
-    setSessionConfig(prev => {
-      const nextSessionId = nextSession?.id ?? ''
-      const nextSessionTitle = nextSession?.title?.trim() ?? ''
+    setSessionConfig((prev) => {
+      const nextSessionId = nextSession?.id ?? "";
+      const nextSessionTitle = nextSession?.title?.trim() ?? "";
       if (
         prev.sessionId.trim() === nextSessionId &&
-        (prev.sessionTitle?.trim() ?? '') === nextSessionTitle
+        (prev.sessionTitle?.trim() ?? "") === nextSessionTitle
       ) {
-        return prev
+        return prev;
       }
       return {
         ...prev,
         sessionId: nextSessionId,
-        sessionTitle: nextSessionTitle
-      }
-    })
+        sessionTitle: nextSessionTitle,
+      };
+    });
   }, [
     isDraftingNewSession,
     props.open,
     selectedAgentId,
     selectedSessionId,
     sessions,
-    sessionsQuery.isLoading
-  ])
+    sessionsQuery.isLoading,
+  ]);
 
   useEffect(() => {
-    if (sessionConfig.sessionId.trim().length === 0) return
-    setIsDraftingNewSession(false)
-  }, [sessionConfig.sessionId])
+    if (sessionConfig.sessionId.trim().length === 0) return;
+    setIsDraftingNewSession(false);
+  }, [sessionConfig.sessionId]);
 
   const archiveSessionMutation = useMutation({
     mutationFn: async (session: ManagerSessionRecord) =>
       auth.api.updateSession(session.id, {
         agentId: session.agentId,
-        isArchived: true
+        isArchived: true,
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['/session'] })
-      toast.success('Session archived')
+      await queryClient.invalidateQueries({ queryKey: ["/session"] });
+      toast.success("Session archived");
     },
-    onError: error => {
-      toast.error(toErrorMessage(error))
-    }
-  })
+    onError: (error) => {
+      toast.error(toErrorMessage(error));
+    },
+  });
 
   const terminalConnectQuery = useQuery({
-    queryKey: ['coordinator-dialog', 'agent-terminal', selectedAgentId],
+    queryKey: ["coordinator-dialog", "agent-terminal", selectedAgentId],
     queryFn: async () => {
       if (selectedAgentId.length === 0) {
-        throw new Error('Select a coordinator agent first.')
+        throw new Error("Select a coordinator agent first.");
       }
 
       return requestTerminalConnectAuthed({
         fetchAuthed: auth.fetchAuthed,
-        targetType: 'agentSandbox',
-        targetId: selectedAgentId
-      })
+        targetType: "agentSandbox",
+        targetId: selectedAgentId,
+      });
     },
     enabled:
-      props.open &&
-      !!auth.user &&
-      selectedAgentId.length > 0 &&
-      isTerminalOpen,
+      props.open && !!auth.user && selectedAgentId.length > 0 && isTerminalOpen,
     staleTime: 10_000,
     refetchOnWindowFocus: false,
-    retry: false
-  })
-  const refetchTerminalConnect = terminalConnectQuery.refetch
+    retry: false,
+  });
+  const refetchTerminalConnect = terminalConnectQuery.refetch;
   const handleTerminalConnectionLost = useCallback(() => {
-    void refetchTerminalConnect()
-  }, [refetchTerminalConnect])
+    void refetchTerminalConnect();
+  }, [refetchTerminalConnect]);
 
   useEffect(() => {
-    setIsTerminalOpen(false)
-  }, [selectedAgentId])
+    setIsTerminalOpen(false);
+  }, [selectedAgentId]);
 
   const canClearCurrentConversation = useCallback((): boolean => {
     return (
       !!auth.user &&
       activeSessionId.length > 0 &&
       !archiveSessionMutation.isPending
-    )
-  }, [activeSessionId, archiveSessionMutation.isPending, auth.user])
+    );
+  }, [activeSessionId, archiveSessionMutation.isPending, auth.user]);
 
   const openSessionsList = useCallback(async () => {
-    setMode('sessions')
-    return { mode: 'sessions' as const }
-  }, [])
+    setMode("sessions");
+    return { mode: "sessions" as const };
+  }, []);
 
   const focusComposer = useCallback(async () => {
-    setMode('conversation')
+    setMode("conversation");
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      await new Promise<void>(resolve => window.setTimeout(resolve, 0))
-      const chatController = getChatRuntimeController('dialog')
-      if (!chatController) continue
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      const chatController = getChatRuntimeController("dialog");
+      if (!chatController) continue;
       try {
-        return await chatController.focusInput()
+        return await chatController.focusInput();
       } catch {
         // Wait for the conversation surface to finish mounting.
       }
     }
-    return { focused: false }
-  }, [])
+    return { focused: false };
+  }, []);
 
   const draftNewSession = useCallback(async () => {
     if (selectedAgentId.length === 0) {
-      throw new Error('Create a coordinator agent first.')
+      throw new Error("Create a coordinator agent first.");
     }
 
-    startDraftSession()
-    return { drafted: true as const, mode: 'conversation' as const }
-  }, [selectedAgentId, startDraftSession])
+    startDraftSession();
+    return { drafted: true as const, mode: "conversation" as const };
+  }, [selectedAgentId, startDraftSession]);
 
   const listSessions = useCallback(
     async (input?: { readonly limit?: number; readonly cursor?: string }) => {
       const limit =
-        typeof input?.limit === 'number' && Number.isFinite(input.limit)
+        typeof input?.limit === "number" && Number.isFinite(input.limit)
           ? Math.max(1, Math.min(100, Math.floor(input.limit)))
-          : 20
+          : 20;
       const cursor =
-        typeof input?.cursor === 'string' && input.cursor.trim().length > 0
+        typeof input?.cursor === "string" && input.cursor.trim().length > 0
           ? input.cursor.trim()
-          : undefined
+          : undefined;
 
       if (selectedAgentId.length === 0) {
         return {
@@ -430,44 +432,44 @@ export function CoordinatorSessionDialog (props: {
           nextCursor: null,
           selectedSessionId: null,
           mode,
-          isDraftingNewSession
-        }
+          isDraftingNewSession,
+        };
       }
 
       const result = await auth.api.listSessions({
         agentId: selectedAgentId,
-        archived: 'false',
+        archived: "false",
         limit,
-        cursor
-      })
+        cursor,
+      });
 
       if (!cursor) {
         queryClient.setQueryData(
-          ['/session', 'coordinator-dialog', selectedAgentId, 'false'],
-          result
-        )
+          ["/session", "coordinator-dialog", selectedAgentId, "false"],
+          result,
+        );
       }
 
       const fallbackSelectedSessionId =
         selectedSessionId.length > 0
           ? selectedSessionId
-          : result.data[0]?.id ?? null
+          : (result.data[0]?.id ?? null);
 
       return {
-        sessions: result.data.map(session => ({
+        sessions: result.data.map((session) => ({
           id: session.id,
           title: session.title,
           createdBy: session.createdBy,
           createdAt: session.createdAt,
-          updatedAt: session.updatedAt
+          updatedAt: session.updatedAt,
         })),
         nextCursor: result.nextCursor,
         selectedSessionId: isDraftingNewSession
           ? null
           : fallbackSelectedSessionId,
         mode,
-        isDraftingNewSession
-      }
+        isDraftingNewSession,
+      };
     },
     [
       auth.api,
@@ -475,67 +477,67 @@ export function CoordinatorSessionDialog (props: {
       mode,
       queryClient,
       selectedAgentId,
-      selectedSessionId
-    ]
-  )
+      selectedSessionId,
+    ],
+  );
 
   const selectSession = useCallback(
     async (input: { readonly sessionId: string }) => {
-      const nextSessionId = input.sessionId.trim()
+      const nextSessionId = input.sessionId.trim();
       if (!nextSessionId) {
-        throw new Error('sessionId is required')
+        throw new Error("sessionId is required");
       }
 
       const matchingSession =
-        sessions.find(session => session.id === nextSessionId) ?? null
+        sessions.find((session) => session.id === nextSessionId) ?? null;
 
-      setSessionConfig(prev => ({
+      setSessionConfig((prev) => ({
         ...prev,
         sessionId: nextSessionId,
-        sessionTitle: matchingSession?.title?.trim() ?? ''
-      }))
-      setIsDraftingNewSession(false)
-      setMode('conversation')
-      setConversationViewKey(prev => prev + 1)
+        sessionTitle: matchingSession?.title?.trim() ?? "",
+      }));
+      setIsDraftingNewSession(false);
+      setMode("conversation");
+      setConversationViewKey((prev) => prev + 1);
 
       return {
         selected: true as const,
         sessionId: nextSessionId,
-        mode: 'conversation' as const
-      }
+        mode: "conversation" as const,
+      };
     },
-    [sessions]
-  )
+    [sessions],
+  );
 
   const createSession = useCallback(
     async (_input?: { readonly title?: string }) => {
       if (selectedAgentId.length === 0) {
-        throw new Error('Create a coordinator agent first.')
+        throw new Error("Create a coordinator agent first.");
       }
 
-      startDraftSession()
+      startDraftSession();
 
       return {
         created: true as const,
-        sessionId: '',
-        mode: 'conversation' as const
-      }
+        sessionId: "",
+        mode: "conversation" as const,
+      };
     },
-    [selectedAgentId, startDraftSession]
-  )
+    [selectedAgentId, startDraftSession],
+  );
 
   const clearCurrentConversation = useCallback(async () => {
     const currentSession =
-      sessions.find(session => session.id === activeSessionId) ?? null
+      sessions.find((session) => session.id === activeSessionId) ?? null;
     if (!currentSession) {
-      startDraftSession()
-      return { cleared: true as const }
+      startDraftSession();
+      return { cleared: true as const };
     }
 
-    await archiveSessionMutation.mutateAsync(currentSession)
-    startDraftSession()
-    return { cleared: true as const }
-  }, [activeSessionId, archiveSessionMutation, sessions, startDraftSession])
+    await archiveSessionMutation.mutateAsync(currentSession);
+    startDraftSession();
+    return { cleared: true as const };
+  }, [activeSessionId, archiveSessionMutation, sessions, startDraftSession]);
 
   useEffect(() => {
     return registerDialogRuntimeController({
@@ -546,8 +548,8 @@ export function CoordinatorSessionDialog (props: {
       selectSession,
       createSession,
       clearConversation: clearCurrentConversation,
-      canClearConversation: canClearCurrentConversation
-    })
+      canClearConversation: canClearCurrentConversation,
+    });
   }, [
     canClearCurrentConversation,
     clearCurrentConversation,
@@ -556,63 +558,63 @@ export function CoordinatorSessionDialog (props: {
     focusComposer,
     listSessions,
     openSessionsList,
-    selectSession
-  ])
+    selectSession,
+  ]);
 
   const formatSessionDate = useCallback((isoDate: string): string => {
-    const parsed = new Date(isoDate)
-    if (Number.isNaN(parsed.getTime())) return isoDate
+    const parsed = new Date(isoDate);
+    if (Number.isNaN(parsed.getTime())) return isoDate;
     return parsed.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    })
-  }, [])
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }, []);
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent
-        data-coordinator-dialog='true'
-        className='max-w-6xl h-[80dvh] max-h-[calc(100dvh-3rem)] flex flex-col p-0 overflow-hidden gap-0'
-        onEscapeKeyDown={event => {
+        data-coordinator-dialog="true"
+        className="max-w-6xl h-[80dvh] max-h-[calc(100dvh-3rem)] flex flex-col p-0 overflow-hidden gap-0"
+        onEscapeKeyDown={(event) => {
           const shouldHandleInConversation =
             !!auth.user &&
             !coordinatorAgentsQuery.isLoading &&
             !coordinatorAgentsQuery.isError &&
-            mode === 'conversation' &&
-            !archiveSessionMutation.isPending
-          if (!shouldHandleInConversation) return
+            mode === "conversation" &&
+            !archiveSessionMutation.isPending;
+          if (!shouldHandleInConversation) return;
 
-          const chatController = getActiveChatRuntimeController()
-          if (!chatController?.isStreaming()) return
+          const chatController = getActiveChatRuntimeController();
+          if (!chatController?.isStreaming()) return;
 
-          event.preventDefault()
-          void chatController.stopStream()
+          event.preventDefault();
+          void chatController.stopStream();
         }}
       >
-        <DialogHeader className='shrink-0 px-4 py-3 border-b border-border space-y-0'>
-          <div className='flex items-center justify-between'>
-            <div className='flex items-center gap-2'>
-              <span className='relative flex h-2 w-2'>
-                <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75' />
-                <span className='relative inline-flex rounded-full h-2 w-2 bg-green-500' />
+        <DialogHeader className="shrink-0 px-4 py-3 border-b border-border space-y-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
               </span>
-              <DialogTitle className='text-sm font-medium'>
+              <DialogTitle className="text-sm font-medium">
                 Coordinator
               </DialogTitle>
-              <DialogDescription className='sr-only'>
+              <DialogDescription className="sr-only">
                 Coordinator conversation dialog. Hold Command or Control plus
                 period to record and release to transcribe into the composer.
               </DialogDescription>
             </div>
             {auth.user ? (
-              <div className='flex items-center gap-1'>
+              <div className="flex items-center gap-1">
                 <Button
-                  size='icon'
-                  variant='icon'
+                  size="icon"
+                  variant="icon"
                   onClick={() => {
-                    setIsTerminalOpen(prev => !prev)
+                    setIsTerminalOpen((prev) => !prev);
                   }}
                   disabled={
                     coordinatorAgentsQuery.isLoading ||
@@ -620,81 +622,84 @@ export function CoordinatorSessionDialog (props: {
                   }
                   title={
                     isTerminalOpen
-                      ? 'Hide coordinator terminal'
-                      : 'Show coordinator terminal'
+                      ? "Hide coordinator terminal"
+                      : "Show coordinator terminal"
                   }
                 >
-                  <Terminal className='h-3.5 w-3.5' />
+                  <Terminal className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size='icon'
-                  variant='icon'
+                  size="icon"
+                  variant="icon"
                   onClick={() => {
-                    setMode(prev =>
-                      prev === 'sessions' ? 'conversation' : 'sessions'
-                    )
+                    setMode((prev) =>
+                      prev === "sessions" ? "conversation" : "sessions",
+                    );
                   }}
                   disabled={
-                    coordinatorAgentsQuery.isLoading || selectedAgentId.length === 0
+                    coordinatorAgentsQuery.isLoading ||
+                    selectedAgentId.length === 0
                   }
                 >
-                  <List className='h-3.5 w-3.5' />
+                  <List className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size='icon'
-                  variant='icon'
+                  size="icon"
+                  variant="icon"
                   onClick={() => {
-                    void draftNewSession().catch(error => {
-                      toast.error(toErrorMessage(error))
-                    })
+                    void draftNewSession().catch((error) => {
+                      toast.error(toErrorMessage(error));
+                    });
                   }}
                   disabled={
-                    coordinatorAgentsQuery.isLoading || selectedAgentId.length === 0
+                    coordinatorAgentsQuery.isLoading ||
+                    selectedAgentId.length === 0
                   }
-                  title='Prepare new coordinator session'
+                  title="Prepare new coordinator session"
                 >
-                  <Plus className='h-3.5 w-3.5' />
+                  <Plus className="h-3.5 w-3.5" />
                 </Button>
                 <Button
-                  size='icon'
-                  variant='icon'
+                  size="icon"
+                  variant="icon"
                   onClick={() => {
-                    createCoordinatorAgentMutation.mutate()
+                    createCoordinatorAgentMutation.mutate();
                   }}
                   disabled={
                     createCoordinatorAgentMutation.isPending ||
                     globalSettingsQuery.isLoading
                   }
-                  title='Create a new coordinator agent'
+                  title="Create a new coordinator agent"
                 >
-                  <Bot className='h-3.5 w-3.5' />
+                  <Bot className="h-3.5 w-3.5" />
                 </Button>
               </div>
             ) : null}
           </div>
           {auth.user && coordinatorAgents.length > 0 ? (
-            <div className='mt-2 flex items-center gap-2 min-w-0'>
+            <div className="mt-2 flex items-center gap-2 min-w-0">
               <select
-                className='h-8 min-w-0 flex-1 rounded-md border border-border bg-surface-1 px-3 text-sm'
+                className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface-1 px-3 text-sm"
                 value={selectedAgentId}
-                onChange={event => {
-                  const nextAgentId = event.target.value
+                onChange={(event) => {
+                  const nextAgentId = event.target.value;
                   const nextAgent =
-                    coordinatorAgents.find(agent => agent.id === nextAgentId) ??
-                    null
-                  setIsTerminalOpen(false)
-                  setConfig(prev => ({
+                    coordinatorAgents.find(
+                      (agent) => agent.id === nextAgentId,
+                    ) ?? null;
+                  setIsTerminalOpen(false);
+                  setConfig((prev) => ({
                     ...prev,
-                    agentId: nextAgent?.id ?? '',
-                    agentName: nextAgent?.name?.trim() ?? '',
-                    sessionId: '',
-                    sessionTitle: ''
-                  }))
+                    agentId: nextAgent?.id ?? "",
+                    agentName: nextAgent?.name?.trim() ?? "",
+                    sessionId: "",
+                    sessionTitle: "",
+                  }));
                 }}
                 disabled={coordinatorAgentsQuery.isLoading}
-                aria-label='Coordinator agent'
+                aria-label="Coordinator agent"
               >
-                {coordinatorAgents.map(agent => (
+                {coordinatorAgents.map((agent) => (
                   <option key={agent.id} value={agent.id}>
                     {agent.name?.trim() || agent.id}
                   </option>
@@ -704,44 +709,44 @@ export function CoordinatorSessionDialog (props: {
           ) : null}
         </DialogHeader>
 
-        <div className='min-h-0 min-w-0 flex-1 overflow-hidden flex flex-col'>
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden flex flex-col">
           {!auth.user ? (
-            <div className='h-full grid place-items-center text-center px-6'>
-              <div className='space-y-1'>
-                <p className='text-sm font-medium text-text-primary'>
+            <div className="h-full grid place-items-center text-center px-6">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-text-primary">
                   Not logged in
                 </p>
-                <p className='text-xs text-text-tertiary font-mono'>
+                <p className="text-xs text-text-tertiary font-mono">
                   Use /auth/login on {auth.baseUrl}
                 </p>
               </div>
             </div>
           ) : auth.isBootstrapping || coordinatorAgentsQuery.isLoading ? (
-            <div className='h-full grid place-items-center'>
-              <p className='text-sm text-text-secondary'>Loading…</p>
+            <div className="h-full grid place-items-center">
+              <p className="text-sm text-text-secondary">Loading…</p>
             </div>
           ) : coordinatorAgentsQuery.isError ? (
-            <div className='h-full grid place-items-center px-6'>
-              <p className='text-sm text-destructive text-center'>
+            <div className="h-full grid place-items-center px-6">
+              <p className="text-sm text-destructive text-center">
                 {toErrorMessage(coordinatorAgentsQuery.error)}
               </p>
             </div>
           ) : coordinatorAgents.length === 0 ? (
-            <div className='h-full grid place-items-center text-center px-6'>
-              <div className='space-y-3'>
-                <p className='text-sm font-medium text-text-primary'>
+            <div className="h-full grid place-items-center text-center px-6">
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-text-primary">
                   No coordinator agents yet.
                 </p>
-                <p className='text-xs text-text-tertiary'>
-                  Create an agent with type{' '}
-                  <span className='font-mono'>coordinator</span> to use this
+                <p className="text-xs text-text-tertiary">
+                  Create an agent with type{" "}
+                  <span className="font-mono">coordinator</span> to use this
                   dialog.
                 </p>
-                <div className='pt-2'>
+                <div className="pt-2">
                   <Button
-                    size='sm'
+                    size="sm"
                     onClick={() => {
-                      createCoordinatorAgentMutation.mutate()
+                      createCoordinatorAgentMutation.mutate();
                     }}
                     disabled={
                       createCoordinatorAgentMutation.isPending ||
@@ -749,98 +754,99 @@ export function CoordinatorSessionDialog (props: {
                     }
                   >
                     {createCoordinatorAgentMutation.isPending
-                      ? 'Creating…'
-                      : 'Create coordinator agent'}
+                      ? "Creating…"
+                      : "Create coordinator agent"}
                   </Button>
                 </div>
               </div>
             </div>
-          ) : mode === 'sessions' ? (
-            <div className='min-h-0 flex-1 flex flex-col'>
-              <div className='min-h-0 min-w-0 flex-1 overflow-y-auto'>
+          ) : mode === "sessions" ? (
+            <div className="min-h-0 flex-1 flex flex-col">
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
                 {selectedAgentId.length === 0 || sessionsQuery.isLoading ? (
-                  <div className='h-full grid place-items-center'>
-                    <p className='text-sm text-text-secondary'>
+                  <div className="h-full grid place-items-center">
+                    <p className="text-sm text-text-secondary">
                       Loading sessions…
                     </p>
                   </div>
                 ) : sessionsQuery.isError ? (
-                  <div className='h-full grid place-items-center px-6'>
-                    <p className='text-sm text-destructive text-center'>
+                  <div className="h-full grid place-items-center px-6">
+                    <p className="text-sm text-destructive text-center">
                       {toErrorMessage(sessionsQuery.error)}
                     </p>
                   </div>
                 ) : sessions.length === 0 ? (
-                  <div className='h-full grid place-items-center text-center px-6'>
-                    <div className='space-y-1'>
-                      <p className='text-sm text-text-secondary'>
+                  <div className="h-full grid place-items-center text-center px-6">
+                    <div className="space-y-1">
+                      <p className="text-sm text-text-secondary">
                         No saved sessions yet.
                       </p>
-                      <p className='text-xs text-text-tertiary'>
+                      <p className="text-xs text-text-tertiary">
                         Press + to start a new one.
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className='divide-y divide-border'>
-                    {sessions.map(session => {
+                  <div className="divide-y divide-border">
+                    {sessions.map((session) => {
                       const isCurrent =
-                        session.id === activeSessionId && !isDraftingNewSession
+                        session.id === activeSessionId && !isDraftingNewSession;
                       return (
                         <button
                           key={session.id}
-                          type='button'
+                          type="button"
                           onClick={() => {
-                            setSessionConfig(prev => ({
+                            setSessionConfig((prev) => ({
                               ...prev,
                               sessionId: session.id,
-                              sessionTitle: session.title?.trim() ?? ''
-                            }))
-                            setIsDraftingNewSession(false)
-                            setMode('conversation')
+                              sessionTitle: session.title?.trim() ?? "",
+                            }));
+                            setIsDraftingNewSession(false);
+                            setMode("conversation");
                           }}
                           className={[
-                            'w-full text-left px-4 py-3 transition-colors',
-                            isCurrent ? 'bg-surface-2' : 'hover:bg-surface-2'
-                          ].join(' ')}
+                            "w-full text-left px-4 py-3 transition-colors",
+                            isCurrent ? "bg-surface-2" : "hover:bg-surface-2",
+                          ].join(" ")}
                         >
-                          <p className='text-sm font-medium text-text-primary truncate'>
+                          <p className="text-sm font-medium text-text-primary truncate">
                             {session.title?.trim().length
                               ? session.title
-                              : 'Untitled session'}
+                              : "Untitled session"}
                           </p>
-                          <p className='text-xs text-text-tertiary mt-0.5'>
+                          <p className="text-xs text-text-tertiary mt-0.5">
                             Updated {formatSessionDate(session.updatedAt)}
                           </p>
                         </button>
-                      )
+                      );
                     })}
                   </div>
                 )}
               </div>
             </div>
           ) : (
-            <div className='h-full min-h-0 flex flex-col flex-1'>
+            <div className="h-full min-h-0 flex flex-col flex-1">
               {isTerminalOpen ? (
-                <div className='shrink-0 h-[36dvh] min-h-56 border-b border-border bg-surface-1'>
+                <div className="shrink-0 h-[36dvh] min-h-56 border-b border-border bg-surface-1">
                   {terminalConnectQuery.isLoading ? (
-                    <div className='flex h-full w-full items-center justify-center text-sm text-text-secondary'>
-                      <SandboxLoader label='starting up the sandbox' />
+                    <div className="flex h-full w-full items-center justify-center text-sm text-text-secondary">
+                      <SandboxLoader label="starting up the sandbox" />
                     </div>
                   ) : terminalConnectQuery.isError ? (
-                    <div className='flex h-full w-full items-center justify-center px-6 text-sm text-destructive text-center'>
+                    <div className="flex h-full w-full items-center justify-center px-6 text-sm text-destructive text-center">
                       {toErrorMessage(terminalConnectQuery.error)}
                     </div>
                   ) : !terminalConnectQuery.data ? (
-                    <div className='flex h-full w-full items-center justify-center px-6 text-sm text-text-secondary text-center'>
+                    <div className="flex h-full w-full items-center justify-center px-6 text-sm text-text-secondary text-center">
                       Missing terminal connect credentials.
                     </div>
                   ) : terminalConnectQuery.data.wsUrl.trim().length === 0 ? (
-                    <div className='flex h-full w-full items-center justify-center px-6 text-sm text-text-secondary text-center'>
+                    <div className="flex h-full w-full items-center justify-center px-6 text-sm text-text-secondary text-center">
                       Invalid terminal websocket URL.
                     </div>
-                  ) : terminalConnectQuery.data.authToken.trim().length === 0 ? (
-                    <div className='flex h-full w-full items-center justify-center px-6 text-sm text-text-secondary text-center'>
+                  ) : terminalConnectQuery.data.authToken.trim().length ===
+                    0 ? (
+                    <div className="flex h-full w-full items-center justify-center px-6 text-sm text-text-secondary text-center">
                       Invalid terminal websocket auth token.
                     </div>
                   ) : (
@@ -853,21 +859,21 @@ export function CoordinatorSessionDialog (props: {
                 </div>
               ) : null}
               <div
-                className='min-h-0 flex-1 overflow-y-auto overscroll-contain'
-                data-workspace-panel-scroller='true'
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                data-workspace-panel-scroller="true"
               >
                 <AgentSessionPanel
                   key={`${selectedAgentId}:${conversationViewKey}`}
                   config={{
                     ...sessionConfig,
                     agentId: selectedAgentId,
-                    agentName: selectedAgent?.name?.trim() ?? '',
-                    sessionId: activeSessionId
+                    agentName: selectedAgent?.name?.trim() ?? "",
+                    sessionId: activeSessionId,
                   }}
                   setConfig={setConfig}
                   runtime={DIALOG_RUNTIME}
                   showToolOpenControls={false}
-                  chatControllerKind='dialog'
+                  chatControllerKind="dialog"
                   allowCoordinatorComposeEvents
                 />
               </div>
@@ -876,5 +882,5 @@ export function CoordinatorSessionDialog (props: {
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

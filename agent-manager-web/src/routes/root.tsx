@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   getDialogRuntimeController,
   setCoordinatorDialogOpen,
-} from "@/coordinator-actions/runtime-bridge";
+} from "@/frontend-runtime/bridge";
 import {
   listAvailableMicrophones,
   readPreferredMicrophoneId,
@@ -25,31 +25,19 @@ type CoordinatorPttStatus = "idle" | "starting" | "recording" | "transcribing";
 
 function isCoordinatorToggleShortcut(e: KeyboardEvent): boolean {
   return (
-    e.code === "Space" &&
-    e.altKey &&
-    !e.shiftKey &&
-    !e.metaKey &&
-    !e.ctrlKey
+    e.code === "Space" && e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey
   );
 }
 
 function isCoordinatorNewChatShortcut(e: KeyboardEvent): boolean {
   return (
-    e.code === "Space" &&
-    e.altKey &&
-    e.shiftKey &&
-    !e.metaKey &&
-    !e.ctrlKey
+    e.code === "Space" && e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey
   );
 }
 
 function isCoordinatorSessionsListShortcut(e: KeyboardEvent): boolean {
   return (
-    e.code === "KeyL" &&
-    e.altKey &&
-    e.shiftKey &&
-    !e.metaKey &&
-    !e.ctrlKey
+    e.code === "KeyL" && e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey
   );
 }
 
@@ -74,7 +62,11 @@ function scoreMicrophoneLabel(label: string): number {
   ) {
     score += 3;
   }
-  if (lower.includes("usb") || lower.includes("focusrite") || lower.includes("shure")) {
+  if (
+    lower.includes("usb") ||
+    lower.includes("focusrite") ||
+    lower.includes("shure")
+  ) {
     score += 4;
   }
   if (
@@ -262,7 +254,9 @@ export function RootLayout() {
       pttSessionRef.current?.cancel();
       pttSessionRef.current = null;
       const message =
-        error instanceof Error ? error.message : "Failed to start transcription";
+        error instanceof Error
+          ? error.message
+          : "Failed to start transcription";
       toast.error(message);
     }
   }, [
@@ -312,7 +306,9 @@ export function RootLayout() {
         await startCoordinatorPtt();
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "Failed to switch microphone";
+          error instanceof Error
+            ? error.message
+            : "Failed to switch microphone";
         toast.error(message);
       } finally {
         pttMicSwitchInFlightRef.current = false;
@@ -384,7 +380,8 @@ export function RootLayout() {
     const onKeyUp = (e: KeyboardEvent) => {
       const shouldStopByShortcut = isCoordinatorPttShortcut(e);
       const shouldStopByModifierRelease =
-        pttStateRef.current !== "idle" && (e.key === "Meta" || e.key === "Control");
+        pttStateRef.current !== "idle" &&
+        (e.key === "Meta" || e.key === "Control");
       if (!shouldStopByShortcut && !shouldStopByModifierRelease) return;
       e.preventDefault();
       void stopCoordinatorPtt();
@@ -420,11 +417,18 @@ export function RootLayout() {
     window.addEventListener(COORDINATOR_PTT_STOP_EVENT, onPttStop);
     return () => {
       window.removeEventListener("agent-manager-web:open-coordinator", onOpen);
-      window.removeEventListener("agent-manager-web:close-coordinator", onClose);
+      window.removeEventListener(
+        "agent-manager-web:close-coordinator",
+        onClose,
+      );
       window.removeEventListener(COORDINATOR_PTT_START_EVENT, onPttStart);
       window.removeEventListener(COORDINATOR_PTT_STOP_EVENT, onPttStop);
     };
-  }, [setCoordinatorDialogOpenPersisted, startCoordinatorPtt, stopCoordinatorPtt]);
+  }, [
+    setCoordinatorDialogOpenPersisted,
+    startCoordinatorPtt,
+    stopCoordinatorPtt,
+  ]);
 
   useEffect(() => {
     window.dispatchEvent(

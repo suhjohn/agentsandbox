@@ -44,7 +44,7 @@ func TestExecutePiCLIRunUsesRPCModeAndStdinPrompt(t *testing.T) {
 	prompt := "@~/uploaded/test_image.png what is in this image"
 
 	events := make([]map[string]any, 0, 1)
-	result, err := app.executePiCLIRun(context.Background(), session, []normalizedInput{
+	result, err := app.executePiCLIRun(context.Background(), "run-1", "user-1", session, []normalizedInput{
 		{Type: "text", Text: prompt},
 	}, func(evt map[string]any) {
 		events = append(events, evt)
@@ -117,7 +117,7 @@ func TestExecutePiCLIRunPreservesUsageOnMessageEnd(t *testing.T) {
 	session := &sessionRecord{ID: "1234567890abcdef1234567890abcdef", Harness: "pi"}
 
 	events := make([]map[string]any, 0, 1)
-	_, err := app.executePiCLIRun(context.Background(), session, []normalizedInput{
+	_, err := app.executePiCLIRun(context.Background(), "run-1", "user-1", session, []normalizedInput{
 		{Type: "text", Text: "hello from pi"},
 	}, func(evt map[string]any) {
 		events = append(events, evt)

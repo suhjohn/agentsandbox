@@ -589,6 +589,19 @@ Codex
 The internal MCP server is not exposed as a browser-facing HTTP API. It is used
 internally by harnesses inside `agent-go`.
 
+The current implementation uses a stdio MCP server subcommand:
+
+- `agent-go client-tool-mcp`
+
+Codex discovers that server through a managed entry in
+`$CODEX_HOME/config.toml`:
+
+- `mcp_servers.agent_go_client_tools`
+
+The stdio MCP server proxies `tools/call` requests into
+`POST /internal/client-tools/request` on the local `agent-go` HTTP server using
+an internal bearer token derived from `SECRET_SEED + AGENT_ID`.
+
 The attached client needs a separate HTTP API surface for registration and
 responses.
 
@@ -850,11 +863,10 @@ no longer part of the status quo.
 
 These are still useful, but their current `coordinator-*` naming is misleading.
 
-- [`agent-manager-web/src/coordinator-actions/runtime-bridge.ts`](/Users/johnsuh/agentdesktop/agent-manager-web/src/coordinator-actions/runtime-bridge.ts)
-  Keep the runtime controller registry, but rename it to a neutral runtime
-  bridge module.
-- [`agent-manager-web/src/coordinator-actions/types.ts`](/Users/johnsuh/agentdesktop/agent-manager-web/src/coordinator-actions/types.ts)
-  Keep and move alongside the renamed runtime/executor modules.
+- [`agent-manager-web/src/frontend-runtime/bridge.ts`](/Users/johnsuh/agentdesktop/agent-manager-web/src/frontend-runtime/bridge.ts)
+  Keep the runtime controller registry in a neutral frontend-runtime module.
+- [`agent-manager-web/src/frontend-runtime/types.ts`](/Users/johnsuh/agentdesktop/agent-manager-web/src/frontend-runtime/types.ts)
+  Keep the runtime controller types alongside the neutral bridge module.
 - [`agent-manager-web/src/coordinator-actions/actions/`](/Users/johnsuh/agentdesktop/agent-manager-web/src/coordinator-actions/actions)
   Keep the action implementations, but re-home them if the module tree is
   renamed.
@@ -874,8 +886,8 @@ These remain valid in the target architecture.
 
 ### Files that need import updates
 
-These files currently import `coordinator-actions/*` infrastructure and likely
-need import updates after the rename/re-home.
+These files previously imported `coordinator-actions/*` infrastructure and now
+use `frontend-runtime/*` instead.
 
 - [`agent-manager-web/src/routes/root.tsx`](/Users/johnsuh/agentdesktop/agent-manager-web/src/routes/root.tsx)
 - [`agent-manager-web/src/routes/workspace.tsx`](/Users/johnsuh/agentdesktop/agent-manager-web/src/routes/workspace.tsx)
@@ -889,7 +901,18 @@ need import updates after the rename/re-home.
 
 ### Recommended frontend module shape
 
-The cleanest target split is:
+The current implementation uses:
+
+- [`shared/client-tools-contract.ts`](/Users/johnsuh/agentdesktop/shared/client-tools-contract.ts)
+- [`agent-manager-web/src/client-tools/device-registration.ts`](/Users/johnsuh/agentdesktop/agent-manager-web/src/client-tools/device-registration.ts)
+- [`agent-manager-web/src/client-tools/stream-handler.ts`](/Users/johnsuh/agentdesktop/agent-manager-web/src/client-tools/stream-handler.ts)
+- [`agent-manager-web/src/client-tools/executor.ts`](/Users/johnsuh/agentdesktop/agent-manager-web/src/client-tools/executor.ts)
+- [`agent-manager-web/src/client-tools/add-secret.ts`](/Users/johnsuh/agentdesktop/agent-manager-web/src/client-tools/add-secret.ts)
+
+The browser stores `add_secret` values in localStorage keyed by `userId +
+deviceId` in v1.
+
+The cleanest target split remains:
 
 1. `client-tools/`
    Owns:
@@ -943,7 +966,6 @@ These points are resolved for v1:
    ```
 
    Argument rules:
-
    - `name` is required
    - `value` is required
    - `overwrite` is optional and defaults to `false`
@@ -958,7 +980,6 @@ These points are resolved for v1:
    ```
 
    Error codes:
-
    - `SECRET_ALREADY_EXISTS`
    - `SECRET_STORAGE_UNAVAILABLE`
    - `INVALID_SECRET_NAME`
